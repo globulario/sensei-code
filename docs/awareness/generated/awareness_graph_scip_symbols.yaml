@@ -13253,6 +13253,12 @@ code_symbols:
     file: internal/event/event.go
     symbol: WorkflowObserved
     kind: const
+  - id: internal/event/event.go:WorkflowPlanAdmissionRefused
+    namespace: structural.scip
+    language: go
+    file: internal/event/event.go
+    symbol: WorkflowPlanAdmissionRefused
+    kind: const
   - id: internal/event/event.go:WorkflowRestorationRefused
     namespace: structural.scip
     language: go
@@ -33053,6 +33059,12 @@ code_symbols:
     file: internal/runreceipt/receipt.go
     symbol: OutcomeNotConverged
     kind: const
+  - id: internal/runreceipt/receipt.go:OutcomePlanAdmissionRefused
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: OutcomePlanAdmissionRefused
+    kind: const
   - id: internal/runreceipt/receipt.go:OutcomeRefused
     namespace: structural.scip
     language: go
@@ -33101,6 +33113,96 @@ code_symbols:
     file: internal/runreceipt/receipt.go
     symbol: Outcome
     kind: type
+  - id: internal/runreceipt/receipt.go:PlanAdmissionProspective
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionProspective
+    kind: const
+  - id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Class
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionRefusal.Class
+    kind: var
+  - id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Declaration
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionRefusal.Declaration
+    kind: var
+  - id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Detail
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionRefusal.Detail
+    kind: var
+  - id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.GoverningEvidenceID
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionRefusal.GoverningEvidenceID
+    kind: var
+  - id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.PlanAttemptID
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionRefusal.PlanAttemptID
+    kind: var
+  - id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Reason
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionRefusal.Reason
+    kind: var
+  - id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.RefusalID
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionRefusal.RefusalID
+    kind: var
+  - id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Source
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionRefusal.Source
+    kind: var
+  - id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.State
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionRefusal.State
+    kind: var
+  - id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.value
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionRefusal.value
+    kind: method
+  - id: internal/runreceipt/receipt.go:PlanAdmissionRefusalClass.Valid
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionRefusalClass.Valid
+    kind: method
+  - id: internal/runreceipt/receipt.go:PlanAdmissionRefusalClass~type
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionRefusalClass
+    kind: type
+  - id: internal/runreceipt/receipt.go:PlanAdmissionRefusal~type
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionRefusal
+    kind: type
+  - id: internal/runreceipt/receipt.go:PlanAdmissionTestEdit
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionTestEdit
+    kind: const
   - id: internal/runreceipt/receipt.go:PlanNone
     namespace: structural.scip
     language: go
@@ -33257,6 +33359,12 @@ code_symbols:
     file: internal/runreceipt/receipt.go
     symbol: Receipt.Outcome
     kind: var
+  - id: internal/runreceipt/receipt.go:Receipt.PlanAdmissionRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: Receipt.PlanAdmissionRefusal
+    kind: var
   - id: internal/runreceipt/receipt.go:Receipt.PlanDigest
     namespace: structural.scip
     language: go
@@ -33340,6 +33448,12 @@ code_symbols:
     language: go
     file: internal/runreceipt/receipt.go
     symbol: Receipt.checkBoundedReview
+    kind: method
+  - id: internal/runreceipt/receipt.go:Receipt.checkPlanAdmissionRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: Receipt.checkPlanAdmissionRefusal
     kind: method
   - id: internal/runreceipt/receipt.go:Receipt~type
     namespace: structural.scip
@@ -33455,6 +33569,12 @@ code_symbols:
     file: internal/runreceipt/receipt.go
     symbol: candidateVocabularies
     kind: var
+  - id: internal/runreceipt/receipt.go:canonicalIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: canonicalIdentity
+    kind: function
   - id: internal/runreceipt/receipt.go:shortSHA
     namespace: structural.scip
     language: go
@@ -33544,6 +33664,18 @@ code_symbols:
     language: go
     file: internal/runreceipt/receipt_test.go
     symbol: TestANotConvergedRunIsACompleteRecordOfARealOutcome
+    kind: function
+  - id: internal/runreceipt/receipt_test.go:TestAPlanAdmissionRefusalIsAV13OutcomeOnly
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt_test.go
+    symbol: TestAPlanAdmissionRefusalIsAV13OutcomeOnly
+    kind: function
+  - id: internal/runreceipt/receipt_test.go:TestAPlanAdmissionRefusedReceiptRequiresTheExactCanonicalRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt_test.go
+    symbol: TestAPlanAdmissionRefusedReceiptRequiresTheExactCanonicalRefusal
     kind: function
   - id: internal/runreceipt/receipt_test.go:TestAPlanNamedWhileClaimingNoneIsInconsistent
     namespace: structural.scip
@@ -33737,6 +33869,12 @@ code_symbols:
     file: internal/runreceipt/receipt_test.go
     symbol: completeReceipt
     kind: function
+  - id: internal/runreceipt/receipt_test.go:planAdmissionRefusedReceipt
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt_test.go
+    symbol: planAdmissionRefusedReceipt
+    kind: function
   - id: internal/runreceipt/receipt_test.go:recordedValue
     namespace: structural.scip
     language: go
@@ -33748,6 +33886,12 @@ code_symbols:
     language: go
     file: internal/runreceipt/receipt_test.go
     symbol: unattemptedReceipt
+    kind: function
+  - id: internal/runreceipt/receipt_test.go:validPlanAdmissionRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt_test.go
+    symbol: validPlanAdmissionRefusal
     kind: function
   - id: internal/runreceipt/vocabulary_test.go:TestTheReceiptVocabularyMatchesTheReviewerContract
     namespace: structural.scip
@@ -35285,11 +35429,23 @@ code_symbols:
     file: internal/session/interrupted_test.go
     symbol: TestACreatedTaskWithNoObjectiveIsFoundAndClassifiedUnusable
     kind: function
+  - id: internal/session/interrupted_test.go:TestAFirstRefusalIsOwedBesideAnOperativePlanUntilAPlanIsAdmitted
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestAFirstRefusalIsOwedBesideAnOperativePlanUntilAPlanIsAdmitted
+    kind: function
   - id: internal/session/interrupted_test.go:TestAPreconditionRefusalSurvivesReconstructionWithItsQuestionStanding
     namespace: structural.scip
     language: go
     file: internal/session/interrupted_test.go
     symbol: TestAPreconditionRefusalSurvivesReconstructionWithItsQuestionStanding
+    kind: function
+  - id: internal/session/interrupted_test.go:TestARefusalBeforeItsAttemptStartedSeedsNoRepetitionState
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestARefusalBeforeItsAttemptStartedSeedsNoRepetitionState
     kind: function
   - id: internal/session/interrupted_test.go:TestATaskIsDiscoverableFromItsCreationUntilItEnds
     namespace: structural.scip
@@ -35321,6 +35477,12 @@ code_symbols:
     file: internal/session/interrupted_test.go
     symbol: TestDeferredAuthorityIsResumableAndCarriesItsQuestion
     kind: function
+  - id: internal/session/interrupted_test.go:TestDistinctRefusalsOfOneAttemptAreKeptAndTheOwedOneIsTheParkedOne
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestDistinctRefusalsOfOneAttemptAreKeptAndTheOwedOneIsTheParkedOne
+    kind: function
   - id: internal/session/interrupted_test.go:TestEachTaskIsJudgedSeparately
     namespace: structural.scip
     language: go
@@ -35350,6 +35512,12 @@ code_symbols:
     language: go
     file: internal/session/interrupted_test.go
     symbol: ev
+    kind: function
+  - id: internal/session/interrupted_test.go:pev
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: pev
     kind: function
   - id: internal/session/large_event_test.go:TestAPreservedCandidateStaysResumableAcrossALargeEvent
     namespace: structural.scip
@@ -35525,6 +35693,12 @@ code_symbols:
     file: internal/session/store.go
     symbol: Interrupted.Plan
     kind: var
+  - id: internal/session/store.go:Interrupted.PlanAdmissionRefused
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Interrupted.PlanAdmissionRefused
+    kind: var
   - id: internal/session/store.go:Interrupted.PlanAttemptID
     namespace: structural.scip
     language: go
@@ -35651,6 +35825,12 @@ code_symbols:
     file: internal/session/store.go
     symbol: New
     kind: function
+  - id: internal/session/store.go:PlanAdmissionContinuationArchitectTurn
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: PlanAdmissionContinuationArchitectTurn
+    kind: const
   - id: internal/session/store.go:Store.Append
     namespace: structural.scip
     language: go
@@ -35728,6 +35908,12 @@ code_symbols:
     language: go
     file: internal/session/store.go
     symbol: recordPath
+    kind: function
+  - id: internal/session/store.go:refusalOf
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: refusalOf
     kind: function
   - id: internal/setup/checks.go:DecodeToolNames
     namespace: structural.scip
@@ -42593,6 +42779,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.Store
     kind: var
+  - id: internal/workflow/engine.go:Engine.admissionRefusalOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.admissionRefusalOf
+    kind: method
   - id: internal/workflow/engine.go:Engine.adoptPlanAttempt
     namespace: structural.scip
     language: go
@@ -42719,6 +42911,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.closures
     kind: var
+  - id: internal/workflow/engine.go:Engine.continueAfterAdmissionRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.continueAfterAdmissionRefusal
+    kind: method
   - id: internal/workflow/engine.go:Engine.conversationSoFar
     namespace: structural.scip
     language: go
@@ -42869,6 +43067,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.notePlanAttemptStarted
     kind: method
+  - id: internal/workflow/engine.go:Engine.noteScopedPreflight
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.noteScopedPreflight
+    kind: method
   - id: internal/workflow/engine.go:Engine.noteUnprovenAuthorityScope
     namespace: structural.scip
     language: go
@@ -42952,6 +43156,18 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.operativePlanAttempt
+    kind: method
+  - id: internal/workflow/engine.go:Engine.owedPlanAdmissionRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.owedPlanAdmissionRefusal
+    kind: method
+  - id: internal/workflow/engine.go:Engine.parkPlanAdmission
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.parkPlanAdmission
     kind: method
   - id: internal/workflow/engine.go:Engine.pending
     namespace: structural.scip
@@ -43055,6 +43271,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.recordObjective
     kind: method
+  - id: internal/workflow/engine.go:Engine.recordPlanAdmissionRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.recordPlanAdmissionRefusal
+    kind: method
   - id: internal/workflow/engine.go:Engine.recordProspectiveGrants
     namespace: structural.scip
     language: go
@@ -43078,6 +43300,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.recordedObjective
+    kind: method
+  - id: internal/workflow/engine.go:Engine.refusalRecorded
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.refusalRecorded
     kind: method
   - id: internal/workflow/engine.go:Engine.refuseCandidatePrecondition
     namespace: structural.scip
@@ -43174,6 +43402,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.resolveSuppliedPlan
+    kind: method
+  - id: internal/workflow/engine.go:Engine.restorePlanAdmissionRefusals
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.restorePlanAdmissionRefusals
     kind: method
   - id: internal/workflow/engine.go:Engine.restorePlanAttempt
     namespace: structural.scip
@@ -43325,6 +43559,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.takeNotes
     kind: method
+  - id: internal/workflow/engine.go:Engine.takeRestoredRefusals
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.takeRestoredRefusals
+    kind: method
   - id: internal/workflow/engine.go:Engine.taskState
     namespace: structural.scip
     language: go
@@ -43403,6 +43643,42 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: New
     kind: function
+  - id: internal/workflow/engine.go:PlanAdmissionRefused.Describe
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: PlanAdmissionRefused.Describe
+    kind: method
+  - id: internal/workflow/engine.go:PlanAdmissionRefused.Error
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: PlanAdmissionRefused.Error
+    kind: method
+  - id: internal/workflow/engine.go:PlanAdmissionRefused.Unwrap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: PlanAdmissionRefused.Unwrap
+    kind: method
+  - id: internal/workflow/engine.go:PlanAdmissionRefused.cause
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: PlanAdmissionRefused.cause
+    kind: var
+  - id: internal/workflow/engine.go:PlanAdmissionRefused.planAttemptRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: PlanAdmissionRefused.planAttemptRefusal
+    kind: var
+  - id: internal/workflow/engine.go:PlanAdmissionRefused~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: PlanAdmissionRefused
+    kind: type
   - id: internal/workflow/engine.go:ReviewPayloadHeading
     namespace: structural.scip
     language: go
@@ -44303,6 +44579,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: parseFindingResponses
     kind: function
+  - id: internal/workflow/engine.go:planAdmissionEvidenceID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAdmissionEvidenceID
+    kind: function
   - id: internal/workflow/engine.go:planAdmissionRefusal.Error
     namespace: structural.scip
     language: go
@@ -44321,6 +44603,54 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: planAdmissionRefusal.cause
     kind: var
+  - id: internal/workflow/engine.go:planAdmissionRefusal.class
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAdmissionRefusal.class
+    kind: var
+  - id: internal/workflow/engine.go:planAdmissionRefusal.declaration
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAdmissionRefusal.declaration
+    kind: var
+  - id: internal/workflow/engine.go:planAdmissionRefusalClass.returnsToArchitect
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAdmissionRefusalClass.returnsToArchitect
+    kind: method
+  - id: internal/workflow/engine.go:planAdmissionRefusalClass~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAdmissionRefusalClass
+    kind: type
+  - id: internal/workflow/engine.go:planAdmissionRefusalEnvelope
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAdmissionRefusalEnvelope
+    kind: function
+  - id: internal/workflow/engine.go:planAdmissionRefusalID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAdmissionRefusalID
+    kind: function
+  - id: internal/workflow/engine.go:planAdmissionRefusalIdentityVersion
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAdmissionRefusalIdentityVersion
+    kind: const
+  - id: internal/workflow/engine.go:planAdmissionRefusalPrompt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAdmissionRefusalPrompt
+    kind: function
   - id: internal/workflow/engine.go:planAdmissionRefusal~type
     namespace: structural.scip
     language: go
@@ -44435,6 +44765,30 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: planAttemptKey
     kind: type
+  - id: internal/workflow/engine.go:planAttemptRefusal.Class
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAttemptRefusal.Class
+    kind: var
+  - id: internal/workflow/engine.go:planAttemptRefusal.Continuation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAttemptRefusal.Continuation
+    kind: var
+  - id: internal/workflow/engine.go:planAttemptRefusal.Declaration
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAttemptRefusal.Declaration
+    kind: var
+  - id: internal/workflow/engine.go:planAttemptRefusal.GoverningEvidenceID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAttemptRefusal.GoverningEvidenceID
+    kind: var
   - id: internal/workflow/engine.go:planAttemptRefusal.PlanAttemptID
     namespace: structural.scip
     language: go
@@ -44446,6 +44800,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: planAttemptRefusal.Reason
+    kind: var
+  - id: internal/workflow/engine.go:planAttemptRefusal.RefusalID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAttemptRefusal.RefusalID
     kind: var
   - id: internal/workflow/engine.go:planAttemptRefusal.TaskID
     namespace: structural.scip
@@ -44579,6 +44939,30 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: publishedRecipe
     kind: function
+  - id: internal/workflow/engine.go:refusalAuthorityDeclined
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusalAuthorityDeclined
+    kind: const
+  - id: internal/workflow/engine.go:refusalProspectiveAdmission
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusalProspectiveAdmission
+    kind: const
+  - id: internal/workflow/engine.go:refusalSuppliedPlan
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusalSuppliedPlan
+    kind: const
+  - id: internal/workflow/engine.go:refusalTestEditAdmission
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusalTestEditAdmission
+    kind: const
   - id: internal/workflow/engine.go:refusePlanAdmission
     namespace: structural.scip
     language: go
@@ -44651,6 +45035,18 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: resolutionRounds
     kind: type
+  - id: internal/workflow/engine.go:restorationSubjectPlanAdmissionRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: restorationSubjectPlanAdmissionRefusal
+    kind: const
+  - id: internal/workflow/engine.go:restoredRefusalsPrompt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: restoredRefusalsPrompt
+    kind: function
   - id: internal/workflow/engine.go:retainedCandidate
     namespace: structural.scip
     language: go
@@ -44993,6 +45389,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: taskPlanAttempts.operativeProspective
     kind: var
+  - id: internal/workflow/engine.go:taskPlanAttempts.owedRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: taskPlanAttempts.owedRefusal
+    kind: var
   - id: internal/workflow/engine.go:taskPlanAttempts.pending
     namespace: structural.scip
     language: go
@@ -45016,6 +45418,18 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: taskPlanAttempts.refused
+    kind: var
+  - id: internal/workflow/engine.go:taskPlanAttempts.restoredRefusals
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: taskPlanAttempts.restoredRefusals
+    kind: var
+  - id: internal/workflow/engine.go:taskPlanAttempts.scopedPreflight
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: taskPlanAttempts.scopedPreflight
     kind: var
   - id: internal/workflow/engine.go:taskPlanAttempts.unrecorded
     namespace: structural.scip
@@ -47681,6 +48095,78 @@ code_symbols:
     file: internal/workflow/planattempt_test.go
     symbol: TestEveryAdmissionRefusalIsRecordedAgainstItsAttempt
     kind: function
+  - id: internal/workflow/planattempt_test.go:TestObj61ARefusalBeforeItsStartIsNeverRepetitionState
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestObj61ARefusalBeforeItsStartIsNeverRepetitionState
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestObj61AResumeRefusingAnOwedRefusalMeasuresTheRetainedCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestObj61AResumeRefusingAnOwedRefusalMeasuresTheRetainedCandidate
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestObj61OnlyARecordedReturnToTheArchitectIsOwed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestObj61OnlyARecordedReturnToTheArchitectIsOwed
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestObj61W1ARefusedPlanReturnsToTheArchitectAndTheTaskProceeds
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestObj61W1ARefusedPlanReturnsToTheArchitectAndTheTaskProceeds
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestObj61W2AMateriallyDifferentPlanResetsTheRepeatIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestObj61W2AMateriallyDifferentPlanResetsTheRepeatIdentity
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestObj61W2ARepeatedIdenticalRefusalEndsTheInvocationNamed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestObj61W2ARepeatedIdenticalRefusalEndsTheInvocationNamed
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestObj61W2NewGovernedEvidenceResetsTheRepeatIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestObj61W2NewGovernedEvidenceResetsTheRepeatIdentity
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestObj61W3AReplacementPlanDerivesItsAuthorityFresh
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestObj61W3AReplacementPlanDerivesItsAuthorityFresh
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestObj61W5TheContinuationIsOneSharedBoundary
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestObj61W5TheContinuationIsOneSharedBoundary
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestObj61W7AResumePresentsTheOwedRefusalAndRestoresNoAuthority
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestObj61W7AResumePresentsTheOwedRefusalAndRestoresNoAuthority
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestObj61W7BAFirstReplanRefusalOfAPlannedTaskIsOwedAcrossInterruption
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestObj61W7BAFirstReplanRefusalOfAPlannedTaskIsOwedAcrossInterruption
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
+    kind: function
   - id: internal/workflow/planattempt_test.go:TestOnlyAGenuineAdmissionRefusalIsRecordedAsOne
     namespace: structural.scip
     language: go
@@ -47783,6 +48269,12 @@ code_symbols:
     file: internal/workflow/planattempt_test.go
     symbol: attemptPlan
     kind: function
+  - id: internal/workflow/planattempt_test.go:beforeStartRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: beforeStartRefusal
+    kind: function
   - id: internal/workflow/planattempt_test.go:breakStore
     namespace: structural.scip
     language: go
@@ -47819,6 +48311,12 @@ code_symbols:
     file: internal/workflow/planattempt_test.go
     symbol: derivingSensei
     kind: const
+  - id: internal/workflow/planattempt_test.go:drivePlanAdmission
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: drivePlanAdmission
+    kind: function
   - id: internal/workflow/planattempt_test.go:durableStore
     namespace: structural.scip
     language: go
@@ -47843,17 +48341,83 @@ code_symbols:
     file: internal/workflow/planattempt_test.go
     symbol: grantWorld
     kind: function
+  - id: internal/workflow/planattempt_test.go:implementerStartedBefore
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: implementerStartedBefore
+    kind: function
+  - id: internal/workflow/planattempt_test.go:indexOfKind
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: indexOfKind
+    kind: function
   - id: internal/workflow/planattempt_test.go:interruptedFrom
     namespace: structural.scip
     language: go
     file: internal/workflow/planattempt_test.go
     symbol: interruptedFrom
     kind: function
+  - id: internal/workflow/planattempt_test.go:obj61CoveredRun
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: obj61CoveredRun
+    kind: function
+  - id: internal/workflow/planattempt_test.go:obj61OwedHeading
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: obj61OwedHeading
+    kind: const
+  - id: internal/workflow/planattempt_test.go:obj61Refused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: obj61Refused
+    kind: const
+  - id: internal/workflow/planattempt_test.go:obj61RefusedAgain
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: obj61RefusedAgain
+    kind: const
+  - id: internal/workflow/planattempt_test.go:obj61RefusedWithEdit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: obj61RefusedWithEdit
+    kind: const
+  - id: internal/workflow/planattempt_test.go:obj61Run
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: obj61Run
+    kind: function
+  - id: internal/workflow/planattempt_test.go:planAdmissionRefusedMarker
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: planAdmissionRefusedMarker
+    kind: const
+  - id: internal/workflow/planattempt_test.go:planAttemptOfRecord
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: planAttemptOfRecord
+    kind: function
   - id: internal/workflow/planattempt_test.go:reconstructed
     namespace: structural.scip
     language: go
     file: internal/workflow/planattempt_test.go
     symbol: reconstructed
+    kind: function
+  - id: internal/workflow/planattempt_test.go:refusalsIn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: refusalsIn
     kind: function
   - id: internal/workflow/planattempt_test.go:refusedForPlanAttempt
     namespace: structural.scip
@@ -47891,6 +48455,12 @@ code_symbols:
     file: internal/workflow/planattempt_test.go
     symbol: replanSamePaths
     kind: const
+  - id: internal/workflow/planattempt_test.go:requireRefusalEnvelope
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: requireRefusalEnvelope
+    kind: function
   - id: internal/workflow/planattempt_test.go:restoreFresh
     namespace: structural.scip
     language: go
@@ -49469,6 +50039,12 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: Engine.notePlanAbsent
     kind: method
+  - id: internal/workflow/receipt.go:Engine.notePlanAdmissionRefused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: Engine.notePlanAdmissionRefused
+    kind: method
   - id: internal/workflow/receipt.go:Engine.notePlanUnidentified
     namespace: structural.scip
     language: go
@@ -49684,6 +50260,12 @@ code_symbols:
     language: go
     file: internal/workflow/receipt.go
     symbol: receiptFacts.plan
+    kind: var
+  - id: internal/workflow/receipt.go:receiptFacts.planAdmissionRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: receiptFacts.planAdmissionRefusal
     kind: var
   - id: internal/workflow/receipt.go:receiptFacts.planState
     namespace: structural.scip
@@ -53255,6 +53837,18 @@ code_symbols:
     file: internal/workflow/testedit_test.go
     symbol: TestEveryProjectedRefusalIsAlsoALateRefusal
     kind: function
+  - id: internal/workflow/testedit_test.go:TestObj61W4AnExistingTestEditRefusalTakesTheSameContinuation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestObj61W4AnExistingTestEditRefusalTakesTheSameContinuation
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestObj61W6UngrantedRequiredTestEditCannotReachImplementation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestObj61W6UngrantedRequiredTestEditCannotReachImplementation
+    kind: function
   - id: internal/workflow/testedit_test.go:TestOperationalAuthorityIsSubtractedFromTheCoverageQuestionNotAddedToIt
     namespace: structural.scip
     language: go
@@ -53507,6 +54101,18 @@ code_symbols:
     file: internal/workflow/testedit_test.go
     symbol: inspectDiff
     kind: function
+  - id: internal/workflow/testedit_test.go:obj61W4Refused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: obj61W4Refused
+    kind: const
+  - id: internal/workflow/testedit_test.go:obj61W6Plan
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: obj61W6Plan
+    kind: const
   - id: internal/workflow/testedit_test.go:preDF23InspectTestEdits
     namespace: structural.scip
     language: go
