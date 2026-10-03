@@ -41,6 +41,7 @@
 package runreceipt
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -59,7 +60,7 @@ import (
 // COMPLETE receipt means, so the version moves with them: a reader on the wrong
 // version misreads the record, which is the fabricated specimen this comment
 // warns about.
-const SchemaVersion = "sensei-code.governed-run-receipt/v12"
+const SchemaVersion = "sensei-code.governed-run-receipt/v13"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?
@@ -166,6 +167,12 @@ const (
 	// the canonical checkout is not clean, and executed nothing. The task
 	// stands and is resumable once the checkout is clean.
 	OutcomeDirtyCanonicalRefused Outcome = "DIRTY_CANONICAL_REFUSED"
+	// OutcomePlanAdmissionRefused: the architect's plan was refused at
+	// admission, the refusal was returned to the architect, and the architect
+	// answered with the same refused plan under the same evidence. No
+	// implementer started. FAILED would end a task whose objective nothing
+	// showed impossible; the task stands and is resumable.
+	OutcomePlanAdmissionRefused Outcome = "PLAN_ADMISSION_REFUSED"
 	// OutcomeUnknown: the record does not say. This is an admission of
 	// ignorance the reader can act on, not a default that hides one.
 	OutcomeUnknown Outcome = "UNKNOWN"
@@ -179,7 +186,7 @@ func (o Outcome) Valid() bool {
 	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
 		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeReviewObligationUnmet,
 		OutcomeBlockedExternal, OutcomeNotConverged, OutcomeRestorationRefused,
-		OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused, OutcomeUnknown:
+		OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused, OutcomePlanAdmissionRefused, OutcomeUnknown:
 		return true
 	}
 	return false
@@ -258,6 +265,15 @@ var vocabularies = map[string][]Outcome{
 		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged,
 		OutcomeRestorationRefused, OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused, OutcomeUnknown,
 	},
+	// v13 adds PLAN_ADMISSION_REFUSED: a repeated plan-admission refusal that
+	// ended the invocation.
+	"sensei-code.governed-run-receipt/v13": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
+		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged,
+		OutcomeRestorationRefused, OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused,
+		OutcomePlanAdmissionRefused, OutcomeUnknown,
+	},
 }
 
 // candidateVocabularies pins the CANDIDATE vocabulary per version, for the same
@@ -294,6 +310,10 @@ var candidateVocabularies = map[string][]CandidateState{
 	},
 	// v12 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
 	"sensei-code.governed-run-receipt/v12": {
+		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
+	},
+	// v13 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
+	"sensei-code.governed-run-receipt/v13": {
 		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
 	},
 }
@@ -702,6 +722,17 @@ type Receipt struct {
 	// diagnosis it is not, and telling those apart is the whole repair.
 	RestorationRefusal Value `json:"restoration_refusal"`
 
+	// PlanAdmissionRefusal is the exact canonical plan-admission refusal a
+	// PLAN_ADMISSION_REFUSED invocation parked on.
+	//
+	// Required when the outcome is PLAN_ADMISSION_REFUSED and contradictory
+	// beside any other outcome. The outcome alone says a refusal ended the
+	// invocation without saying WHICH, and the terminal event that names it is
+	// emitted after this record, so it cannot make this record self-contained.
+	// A pointer, because a record that never stated the fact (nil) differs from
+	// one that stated it was not measured.
+	PlanAdmissionRefusal *PlanAdmissionRefusal `json:"plan_admission_refusal,omitempty"`
+
 	// ReviewedTree is the content the verdict's envelope named. A receipt that
 	// states a candidate tree and a reviewed digest, while proving nothing about
 	// whether the verdict was bound to THAT tree, sends a later adjudicator back
@@ -766,6 +797,7 @@ func (r Receipt) Fields() []Field {
 	blocked := r.Outcome == OutcomeBlockedExternal
 	notConverged := r.Outcome == OutcomeNotConverged
 	restorationRefused := r.Outcome == OutcomeRestorationRefused
+	planAdmissionRefused := r.Outcome == OutcomePlanAdmissionRefused
 	return []Field{
 		{"governor_commit", r.GovernorCommit, Rederivable, true},
 		{"governor_binary_sha256", r.GovernorBinarySHA256, Rederivable, true},
@@ -788,6 +820,7 @@ func (r Receipt) Fields() []Field {
 		{"external_block", r.ExternalBlock, Observed, blocked},
 		{"not_converged", r.NotConverged, Observed, notConverged},
 		{"restoration_refusal", r.RestorationRefusal, Observed, restorationRefused},
+		{"plan_admission_refusal", r.PlanAdmissionRefusal.value(), Observed, planAdmissionRefused},
 		{"formatter_mutation", r.FormatterMutationState, Observed, worked},
 		{"terminal", r.Terminal, Observed, true},
 	}
@@ -928,6 +961,8 @@ func (r Receipt) Completeness() (Completeness, []string) {
 		missing = append(missing, "outcome UNREVIEWED while a bounded verdict is recorded: the condition contradicts the evidence")
 	}
 
+	missing = append(missing, r.checkPlanAdmissionRefusal()...)
+
 	if r.FormatterMutationState.State == Known &&
 		!FormatterMutation(r.FormatterMutationState.Text).Valid() {
 		missing = append(missing, fmt.Sprintf(
@@ -963,6 +998,116 @@ func (r Receipt) Completeness() (Completeness, []string) {
 		return Incomplete, missing
 	}
 	return Complete, nil
+}
+
+// PlanAdmissionRefusalClass is the closed vocabulary of plan-admission refusal
+// classes that park an invocation.
+//
+// It mirrors the workflow's returning classes deliberately rather than
+// importing them, for the reason ReviewDecision mirrors roles.Decision: only a
+// refusal the workflow returns to the architect can be repeated and park an
+// invocation, so only those classes may name a parked refusal here.
+type PlanAdmissionRefusalClass string
+
+const (
+	PlanAdmissionProspective PlanAdmissionRefusalClass = "prospective_admission"
+	PlanAdmissionTestEdit    PlanAdmissionRefusalClass = "test_edit_admission"
+)
+
+// Valid reads membership by enumeration.
+func (c PlanAdmissionRefusalClass) Valid() bool {
+	switch c {
+	case PlanAdmissionProspective, PlanAdmissionTestEdit:
+		return true
+	}
+	return false
+}
+
+// PlanAdmissionRefusal is the observed canonical plan-admission refusal, copied
+// losslessly from the workflow's refusal record: the attempt it refused, the
+// refusal's own identity, its class, the exact declarations under admission,
+// the reason and the identity of the governing evidence it was decided on.
+//
+// Its State and Source obey the law every Value obeys. A Known fact must carry
+// every identity component in its canonical shape: a refusal named without the
+// attempt it refused, or by an identity that is not a canonical one, cannot be
+// resumed against and is not a record of which refusal parked the invocation.
+type PlanAdmissionRefusal struct {
+	State  Knownness `json:"state"`
+	Source string    `json:"source,omitempty"`
+	Detail string    `json:"detail,omitempty"`
+
+	PlanAttemptID string                    `json:"plan_attempt_id,omitempty"`
+	RefusalID     string                    `json:"refusal_id,omitempty"`
+	Class         PlanAdmissionRefusalClass `json:"refusal_class,omitempty"`
+	// Declaration is the plan's exact declarations of the refused class, the
+	// JSON text the refusal record carries, byte for byte.
+	Declaration         string `json:"declaration,omitempty"`
+	Reason              string `json:"reason,omitempty"`
+	GoverningEvidenceID string `json:"governing_evidence_id,omitempty"`
+}
+
+// value projects the fact onto the axis every field shares, so requiredness
+// and the State/Source law are read the same way as for every other fact. A
+// record that never stated it is an absence, stated.
+func (p *PlanAdmissionRefusal) value() Value {
+	if p == nil {
+		return UnknownValue("absent: the record does not state a plan-admission refusal")
+	}
+	v := Value{State: p.State, Source: p.Source, Detail: p.Detail}
+	if p.State == Known {
+		v.Text = fmt.Sprintf("plan attempt %s refused at admission (class %s, refusal %s)", p.PlanAttemptID, p.Class, p.RefusalID)
+	}
+	return v
+}
+
+// canonicalIdentity reports whether s has the shape of a canonical identity:
+// a SHA-256, lowercase hex.
+func canonicalIdentity(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// checkPlanAdmissionRefusal holds the refusal fact to its outcome and to its
+// canonical shape. Requiredness and an unknown state are read by Fields; this
+// reads what Fields cannot: a fact stated beside an outcome that contradicts
+// it, and a Known fact whose identity is partial, malformed or non-canonical.
+func (r Receipt) checkPlanAdmissionRefusal() []string {
+	p := r.PlanAdmissionRefusal
+	if p == nil || p.State != Known {
+		return nil
+	}
+	var bad []string
+	if r.Outcome != OutcomePlanAdmissionRefused {
+		bad = append(bad, fmt.Sprintf(
+			"plan_admission_refusal is measured while the outcome is %s: the record names a refusal that did not end this invocation", r.Outcome))
+	}
+	for _, id := range []struct{ name, v string }{
+		{"plan_attempt_id", p.PlanAttemptID},
+		{"refusal_id", p.RefusalID},
+		{"governing_evidence_id", p.GoverningEvidenceID},
+	} {
+		if !canonicalIdentity(id.v) {
+			bad = append(bad, fmt.Sprintf("plan_admission_refusal.%s %q is not a canonical identity (lowercase hex SHA-256)", id.name, id.v))
+		}
+	}
+	if !p.Class.Valid() {
+		bad = append(bad, fmt.Sprintf("plan_admission_refusal.refusal_class %q is not a class that returns to the architect", p.Class))
+	}
+	if strings.TrimSpace(p.Declaration) == "" || !json.Valid([]byte(p.Declaration)) {
+		bad = append(bad, fmt.Sprintf("plan_admission_refusal.declaration %q is not the refused declarations as recorded JSON", p.Declaration))
+	}
+	if strings.TrimSpace(p.Reason) == "" {
+		bad = append(bad, "plan_admission_refusal.reason: absent")
+	}
+	return bad
 }
 
 func shortSHA(s string) string {

@@ -267,10 +267,29 @@ type Interrupted struct {
 	// not an empty grant set, and is left for the restorer to refuse.
 	PlanAttemptID string
 	// PlanAttemptRefusals are the plan-admission refusals this task recorded,
-	// keyed by the PlanAttemptID each refused, payload byte for byte. Evidence
-	// about those exact attempts: a refusal never attaches to another attempt
-	// and never makes the task planned.
+	// keyed by each one's canonical RefusalID, payload byte for byte; each
+	// payload names the PlanAttemptID it refused. Keyed by refusal and not by
+	// attempt because one attempt may be refused more than once under
+	// different governing evidence, and a later refusal must not erase an
+	// earlier one. A record written before refusals carried a RefusalID is
+	// keyed by the PlanAttemptID it refused, as it always was. Evidence about
+	// those exact attempts: a refusal never attaches to another attempt and
+	// never makes the task planned. Only a refusal recorded after its
+	// attempt's PlanAttemptStarted is kept here.
 	PlanAttemptRefusals map[string]json.RawMessage
+	// PlanAdmissionRefused is the plan-admission refusal the task is currently
+	// OWED an architect turn for, payload byte for byte, named by its
+	// PlanAttemptID and RefusalID: the newest canonical PlanAttemptRefused
+	// whose recorded continuation is PlanAdmissionContinuationArchitectTurn (a
+	// first occurrence the workflow returned to the architect), or
+	// WorkflowPlanAdmissionRefused (a repeat an invocation parked on). It is
+	// the durable statement of which refusal is owed, read in record order and
+	// not from the RefusalID-keyed map. A later PlanProposed -- an admitted
+	// plan -- discharges it, including when an older plan was already
+	// operative. Which refusals return to the architect is the workflow
+	// package's to decide, and it records that decision on the refusal; this
+	// projection reads the recorded decision and never infers it.
+	PlanAdmissionRefused json.RawMessage
 	// PlanAttemptStart is the FIRST PlanAttemptStarted record of the operative
 	// attempt, payload byte for byte: the durable prerequisite every authority
 	// record and the operative PlanProposed of that attempt stand on. Absent
@@ -366,6 +385,29 @@ func planAttemptOf(raw json.RawMessage) string {
 		return ""
 	}
 	return r.PlanAttemptID
+}
+
+// PlanAdmissionContinuationArchitectTurn is the continuation the workflow
+// records on a PlanAttemptRefused when it returned that refusal to the
+// architect, so the task is owed an architect turn for it. Read by membership:
+// a refusal recorded with any other continuation, or none, owes nothing.
+const PlanAdmissionContinuationArchitectTurn = "architect_turn"
+
+// refusalOf reads only the refusal_id a refusal record names ("" for a record
+// written before refusals carried one) and the continuation the workflow
+// recorded on it. The workflow package owns the record's full shape.
+func refusalOf(raw json.RawMessage) (id, continuation string) {
+	if len(raw) == 0 {
+		return "", ""
+	}
+	var r struct {
+		RefusalID    string `json:"refusal_id"`
+		Continuation string `json:"continuation"`
+	}
+	if json.Unmarshal(raw, &r) != nil {
+		return "", ""
+	}
+	return r.RefusalID, r.Continuation
 }
 
 // FindInterrupted reconstructs, from one session record, every task that has
@@ -471,6 +513,9 @@ func FindInterrupted(events []event.Event) []Interrupted {
 				p.BlockedExternal = nil
 			}
 			p.NotConverged = nil
+			// An admitted plan is the architect turn an owed plan-admission
+			// refusal was holding.
+			p.PlanAdmissionRefused = nil
 			p.PlanEventSource = e.Source
 			var src struct {
 				Source string `json:"plan_source"`
@@ -500,11 +545,40 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			p.testEditsAt[planAttemptOf(e.Payload)] = at
 		case event.PlanAttemptRefused:
 			if id := planAttemptOf(e.Payload); id != "" {
+				key, continuation := refusalOf(e.Payload)
+				if key != "" && continuation == PlanAdmissionContinuationArchitectTurn {
+					// A canonical refusal the workflow returned to the
+					// architect is owed an architect turn from the moment it
+					// is recorded -- the first occurrence, not only a parked
+					// repeat -- until an admitted plan discharges it, whether
+					// or not an older plan is operative. Any other refusal is
+					// evidence only. Owed even when the refusal below is not
+					// admitted: the obligation is preserved so restoration
+					// refuses its binding by name instead of losing it.
+					p.PlanAdmissionRefused = e.Payload
+				}
+				// A refusal is bound to an attempt only when that attempt was
+				// durably started EARLIER in the record. A refusal recorded
+				// before its start refused nothing this task had routed, and a
+				// later start of the same identity does not validate it
+				// retroactively, so it never enters the refusals restoration
+				// reads as repetition state. This fold is the one place that
+				// order is still visible.
+				if _, started := p.starts[id]; !started {
+					break
+				}
+				if key == "" {
+					key = id
+				}
 				if p.PlanAttemptRefusals == nil {
 					p.PlanAttemptRefusals = map[string]json.RawMessage{}
 				}
-				p.PlanAttemptRefusals[id] = e.Payload
+				p.PlanAttemptRefusals[key] = e.Payload
 			}
+		case event.WorkflowPlanAdmissionRefused:
+			// Not terminal: the invocation parked on a repeated refusal of a
+			// plan, and the task is owed an architect turn under it.
+			p.PlanAdmissionRefused = e.Payload
 		case event.WorkflowStopped:
 			// Deliberately not terminal. A stop is the human withdrawing
 			// attention, and the whole point of leaving the candidate as it

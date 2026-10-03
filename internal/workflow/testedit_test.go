@@ -2813,3 +2813,140 @@ func TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff(t *te
 		t.Errorf("the refusal was reported as implementors failing rather than as itself: %v", failed)
 	}
 }
+
+// OBJECTIVE 61 -- AN EXISTING-TEST EDIT ADMISSION REFUSAL TAKES THE SAME
+// TYPED PLAN-ADMISSION CONTINUATION. The DF-37b and DF-23 witnesses above are
+// unchanged; these consume them.
+
+// obj61W4Refused edits the existing test beside main.go, which routing grants,
+// but declares an import the pinned world's test does not carry: refused by
+// projectTestEditRefusals at plan admission.
+const obj61W4Refused = `{"decision":"proceed","summary":"edit main","plan":"plan A: edit main.go and its test with a new import","files":["main.go","main_test.go"],"mode":"modify",` +
+	`"test_edits":[{"path":"main_test.go","operation":"edit","package":"main","build_constraints":[],"imports":["testing","os"]}]}`
+
+// W4 (Objective 61): COMMON ADMISSION PATH. A projected existing-test edit
+// refusal establishes only that the proposed plan is inadmissible, so it takes
+// the same continuation a prospective refusal takes: no implementer starts,
+// the refusal is returned to the architect, the replacement's authority is
+// derived fresh under its own attempt, and its identical repetition parks.
+func TestObj61W4AnExistingTestEditRefusalTakesTheSameContinuation(t *testing.T) {
+	t.Run("returned, then replaced", func(t *testing.T) {
+		const task = "task-obj61-w4"
+		run, architect := obj61Run(t, sessionStore(t), task, obj61W4Refused, replanA)
+		refusals := refusalsIn(t, run.events)
+		attempts := startedAttempts(t, run.events)
+		if len(refusals) != 1 || len(attempts) != 2 || refusals[0].PlanAttemptID != attempts[0] {
+			t.Fatalf("premise: the edit plan refused once at admission, then replaced: attempts %v refusals %+v\n%s", attempts, refusals, gapLoopTrace(run.events))
+		}
+		r := refusals[0]
+		if r.Class != refusalTestEditAdmission || !strings.Contains(r.Reason, "os") || !strings.Contains(string(r.Declaration), "main_test.go") {
+			t.Fatalf("the projected refusal is not typed as an existing-test edit admission refusal: %+v", r)
+		}
+		if implementerStartedBefore(run.events, indexOfKind(run.events, event.PlanAttemptRefused)) {
+			t.Fatal("an agent started before the existing-test edit refusal")
+		}
+		if len(architect.prompts) != 2 || !strings.Contains(architect.prompts[1], planAdmissionRefusedMarker) {
+			t.Fatal("the existing-test edit refusal was not returned to the architect")
+		}
+		// The replacement holds its OWN grant, recorded under its own attempt.
+		_, ed := run.engine.recordedGrants(task, attempts[1])
+		if ed.PlanAttemptID != attempts[1] || len(ed.Grants) != 1 || ed.Grants[0].Path != "main_test.go" {
+			t.Fatalf("the replacement's test-edit authority was not derived under its own attempt: %+v", ed)
+		}
+		if op := run.engine.operativePlanAttempt(task); op.ID != attempts[1] {
+			t.Fatalf("the replacement did not become operative: %s", op.ID)
+		}
+	})
+	t.Run("repeated, then parked", func(t *testing.T) {
+		const task = "task-obj61-w4-repeat"
+		run, architect := obj61Run(t, sessionStore(t), task, obj61W4Refused)
+		if len(architect.prompts) != 2 || !hasKind(kindsOf(run.events), event.WorkflowPlanAdmissionRefused) ||
+			hasKind(kindsOf(run.events), event.WorkflowFailed) || hasKind(kindsOf(run.events), event.PlanProposed) {
+			t.Fatalf("the repeated existing-test edit refusal was not bounded (%d prompts):\n%s", len(architect.prompts), gapLoopTrace(run.events))
+		}
+	})
+}
+
+// obj61W6Plan is an objective-61-shaped plan requiring two existing-test
+// edits: main_test.go beside main.go and other/other_test.go beside
+// other/other.go.
+const obj61W6Plan = `{"decision":"proceed","summary":"vocabulary","plan":"plan W6: edit two production files and the existing test beside each","files":["main.go","main_test.go","other/other.go","other/other_test.go"],"mode":"modify",` +
+	`"test_edits":[{"path":"main_test.go","operation":"edit","package":"main","build_constraints":[],"imports":["testing"]},` +
+	`{"path":"other/other_test.go","operation":"edit","package":"other","build_constraints":[],"imports":["testing"]}]}`
+
+// W6 (Objective 61): TEST-AUTHORITY CONSUMPTION, through the production
+// routing and architect path. Where the pinned world's governance derives a
+// grant for main_test.go and none for other/other_test.go, the plan is refused
+// at admission, its refusal reaches the architect, no implementer starts, and
+// its identical repeat parks. Where the governance derives both, the SAME plan
+// is admitted, operative, with both grants recorded under its PlanAttemptID.
+// Every grant here is one the production coverage path derived and recorded;
+// DF-23 policy is consumed, not altered.
+func TestObj61W6UngrantedRequiredTestEditCannotReachImplementation(t *testing.T) {
+	region := []string{"main.go", "main_test.go", "other/other.go", "other/other_test.go"}
+	t.Run("one ungranted", func(t *testing.T) {
+		const task = "task-obj61-w6-partial"
+		run, architect := obj61CoveredRun(t, task, []string{"main.go"}, region, obj61W6Plan)
+		attempts := startedAttempts(t, run.events)
+		refusals := refusalsIn(t, run.events)
+		if len(attempts) == 0 || len(refusals) != 1 || refusals[0].PlanAttemptID != attempts[0] {
+			t.Fatalf("premise: the plan was routed and refused once at admission: attempts %v refusals %+v\n%s", attempts, refusals, gapLoopTrace(run.events))
+		}
+		_, ed := run.engine.recordedGrants(task, attempts[0])
+		if len(ed.Grants) != 1 || ed.Grants[0].Path != "main_test.go" || ed.PlanAttemptID != attempts[0] {
+			t.Fatalf("premise: routing derived exactly the main_test.go grant for the attempt: %+v", ed)
+		}
+		r := refusals[0]
+		if r.Class != refusalTestEditAdmission || !strings.Contains(r.Reason, "other/other_test.go") || strings.Contains(r.Reason, "main_test.go") {
+			t.Fatalf("the refusal does not name only the ungranted required edit: %+v", r)
+		}
+		if implementerStartedBefore(run.events, len(run.events)) {
+			t.Fatalf("an implementer started under a plan with an ungranted required test edit:\n%s", gapLoopTrace(run.events))
+		}
+		if len(architect.prompts) != 2 || !strings.Contains(architect.prompts[1], planAdmissionRefusedMarker) || !strings.Contains(architect.prompts[1], "other/other_test.go") {
+			t.Fatalf("the refusal did not reach the architect (%d prompts)", len(architect.prompts))
+		}
+		if !hasKind(kindsOf(run.events), event.WorkflowPlanAdmissionRefused) || hasKind(kindsOf(run.events), event.PlanProposed) {
+			t.Fatalf("the identical ungranted plan was not parked, or became operative:\n%s", gapLoopTrace(run.events))
+		}
+	})
+	t.Run("both granted", func(t *testing.T) {
+		const task = "task-obj61-w6-full"
+		run, architect := obj61CoveredRun(t, task, []string{"main.go", "other/other.go"}, region, obj61W6Plan)
+		if len(refusalsIn(t, run.events)) != 0 || len(architect.prompts) != 1 {
+			t.Fatalf("the fully granted plan was refused (%d prompts):\n%s", len(architect.prompts), gapLoopTrace(run.events))
+		}
+		proposed := indexOfKind(run.events, event.PlanProposed)
+		if proposed < 0 {
+			t.Fatalf("the fully granted plan did not become operative:\n%s", gapLoopTrace(run.events))
+		}
+		var p struct {
+			PlanAttemptID string `json:"plan_attempt_id"`
+		}
+		if err := json.Unmarshal(run.events[proposed].Payload, &p); err != nil || p.PlanAttemptID == "" {
+			t.Fatalf("the operative plan names no attempt: %v", err)
+		}
+		if op := run.engine.operativePlanAttempt(task); op.ID != p.PlanAttemptID {
+			t.Fatalf("the operative attempt is not the admitted plan: %s", op.ID)
+		}
+		_, ed := run.engine.recordedGrants(task, p.PlanAttemptID)
+		paths := map[string]bool{}
+		for _, g := range ed.Grants {
+			paths[g.Path] = true
+		}
+		if ed.PlanAttemptID != p.PlanAttemptID || len(ed.Grants) != 2 || !paths["main_test.go"] || !paths["other/other_test.go"] {
+			t.Fatalf("both required grants are not recorded under the operative PlanAttemptID: %+v", ed)
+		}
+		if implementerStartedBefore(run.events, proposed) {
+			t.Fatal("work started before the plan was admitted")
+		}
+		// Past admission the run goes on to implementation, whose first gate
+		// in this rig is the candidate-worktree capability it does not grant:
+		// the plan proceeded, and nothing parked or refused it.
+		failed := indexOfKind(run.events, event.WorkflowFailed)
+		if hasKind(kindsOf(run.events), event.WorkflowPlanAdmissionRefused) || failed < proposed ||
+			!strings.Contains(run.events[failed].Summary, "candidate worktree capability") {
+			t.Fatalf("the admitted plan did not proceed to implementation:\n%s", gapLoopTrace(run.events))
+		}
+	})
+}
