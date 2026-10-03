@@ -133,6 +133,10 @@ func TestTheGovernedLoopBindsTheCandidateTheFormatterProduced(t *testing.T) {
 		Files:    []string{"main.go"},
 		Identity: candidateIdentityWithBase(base),
 	}
+	// FIXTURE MIGRATION (DF-39, ruling 116): the operative plan attempt the
+	// candidate loop inspects production scope against, adopted through the
+	// production path at the pinned base, naming the one file the worker edits.
+	adoptFixturePlanAttempt(t, e, "task-1", tc.Task, base, "Rewrite main.go so it prints a number.", tc.Files, nil)
 	accepted, _, _, _, err := e.runCandidate(ctx, sc, certifiedStart{}, "task-1", tc,
 		"Rewrite main.go so it prints a number.", worker, workspace, "")
 	if err != nil {

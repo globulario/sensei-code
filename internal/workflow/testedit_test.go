@@ -2516,3 +2516,300 @@ func TestDF37bRoutePlanReconcilesAfterTheCompleteGrantState(t *testing.T) {
 		t.Fatal("routePlan projects structural refusals before it establishes each declared edit is granted")
 	}
 }
+
+// DF-39 -- AN UNPLANNED EXISTING-PRODUCTION EDIT IS REFUSED.
+//
+// Objective 61, run 6: the operative plan omitted
+// internal/runreceipt/legacy/fromevents.go, the candidate modified it, and the
+// candidate went through validation and review instead of being refused.
+// Candidate inspection now enumerates every existing production Go file the
+// candidate mutates from the frozen capture, and each must be named by the
+// Files of the operative plan attempt. These witnesses are separate from the
+// DF-23, DF-37 and DF-37b witnesses above, which are unchanged.
+
+const (
+	df39A          = "internal/workflow/engine.go"
+	df39B          = "internal/workflow/gate.go"
+	df39FromEvents = "internal/runreceipt/legacy/fromevents.go"
+)
+
+// df39Attempt is a canonical plan attempt at teWorld whose plan names files.
+func df39Attempt(t *testing.T, files ...string) planAttempt {
+	t.Helper()
+	d := attemptPlan("objective 67", files...)
+	id, err := planAttemptID("t", attemptObjective, teWorld, PlanByArchitect, "", d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return planAttempt{ID: id, TaskID: "t", World: teWorld, PlanSource: PlanByArchitect, Plan: d}
+}
+
+func df39Scope(diff string, operative planAttempt) error {
+	return inspectProductionScope(teDiffState(diff, df23Candidate), operative)
+}
+
+func df39Created(p string) string {
+	return "diff --git a/" + p + " b/" + p + "\nnew file mode 100644\n--- /dev/null\n+++ b/" + p + "\n@@ -0,0 +1 @@\n+package x\n"
+}
+
+func df39Deleted(p string) string {
+	return "diff --git a/" + p + " b/" + p + "\ndeleted file mode 100644\n--- a/" + p + "\n+++ /dev/null\n@@ -1 +0,0 @@\n-package x\n"
+}
+
+func df39Renamed(from, to string) string {
+	return "diff --git a/" + from + " b/" + to + "\nsimilarity index 100%\nrename from " + from + "\nrename to " + to + "\n"
+}
+
+// df39Refused asserts err is the production-scope refusal naming exactly the
+// mutation verb+" "+path, and naming none of clear.
+func df39Refused(t *testing.T, name string, err error, verb, p string, clear ...string) {
+	t.Helper()
+	if err == nil || !strings.HasPrefix(err.Error(), "production scope refuted:") || !strings.Contains(err.Error(), verb+" "+p) {
+		t.Errorf("%s: the unplanned production %s of %s was not refused by path: %v", name, verb, p, err)
+		return
+	}
+	for _, c := range clear {
+		if strings.Contains(err.Error(), c) {
+			t.Errorf("%s: the refusal named %s, which is not unauthorized: %v", name, c, err)
+		}
+	}
+}
+
+// W1 -- the plan names A; the candidate edits A and the existing B. B is
+// refused by its exact path, and A is not named.
+func TestDF39W1AnExtraExistingProductionFileIsRefusedByPath(t *testing.T) {
+	err := df39Scope(df23Edit(df39A)+df23Edit(df39B), df39Attempt(t, df39A))
+	df39Refused(t, "W1", err, "edits", df39B, "edits "+df39A)
+	if err != nil && !strings.Contains(err.Error(), "does not name it") {
+		t.Errorf("W1: the refusal does not say the operative plan omits the path: %v", err)
+	}
+}
+
+// W2 -- the planned control: the plan names A and B, in any spelling the
+// architect may write, and the same candidate is not refused. A planned file
+// the candidate leaves unchanged refuses nothing either.
+func TestDF39W2PlannedExistingProductionEditsAreNotRefused(t *testing.T) {
+	diff := df23Edit(df39A) + df23Edit(df39B)
+	for name, files := range map[string][]string{
+		"exact":                 {df39A, df39B},
+		"unnormal spelling":     {" ./" + df39A, "internal//workflow/gate.go "},
+		"planned but untouched": {df39A, df39B, df39FromEvents},
+	} {
+		if err := df39Scope(diff, df39Attempt(t, files...)); err != nil {
+			t.Errorf("%s: planned production edits were refused: %v", name, err)
+		}
+	}
+}
+
+// W3 -- an existing *_test.go stays the test-edit inspection's: the
+// production rule neither refuses it nor admits it, and the DF-23 refusal of
+// the ungranted edit is unchanged.
+func TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction(t *testing.T) {
+	diff := df23Edit(df39A) + df23Edit(df23Receipt)
+	a := df39Attempt(t, df39A)
+	if err := df39Scope(diff, a); err != nil {
+		t.Fatalf("the production-scope rule judged an existing test edit: %v", err)
+	}
+	err := inspectDiff(diff, a, testEditRecord{PlanAttemptID: a.ID, World: a.World}, df23Candidate)
+	if err == nil || !strings.HasPrefix(err.Error(), "test edit refuted:") || !strings.Contains(err.Error(), "edits the existing test "+df23Receipt) ||
+		!strings.Contains(err.Error(), "holds no test-edit grant") {
+		t.Errorf("the ungranted existing test edit is no longer governed by the test-edit inspection: %v", err)
+	}
+	// Planning the test does not make it production scope's to admit either.
+	if err := inspectDiff(diff, df39Attempt(t, df39A, df23Receipt), testEditRecord{}, df23Candidate); err == nil {
+		t.Error("naming an existing test in the plan stood in for its test-edit grant")
+	}
+}
+
+// W4 -- a created production file is not an existing-production edit,
+// planned or not, and continues to the prospective-create inspection, which
+// still refutes it against its (absent) grant.
+func TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection(t *testing.T) {
+	const created = "internal/workflow/df39new.go"
+	diff := df23Edit(df39A) + df39Created(created)
+	if err := df39Scope(diff, df39Attempt(t, df39A)); err != nil {
+		t.Fatalf("a created production file was judged as an existing-production edit: %v", err)
+	}
+	decl := []ProspectiveSurface{{Path: created, Package: "x", Role: "go-existing-package", Covering: df39A}}
+	if err := inspectProspectiveGrants(diff, decl, nil); err == nil || !strings.HasPrefix(err.Error(), "prospective surface refuted:") {
+		t.Errorf("the created file did not reach prospective-create authority: %v", err)
+	}
+}
+
+// W5 -- deleting an existing unplanned production file is refused; deleting
+// a planned one is not refused for scope.
+func TestDF39W5DeletingAnUnplannedExistingProductionFileIsRefused(t *testing.T) {
+	diff := df23Edit(df39A) + df39Deleted(df39B)
+	df39Refused(t, "W5", df39Scope(diff, df39Attempt(t, df39A)), "deletes", df39B, df39A)
+	if err := df39Scope(diff, df39Attempt(t, df39A, df39B)); err != nil {
+		t.Errorf("W5: deleting a planned production file was refused for scope: %v", err)
+	}
+}
+
+// W6 -- renaming an existing production file whose SOURCE the plan does not
+// name is refused on the source, whether or not the destination is planned.
+// With the source planned, scope refuses nothing, and the destination -- a
+// creation -- is left to prospective semantics, not judged here.
+func TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource(t *testing.T) {
+	const dest = "internal/workflow/gate_moved.go"
+	diff := df23Edit(df39A) + df39Renamed(df39B, dest)
+	df39Refused(t, "W6", df39Scope(diff, df39Attempt(t, df39A)), "renames", df39B, df39A, dest)
+	df39Refused(t, "W6 destination planned", df39Scope(diff, df39Attempt(t, df39A, dest)), "renames", df39B, df39A, dest)
+	if err := df39Scope(diff, df39Attempt(t, df39A, df39B)); err != nil {
+		t.Errorf("W6: renaming a planned production file was refused for scope: %v", err)
+	}
+	decl := []ProspectiveSurface{{Path: dest, Package: "x", Role: "go-existing-package", Covering: df39A}}
+	if err := inspectProspectiveGrants(diff, decl, nil); err == nil || !strings.HasPrefix(err.Error(), "prospective surface refuted:") {
+		t.Errorf("W6: the rename destination did not reach prospective-create authority: %v", err)
+	}
+}
+
+// W7 -- a re-plan through the production attempt transition: attempt A plans
+// B, attempt C omits it, and the candidate under C that modifies B is refused
+// although A once planned it. Re-planning B again (attempt D) authorizes it.
+func TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused(t *testing.T) {
+	const task = "task-df39-replan"
+	e := df23Engine(t, "", task)
+	diff := df23Edit(df39A) + df23Edit(df39B)
+	inspect := func() error {
+		return inspectProductionScope(teDiffState(diff, df23Candidate), e.operativePlanAttempt(task))
+	}
+	a := df23Route(t, e, task, attemptPlan("plan A", df39A, df39B), nil)
+	if err := inspect(); err != nil {
+		t.Fatalf("premise: attempt A authorizes its own planned edit of %s: %v", df39B, err)
+	}
+	c := df23Route(t, e, task, attemptPlan("plan C", df39A), nil)
+	if op := e.operativePlanAttempt(task); op.ID != c.ID || c.ID == a.ID {
+		t.Fatalf("premise: the re-plan made C operative (a=%s c=%s operative=%s)", short12(a.ID), short12(c.ID), short12(op.ID))
+	}
+	df39Refused(t, "W7", inspect(), "edits", df39B, "edits "+df39A)
+	df23Route(t, e, task, attemptPlan("plan D", df39A, df39B), nil)
+	if err := inspect(); err != nil {
+		t.Errorf("W7: the operative attempt's own plan of %s was refused: %v", df39B, err)
+	}
+}
+
+// No operative attempt, or one pinned at another world, authorizes no
+// existing production edit -- planned or not. A candidate that mutates no
+// existing production file needs no plan to say so.
+func TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized(t *testing.T) {
+	diff := df23Edit(df39A)
+	if err := df39Scope(diff, planAttempt{}); err == nil || !strings.HasPrefix(err.Error(), "production scope refuted:") ||
+		!strings.Contains(err.Error(), "no operative plan attempt") || !strings.Contains(err.Error(), df39A) {
+		t.Errorf("an edit with no operative plan attempt was not refused: %v", err)
+	}
+	elsewhere := df39Attempt(t, df39A)
+	elsewhere.World = "another-world"
+	if err := df39Scope(diff, elsewhere); err == nil || !strings.Contains(err.Error(), "not the candidate's base") {
+		t.Errorf("an attempt pinned at another world authorized the edit: %v", err)
+	}
+	if err := df39Scope(df39Created("internal/workflow/df39new.go")+df23Edit(df23Receipt), planAttempt{}); err != nil {
+		t.Errorf("a candidate mutating no existing production file was refused for scope: %v", err)
+	}
+}
+
+// W8 -- THE OBJECTIVE-61 REGRESSION, in the real governed loop (runCandidate)
+// over a real repository: fromevents.go exists at the pinned world, the
+// operative plan routed through the production transition omits it, and the
+// candidate modifies it beside the worker's planned main.go. The loop must end
+// with the production-scope refusal naming fromevents.go BEFORE any audit or
+// review, so ACCEPT is never reachable. The control plans it and reaches the
+// review.
+func TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview(t *testing.T) {
+	const fromEventsSrc = "package legacy\n\nfunc FromEvents() int { return 0 }\n"
+	type outcome struct {
+		result          candidateOutcome
+		err             error
+		changed, beyond bool
+	}
+	run := func(t *testing.T, planned ...string) outcome {
+		t.Helper()
+		h := newGateHarness(t, roles.Policy{}, roles.Fresh, string(roles.Accept))
+		e := h.engine
+		world := commitFixtureFile(t, h.work, df39FromEvents, fromEventsSrc)
+		h.tc.Identity = candidateIdentityWithBase(world)
+		h.tc.Files = append([]string{"main.go"}, planned...)
+		adoptFixturePlanAttempt(t, e, "task-1", h.tc.Task, world, "Rewrite main.go so it prints a number.", h.tc.Files, nil)
+		commitFixtureFile(t, h.work, df39FromEvents, strings.Replace(fromEventsSrc, "return 0", "return 1", 1))
+
+		var o outcome
+		o.result, _, _, _, o.err = e.runCandidate(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+			"Rewrite main.go so it prints a number.", h.worker, h.work, "")
+		for _, ev := range drainEvents(h.events) {
+			switch ev.Kind {
+			case event.CandidateChanged:
+				o.changed = true
+			case event.CandidateAudited, event.ReviewStarted, event.ReviewCompleted:
+				o.beyond = true
+			}
+		}
+		return o
+	}
+
+	refused := run(t)
+	if !refused.changed {
+		t.Fatalf("premise: the loop never produced a candidate: %v", refused.err)
+	}
+	df39Refused(t, "W8", refused.err, "edits", df39FromEvents, "main.go")
+	if refused.beyond {
+		t.Error("W8: the unplanned fromevents.go edit reached audit or review before it was refused")
+	}
+	if refused.result.Accepted() {
+		t.Error("W8: the candidate with the unplanned fromevents.go edit was accepted")
+	}
+
+	control := run(t, df39FromEvents)
+	if control.err != nil && strings.Contains(control.err.Error(), "production scope refuted") {
+		t.Errorf("control: the planned fromevents.go edit was refused for scope: %v", control.err)
+	}
+	if !control.beyond {
+		t.Errorf("control: the planned candidate never reached audit or review: %v", control.err)
+	}
+}
+
+// The DF-39 refusal is terminal in the OUTER loop, not only in runCandidate:
+// with a second implementor configured, Engine.implement must end the run on
+// the production-scope refusal without asking that implementor and without
+// creating a handoff, exactly as a prospective or test-edit refutation does.
+// W8 drives runCandidate directly, so it cannot see this.
+func TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff(t *testing.T) {
+	const fromEventsSrc = "package legacy\n\nfunc FromEvents() int { return 0 }\n"
+	h := newGateHarness(t, roles.Policy{Reason: "blast radius local with approval gate none"}, roles.Unverified, string(roles.Accept))
+	e := h.engine
+	world := commitFixtureFile(t, h.work, df39FromEvents, fromEventsSrc)
+	h.tc.Identity = candidateIdentityWithBase(world)
+	adoptFixturePlanAttempt(t, e, "task-1", h.tc.Task, world, "Rewrite main.go so it prints a number.", h.tc.Files, nil)
+	commitFixtureFile(t, h.work, df39FromEvents, strings.Replace(fromEventsSrc, "return 0", "return 1", 1))
+
+	// The second implementor is the same stub under another name, so if it
+	// were asked it would produce a candidate; its turn is visible as an
+	// agent start from its own source.
+	second := h.worker
+	second.Name = "codex"
+	e.Config.Implementors = append(e.Config.Implementors, second)
+
+	var failed error
+	e.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
+	seen := drainEvents(h.events)
+
+	starts := map[event.Source]int{}
+	for _, ev := range seen {
+		if ev.Kind == event.AgentStarted {
+			starts[ev.Source]++
+		}
+	}
+	if starts[event.SourceClaude] != 1 {
+		t.Fatalf("premise: the first implementor was asked %d times, want once: %v", starts[event.SourceClaude], failed)
+	}
+	df39Refused(t, "outer loop", failed, "edits", df39FromEvents, "main.go")
+	if starts[event.SourceCodex] != 0 {
+		t.Error("a second implementor was asked after the production-scope refusal")
+	}
+	if contains(seen, event.HandoffCreated) {
+		t.Errorf("the production-scope refusal created an implementer handoff: %v", kinds(seen))
+	}
+	if failed != nil && strings.Contains(failed.Error(), "no bounded implementor produced") {
+		t.Errorf("the refusal was reported as implementors failing rather than as itself: %v", failed)
+	}
+}
