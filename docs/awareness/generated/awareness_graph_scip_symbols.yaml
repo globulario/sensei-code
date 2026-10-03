@@ -32561,6 +32561,114 @@ code_symbols:
     file: internal/runreceipt/legacy/fromevents.go
     symbol: OutcomeFrom
     kind: function
+  - id: internal/runreceipt/legacy/fromevents.go:candidateInsufficiency
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateInsufficiency
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:candidateKeys
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateKeys
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateReconstruction.current
+    kind: method
+  - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.digest
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateReconstruction.digest
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.observeDigest
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateReconstruction.observeDigest
+    kind: method
+  - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.observeWork
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateReconstruction.observeWork
+    kind: method
+  - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateReconstruction.publish
+    kind: method
+  - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.receipt
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateReconstruction.receipt
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.reset
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateReconstruction.reset
+    kind: method
+  - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settle
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateReconstruction.settle
+    kind: method
+  - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settled
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateReconstruction.settled
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.snapshot
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateReconstruction.snapshot
+    kind: method
+  - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.work
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateReconstruction.work
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction~type
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateReconstruction
+    kind: type
+  - id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot.ids
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateSnapshot.ids
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot.state
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateSnapshot.state
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot~type
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateSnapshot
+    kind: type
+  - id: internal/runreceipt/legacy/fromevents.go:insufficientCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: insufficientCandidate
+    kind: function
   - id: internal/runreceipt/legacy/fromevents.go:maxLine
     namespace: structural.scip
     language: go
@@ -32579,17 +32687,101 @@ code_symbols:
     file: internal/runreceipt/legacy/fromevents.go
     symbol: nested
     kind: function
+  - id: internal/runreceipt/legacy/fromevents.go:newCandidateReconstruction
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: newCandidateReconstruction
+    kind: function
   - id: internal/runreceipt/legacy/fromevents.go:object
     namespace: structural.scip
     language: go
     file: internal/runreceipt/legacy/fromevents.go
     symbol: object
     kind: function
+  - id: internal/runreceipt/legacy/fromevents.go:payloadDeclaration
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: payloadDeclaration
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: planAdmissionRefusal
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusedKind
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: planAdmissionRefusedKind
+    kind: const
+  - id: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: readReceiptCandidate
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents.go:readRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: readRefusal
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: receiptIdentity
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: receiptRefusal
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents.go:refusalKeys
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: refusalKeys
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:refusalRecord.source
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: refusalRecord.source
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:refusalRecord.values
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: refusalRecord.values
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:refusalRecord~type
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: refusalRecord
+    kind: type
   - id: internal/runreceipt/legacy/fromevents.go:text
     namespace: structural.scip
     language: go
     file: internal/runreceipt/legacy/fromevents.go
     symbol: text
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: TestALaterPartialReceiptInheritsNoIdentity
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: TestALaterUnknownReceiptClearsAnEarlierPresentOne
     kind: function
   - id: internal/runreceipt/legacy/fromevents_test.go:TestAnAdapterBuiltReceiptIsNeverCompleteOnItsOwn
     namespace: structural.scip
@@ -32597,17 +32789,41 @@ code_symbols:
     file: internal/runreceipt/legacy/fromevents_test.go
     symbol: TestAnAdapterBuiltReceiptIsNeverCompleteOnItsOwn
     kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    kind: function
   - id: internal/runreceipt/legacy/fromevents_test.go:TestAnUnmodelledKindIsReportedRatherThanSilentlyDropped
     namespace: structural.scip
     language: go
     file: internal/runreceipt/legacy/fromevents_test.go
     symbol: TestAnUnmodelledKindIsReportedRatherThanSilentlyDropped
     kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: TestAnUnsupportedIdentityIsNotAnAbsence
+    kind: function
   - id: internal/runreceipt/legacy/fromevents_test.go:TestEveryPreservedLogIsTotallyReadable
     namespace: structural.scip
     language: go
     file: internal/runreceipt/legacy/fromevents_test.go
     symbol: TestEveryPreservedLogIsTotallyReadable
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: TestFallbackCandidateEvidenceDoesNotCrossATerminal
     kind: function
   - id: internal/runreceipt/legacy/fromevents_test.go:TestNoSyntacticallyValidEventCanCrashExtraction
     namespace: structural.scip
@@ -32645,18 +32861,102 @@ code_symbols:
     file: internal/runreceipt/legacy/fromevents_test.go
     symbol: TestTheShapeThatVoidedC5IsAClassificationNotACrash
     kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: TestW2APositiveAbsenceStillRendersAsAbsence
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: TestW3AKnownCandidateIdentityIsReconstructed
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: TestW4BNonCanonicalRefusalValuesAreNotKnown
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: TestW5BABoundPriorRefusalCompletesTheTerminal
+    kind: function
   - id: internal/runreceipt/legacy/fromevents_test.go:baseline
     namespace: structural.scip
     language: go
     file: internal/runreceipt/legacy/fromevents_test.go
     symbol: baseline
     kind: var
+  - id: internal/runreceipt/legacy/fromevents_test.go:candidateIdentities
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: candidateIdentities
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:completePresent
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: completePresent
+    kind: function
   - id: internal/runreceipt/legacy/fromevents_test.go:discovered
     namespace: structural.scip
     language: go
     file: internal/runreceipt/legacy/fromevents_test.go
     symbol: discovered
     kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:knownField
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: knownField
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:receiptEvent
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: receiptEvent
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:refusalEvent
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: refusalEvent
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:refusalPayload
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: refusalPayload
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents_test.go:specimenStream
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents_test.go
+    symbol: specimenStream
+    kind: const
   - id: internal/runreceipt/receipt.go:Attempt.DeliveredVerdict
     namespace: structural.scip
     language: go

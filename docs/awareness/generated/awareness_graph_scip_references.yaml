@@ -6302,11 +6302,11 @@ code_references:
     to_name: Bus.Subscribe
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/config.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/ghwebhook/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6403,11 +6403,11 @@ code_references:
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6469,11 +6469,11 @@ code_references:
     to_name: SIGTERM
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Close
+    to_id: internal/control/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Close
+    to_id: internal/ghwebhook/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6481,11 +6481,11 @@ code_references:
     to_name: Server.CloseLocal
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6501,11 +6501,11 @@ code_references:
     to_name: Server.ListenRelay
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Serve
+    to_id: internal/control/server.go:Server.Serve
     to_name: Server.Serve
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Serve
+    to_id: internal/ghwebhook/server.go:Server.Serve
     to_name: Server.Serve
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -7257,11 +7257,11 @@ code_references:
     to_name: Reviewer
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/agent/agent.go:Runner~type
+    to_id: internal/ghbridge/runner.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/ghbridge/runner.go:Runner~type
+    to_id: internal/agent/agent.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
@@ -8224,15 +8224,15 @@ code_references:
     to_name: Load
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/workflow/engine.go:New
-    to_name: New
-    file: cmd/sensei-code/main.go
-  - from: cmd/sensei-code/main.go:main
     to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
     to_id: internal/tui/model.go:New
+    to_name: New
+    file: cmd/sensei-code/main.go
+  - from: cmd/sensei-code/main.go:main
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
@@ -11297,11 +11297,11 @@ code_references:
     to_name: Interrupted.TaskID
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
@@ -28202,10 +28202,10 @@ code_references:
     to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_id: internal/behavioral/behavioral.go:Config.InsecureSkipVerify
     to_name: Config.InsecureSkipVerify
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
+    to_id: internal/behavioral/behavioral.go:Config.InsecureSkipVerify
     to_name: Config.InsecureSkipVerify
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
@@ -31617,11 +31617,11 @@ code_references:
     to_name: Agent.Name
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/behavioral/behavioral.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
@@ -34074,11 +34074,11 @@ code_references:
     to_name: Mint
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
@@ -35746,15 +35746,15 @@ code_references:
     to_name: Minute
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
-    to_id: internal/session/store.go:New
-    to_name: New
-    file: internal/control/control_test.go
-  - from: internal/control/control_test.go:newHarness
     to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
     to_id: internal/control/server.go:New
+    to_name: New
+    file: internal/control/control_test.go
+  - from: internal/control/control_test.go:newHarness
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
@@ -97740,17 +97740,17 @@ code_references:
     to_name: Second
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_name: Server
-    file: internal/ghwebhook/server.go
-  - from: internal/ghwebhook/server.go:Server.Listen
     to_id: internal/ghwebhook/server.go:Server~type
     to_name: Server
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_id: internal/ghwebhook/server.go:Server.Handler
+    to_name: Server
+    file: internal/ghwebhook/server.go
+  - from: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
@@ -110539,10 +110539,10 @@ code_references:
     to_name: testing
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
-    to_id: internal/processx/runner.go:Environ
     to_name: Environ
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
+    to_id: internal/processx/runner.go:Environ
     to_name: Environ
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
@@ -133233,14 +133233,6 @@ code_references:
     to_name: Attempt.Verdict
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
-    to_id: internal/runreceipt/receipt.go:CandidatePresent
-    to_name: CandidatePresent
-    file: internal/runreceipt/legacy/fromevents.go
-  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
-    to_id: internal/runreceipt/receipt.go:CandidateUnknown
-    to_name: CandidateUnknown
-    file: internal/runreceipt/legacy/fromevents.go
-  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
     to_id: internal/runreceipt/receipt.go:Delivered
     to_name: Delivered
     file: internal/runreceipt/legacy/fromevents.go
@@ -133254,6 +133246,10 @@ code_references:
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
     to_name: HasPrefix
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/event/event.go:Kind~type
+    to_name: Kind
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
     to_id: internal/runreceipt/receipt.go:Known
@@ -133298,32 +133294,8 @@ code_references:
     to_name: Receipt.BaseCommit
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
-    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommit
-    to_name: Receipt.CandidateCommit
-    file: internal/runreceipt/legacy/fromevents.go
-  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
-    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommitDiffDigest
-    to_name: Receipt.CandidateCommitDiffDigest
-    file: internal/runreceipt/legacy/fromevents.go
-  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
-    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
-    to_name: Receipt.CandidateDigest
-    file: internal/runreceipt/legacy/fromevents.go
-  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
     to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigestRelation
     to_name: Receipt.CandidateDigestRelation
-    file: internal/runreceipt/legacy/fromevents.go
-  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
-    to_id: internal/runreceipt/receipt.go:Receipt.CandidateFirstParent
-    to_name: Receipt.CandidateFirstParent
-    file: internal/runreceipt/legacy/fromevents.go
-  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
-    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
-    to_name: Receipt.CandidateState
-    file: internal/runreceipt/legacy/fromevents.go
-  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
-    to_id: internal/runreceipt/receipt.go:Receipt.CandidateTree
-    to_name: Receipt.CandidateTree
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
     to_id: internal/runreceipt/receipt.go:Receipt.DeferredQuestion
@@ -133364,6 +133336,10 @@ code_references:
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
     to_id: internal/runreceipt/receipt.go:Receipt.Outcome
     to_name: Receipt.Outcome
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/receipt.go:Receipt.PlanAdmissionRefusal
+    to_name: Receipt.PlanAdmissionRefusal
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
     to_id: internal/runreceipt/receipt.go:Receipt.PlanDigest
@@ -133414,6 +133390,10 @@ code_references:
     to_name: RelationUnknown
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/event/event.go:RunTerminality
+    to_name: RunTerminality
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
     to_name: Scanner.Buffer
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
@@ -133454,10 +133434,33 @@ code_references:
     to_name: bufio
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.observeDigest
+    to_name: candidateReconstruction.observeDigest
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.observeWork
+    to_name: candidateReconstruction.observeWork
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_name: candidateReconstruction.publish
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settle
+    to_name: candidateReconstruction.settle
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.snapshot
+    to_name: candidateReconstruction.snapshot
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
     to_name: encoding/json
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
     to_name: fmt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: github.com/globulario/sensei-code/internal/event
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
     to_name: github.com/globulario/sensei-code/internal/runreceipt
@@ -133478,8 +133481,40 @@ code_references:
     to_name: nested
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/legacy/fromevents.go:newCandidateReconstruction
+    to_name: newCandidateReconstruction
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
     to_id: internal/runreceipt/legacy/fromevents.go:object
     to_name: object
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/legacy/fromevents.go:payloadDeclaration
+    to_name: payloadDeclaration
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_name: planAdmissionRefusal
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusedKind
+    to_name: planAdmissionRefusedKind
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_name: readReceiptCandidate
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/legacy/fromevents.go:readRefusal
+    to_name: readRefusal
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_name: receiptRefusal
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_id: internal/runreceipt/legacy/fromevents.go:refusalRecord~type
+    to_name: refusalRecord
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:FromEvents
     to_name: strings
@@ -133506,6 +133541,10 @@ code_references:
   - from: internal/runreceipt/legacy/fromevents.go:OutcomeFrom
     to_id: internal/runreceipt/receipt.go:OutcomeFailed
     to_name: OutcomeFailed
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:OutcomeFrom
+    to_id: internal/runreceipt/receipt.go:OutcomePlanAdmissionRefused
+    to_name: OutcomePlanAdmissionRefused
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:OutcomeFrom
     to_id: internal/runreceipt/receipt.go:OutcomeRefused
@@ -133543,7 +133582,255 @@ code_references:
     to_name: github.com/globulario/sensei-code/internal/runreceipt
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:OutcomeFrom
+    to_id: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusedKind
+    to_name: planAdmissionRefusedKind
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:OutcomeFrom
     to_name: strings
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/receipt.go:CandidateNone
+    to_name: CandidateNone
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/receipt.go:CandidateUnattempted
+    to_name: CandidateUnattempted
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/receipt.go:Receipt~type
+    to_name: Receipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/receipt.go:Receipt.Diagnostics
+    to_name: Receipt.Diagnostics
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_name: Sprintf
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction~type
+    to_name: candidateReconstruction
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.digest
+    to_name: candidateReconstruction.digest
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.receipt
+    to_name: candidateReconstruction.receipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.work
+    to_name: candidateReconstruction.work
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot~type
+    to_name: candidateSnapshot
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot.ids
+    to_name: candidateSnapshot.ids
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot.state
+    to_name: candidateSnapshot.state
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_name: fmt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_id: internal/runreceipt/legacy/fromevents.go:insufficientCandidate
+    to_name: insufficientCandidate
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.observeDigest
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.observeDigest
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction~type
+    to_name: candidateReconstruction
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.observeDigest
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.digest
+    to_name: candidateReconstruction.digest
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.observeDigest
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.work
+    to_name: candidateReconstruction.work
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.observeDigest
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.observeWork
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction~type
+    to_name: candidateReconstruction
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.observeWork
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.work
+    to_name: candidateReconstruction.work
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_id: internal/runreceipt/receipt.go:Receipt~type
+    to_name: Receipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommit
+    to_name: Receipt.CandidateCommit
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommitDiffDigest
+    to_name: Receipt.CandidateCommitDiffDigest
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
+    to_name: Receipt.CandidateDigest
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateFirstParent
+    to_name: Receipt.CandidateFirstParent
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateTree
+    to_name: Receipt.CandidateTree
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction~type
+    to_name: candidateReconstruction
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settle
+    to_name: candidateReconstruction.settle
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settled
+    to_name: candidateReconstruction.settled
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot.ids
+    to_name: candidateSnapshot.ids
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot.state
+    to_name: candidateSnapshot.state
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.publish
+    to_id: internal/runreceipt/legacy/fromevents.go:insufficientCandidate
+    to_name: insufficientCandidate
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.reset
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.reset
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction~type
+    to_name: candidateReconstruction
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.reset
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.digest
+    to_name: candidateReconstruction.digest
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.reset
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.receipt
+    to_name: candidateReconstruction.receipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.reset
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.work
+    to_name: candidateReconstruction.work
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.reset
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settle
+    to_id: internal/runreceipt/receipt.go:Receipt~type
+    to_name: Receipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settle
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction~type
+    to_name: candidateReconstruction
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settle
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.current
+    to_name: candidateReconstruction.current
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settle
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.receipt
+    to_name: candidateReconstruction.receipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settle
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.reset
+    to_name: candidateReconstruction.reset
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settle
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settled
+    to_name: candidateReconstruction.settled
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settle
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.work
+    to_name: candidateReconstruction.work
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.settle
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.snapshot
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction~type
+    to_name: candidateReconstruction
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.snapshot
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.receipt
+    to_name: candidateReconstruction.receipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.snapshot
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot~type
+    to_name: candidateSnapshot
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:insufficientCandidate
+    to_id: internal/runreceipt/receipt.go:CandidateUnknown
+    to_name: CandidateUnknown
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:insufficientCandidate
+    to_id: internal/runreceipt/receipt.go:UnknownValue
+    to_name: UnknownValue
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:insufficientCandidate
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateInsufficiency
+    to_name: candidateInsufficiency
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:insufficientCandidate
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot~type
+    to_name: candidateSnapshot
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:insufficientCandidate
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot.ids
+    to_name: candidateSnapshot.ids
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:insufficientCandidate
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot.state
+    to_name: candidateSnapshot.state
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:insufficientCandidate
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:nested
     to_id: internal/runreceipt/receipt.go:Malformed
@@ -133576,6 +133863,14 @@ code_references:
     to_id: internal/runreceipt/legacy/fromevents.go:text
     to_name: text
     file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:newCandidateReconstruction
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction~type
+    to_name: candidateReconstruction
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:newCandidateReconstruction
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.reset
+    to_name: candidateReconstruction.reset
+    file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:object
     to_id: internal/runreceipt/receipt.go:Known
     to_name: Known
@@ -133600,6 +133895,410 @@ code_references:
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:object
     to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:payloadDeclaration
+    to_id: internal/runreceipt/receipt.go:MalformedValue
+    to_name: MalformedValue
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:payloadDeclaration
+    to_id: internal/runreceipt/receipt.go:MeasuredValue
+    to_name: MeasuredValue
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:payloadDeclaration
+    to_name: RawMessage
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:payloadDeclaration
+    to_id: internal/runreceipt/receipt.go:UnknownValue
+    to_name: UnknownValue
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:payloadDeclaration
+    to_name: Unmarshal
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:payloadDeclaration
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:payloadDeclaration
+    to_name: encoding/json
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:payloadDeclaration
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_name: HasPrefix
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_name: Join
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:Knownness~type
+    to_name: Knownness
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:Malformed
+    to_name: Malformed
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:OutcomePlanAdmissionRefused
+    to_name: OutcomePlanAdmissionRefused
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal~type
+    to_name: PlanAdmissionRefusal
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Class
+    to_name: PlanAdmissionRefusal.Class
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Declaration
+    to_name: PlanAdmissionRefusal.Declaration
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Detail
+    to_name: PlanAdmissionRefusal.Detail
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.GoverningEvidenceID
+    to_name: PlanAdmissionRefusal.GoverningEvidenceID
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.PlanAttemptID
+    to_name: PlanAdmissionRefusal.PlanAttemptID
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Reason
+    to_name: PlanAdmissionRefusal.Reason
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.RefusalID
+    to_name: PlanAdmissionRefusal.RefusalID
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Source
+    to_name: PlanAdmissionRefusal.Source
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.State
+    to_name: PlanAdmissionRefusal.State
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusalClass~type
+    to_name: PlanAdmissionRefusalClass
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:Receipt~type
+    to_name: Receipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:Receipt.Completeness
+    to_name: Receipt.Completeness
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:Receipt.Outcome
+    to_name: Receipt.Outcome
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:Receipt.PlanAdmissionRefusal
+    to_name: Receipt.PlanAdmissionRefusal
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:Receipt.Schema
+    to_name: Receipt.Schema
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:SchemaVersion
+    to_name: SchemaVersion
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_name: Sprintf
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:Value.Detail
+    to_name: Value.Detail
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:Value.Source
+    to_name: Value.Source
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/receipt.go:Value.Text
+    to_name: Value.Text
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_name: fmt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:payloadDeclaration
+    to_name: payloadDeclaration
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusedKind
+    to_name: planAdmissionRefusedKind
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:readRefusal
+    to_name: readRefusal
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:refusalKeys
+    to_name: refusalKeys
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:refusalRecord~type
+    to_name: refusalRecord
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:refusalRecord.source
+    to_name: refusalRecord.source
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:refusalRecord.values
+    to_name: refusalRecord.values
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/receipt.go:CandidateNone
+    to_name: CandidateNone
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/receipt.go:CandidateState~type
+    to_name: CandidateState
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/receipt.go:CandidateUnattempted
+    to_name: CandidateUnattempted
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/receipt.go:CandidateUnknown
+    to_name: CandidateUnknown
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/receipt.go:Malformed
+    to_name: Malformed
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/receipt.go:Receipt~type
+    to_name: Receipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/receipt.go:Receipt.Diagnostics
+    to_name: Receipt.Diagnostics
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/receipt.go:SpeaksItsCandidateVocabulary
+    to_name: SpeaksItsCandidateVocabulary
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_name: Sprintf
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/receipt.go:UnknownValue
+    to_name: UnknownValue
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateInsufficiency
+    to_name: candidateInsufficiency
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateKeys
+    to_name: candidateKeys
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot~type
+    to_name: candidateSnapshot
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot.ids
+    to_name: candidateSnapshot.ids
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/legacy/fromevents.go:candidateSnapshot.state
+    to_name: candidateSnapshot.state
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_name: fmt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/legacy/fromevents.go:insufficientCandidate
+    to_name: insufficientCandidate
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/legacy/fromevents.go:object
+    to_name: object
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
+    to_id: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_name: receiptIdentity
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readRefusal
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readRefusal
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:refusalKeys
+    to_name: refusalKeys
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:refusalRecord~type
+    to_name: refusalRecord
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:refusalRecord.source
+    to_name: refusalRecord.source
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:refusalRecord.values
+    to_name: refusalRecord.values
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:readRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:text
+    to_name: text
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_id: internal/runreceipt/receipt.go:Knownness~type
+    to_name: Knownness
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_id: internal/runreceipt/receipt.go:Malformed
+    to_name: Malformed
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_id: internal/runreceipt/receipt.go:MalformedValue
+    to_name: MalformedValue
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_name: Sprintf
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_id: internal/runreceipt/receipt.go:UnknownValue
+    to_name: UnknownValue
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_id: internal/runreceipt/receipt.go:Unsupported
+    to_name: Unsupported
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_id: internal/runreceipt/receipt.go:Value.Detail
+    to_name: Value.Detail
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_name: fmt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_id: internal/runreceipt/legacy/fromevents.go:object
+    to_name: object
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptIdentity
+    to_id: internal/runreceipt/legacy/fromevents.go:text
+    to_name: text
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_id: internal/runreceipt/receipt.go:Knownness~type
+    to_name: Knownness
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_id: internal/runreceipt/receipt.go:Outcome~type
+    to_name: Outcome
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_id: internal/runreceipt/receipt.go:OutcomePlanAdmissionRefused
+    to_name: OutcomePlanAdmissionRefused
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_id: internal/runreceipt/receipt.go:Receipt~type
+    to_name: Receipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_id: internal/runreceipt/receipt.go:Receipt.Diagnostics
+    to_name: Receipt.Diagnostics
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_id: internal/runreceipt/receipt.go:SpeaksItsVersion
+    to_name: SpeaksItsVersion
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_name: Sprintf
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_name: fmt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:object
+    to_name: object
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:readRefusal
+    to_name: readRefusal
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:refusalRecord~type
+    to_name: refusalRecord
+    file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents.go:receiptRefusal
+    to_id: internal/runreceipt/legacy/fromevents.go:text
+    to_name: text
     file: internal/runreceipt/legacy/fromevents.go
   - from: internal/runreceipt/legacy/fromevents.go:text
     to_id: internal/runreceipt/receipt.go:MalformedValue
@@ -133626,6 +134325,128 @@ code_references:
   - from: internal/runreceipt/legacy/fromevents.go:text
     to_name: github.com/globulario/sensei-code/internal/runreceipt
     file: internal/runreceipt/legacy/fromevents.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_id: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: FromEvents
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_name: NewReader
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_name: Repeat
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_name: T
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_id: internal/runreceipt/receipt.go:Value.Text
+    to_name: Value.Text
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_id: internal/runreceipt/legacy/fromevents_test.go:candidateIdentities
+    to_name: candidateIdentities
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_name: common.Errorf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_id: internal/runreceipt/legacy/fromevents_test.go:completePresent
+    to_name: completePresent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_id: internal/runreceipt/legacy/fromevents_test.go:knownField
+    to_name: knownField
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_id: internal/runreceipt/legacy/fromevents_test.go:receiptEvent
+    to_name: receiptEvent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
+    to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_id: internal/runreceipt/receipt.go:CandidateUnknown
+    to_name: CandidateUnknown
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_name: Contains
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_id: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: FromEvents
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_name: NewReader
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_name: T
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_id: internal/runreceipt/receipt.go:Value.Detail
+    to_name: Value.Detail
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_id: internal/runreceipt/legacy/fromevents_test.go:candidateIdentities
+    to_name: candidateIdentities
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_name: common.Errorf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_id: internal/runreceipt/legacy/fromevents_test.go:completePresent
+    to_name: completePresent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_id: internal/runreceipt/legacy/fromevents_test.go:receiptEvent
+    to_name: receiptEvent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestALaterUnknownReceiptClearsAnEarlierPresentOne
+    to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
   - from: internal/runreceipt/legacy/fromevents_test.go:TestAnAdapterBuiltReceiptIsNeverCompleteOnItsOwn
     to_name: Contains
     file: internal/runreceipt/legacy/fromevents_test.go
@@ -133674,6 +134495,55 @@ code_references:
   - from: internal/runreceipt/legacy/fromevents_test.go:TestAnAdapterBuiltReceiptIsNeverCompleteOnItsOwn
     to_name: testing
     file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_id: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: FromEvents
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_name: NewReader
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
+    to_name: Receipt.CandidateDigest
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_name: Repeat
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_name: T
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_id: internal/runreceipt/receipt.go:Value.Text
+    to_name: Value.Text
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_name: common.Errorf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnEvidenceFreeInvocationKeepsTheSettledCandidate
+    to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
   - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnmodelledKindIsReportedRatherThanSilentlyDropped
     to_name: Contains
     file: internal/runreceipt/legacy/fromevents_test.go
@@ -133701,6 +134571,81 @@ code_references:
     to_name: strings
     file: internal/runreceipt/legacy/fromevents_test.go
   - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnmodelledKindIsReportedRatherThanSilentlyDropped
+    to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_id: internal/runreceipt/receipt.go:CandidateNone
+    to_name: CandidateNone
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_name: Contains
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_id: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: FromEvents
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_name: HasPrefix
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_id: internal/runreceipt/receipt.go:Incomplete
+    to_name: Incomplete
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_name: NewReader
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommit
+    to_name: Receipt.CandidateCommit
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateTree
+    to_name: Receipt.CandidateTree
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.Completeness
+    to_name: Receipt.Completeness
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_name: T
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_id: internal/runreceipt/receipt.go:Unsupported
+    to_name: Unsupported
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_id: internal/runreceipt/receipt.go:Value.Detail
+    to_name: Value.Detail
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_name: common.Errorf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_name: common.Fatalf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_id: internal/runreceipt/legacy/fromevents_test.go:receiptEvent
+    to_name: receiptEvent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestAnUnsupportedIdentityIsNotAnAbsence
     to_name: testing
     file: internal/runreceipt/legacy/fromevents_test.go
   - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryPreservedLogIsTotallyReadable
@@ -133823,6 +134768,116 @@ code_references:
     to_name: sort
     file: internal/runreceipt/legacy/fromevents_test.go
   - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryPreservedLogIsTotallyReadable
+    to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_id: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: FromEvents
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_name: NewReader
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_name: Repeat
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_name: T
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_id: internal/runreceipt/receipt.go:Value.Text
+    to_name: Value.Text
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_id: internal/runreceipt/legacy/fromevents_test.go:candidateIdentities
+    to_name: candidateIdentities
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_name: common.Errorf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_id: internal/runreceipt/legacy/fromevents_test.go:completePresent
+    to_name: completePresent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestEveryRunEndingSeparatesAReceiptFromLaterFallback
+    to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_id: internal/runreceipt/receipt.go:CandidateUnknown
+    to_name: CandidateUnknown
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_id: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: FromEvents
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_name: NewReader
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
+    to_name: Receipt.CandidateDigest
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_name: Repeat
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_name: T
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_id: internal/runreceipt/receipt.go:Value.Text
+    to_name: Value.Text
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_name: common.Errorf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_id: internal/runreceipt/legacy/fromevents_test.go:receiptEvent
+    to_name: receiptEvent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestFallbackCandidateEvidenceDoesNotCrossATerminal
     to_name: testing
     file: internal/runreceipt/legacy/fromevents_test.go
   - from: internal/runreceipt/legacy/fromevents_test.go:TestNoSyntacticallyValidEventCanCrashExtraction
@@ -134153,6 +135208,654 @@ code_references:
   - from: internal/runreceipt/legacy/fromevents_test.go:TestTheShapeThatVoidedC5IsAClassificationNotACrash
     to_name: testing
     file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_name: Contains
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/receipt.go:Field.Name
+    to_name: Field.Name
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/receipt.go:Field.Value
+    to_name: Field.Value
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: FromEvents
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_name: NewReader
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommit
+    to_name: Receipt.CandidateCommit
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommitDiffDigest
+    to_name: Receipt.CandidateCommitDiffDigest
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
+    to_name: Receipt.CandidateDigest
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.Fields
+    to_name: Receipt.Fields
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_name: T
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/receipt.go:Value.Detail
+    to_name: Value.Detail
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/receipt.go:Value.Text
+    to_name: Value.Text
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_name: common.Errorf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_id: internal/runreceipt/legacy/fromevents_test.go:specimenStream
+    to_name: specimenStream
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW1TheDF35SpecimenDoesNotRenderAnUnprovenAbsence
+    to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_id: internal/runreceipt/receipt.go:CandidateNone
+    to_name: CandidateNone
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_name: Contains
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_id: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: FromEvents
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_name: HasPrefix
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_name: NewReader
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommit
+    to_name: Receipt.CandidateCommit
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommitDiffDigest
+    to_name: Receipt.CandidateCommitDiffDigest
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
+    to_name: Receipt.CandidateDigest
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateFirstParent
+    to_name: Receipt.CandidateFirstParent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateTree
+    to_name: Receipt.CandidateTree
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.Completeness
+    to_name: Receipt.Completeness
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_name: T
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_id: internal/runreceipt/receipt.go:Value.Detail
+    to_name: Value.Detail
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_name: common.Errorf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_name: common.Fatalf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW2APositiveAbsenceStillRendersAsAbsence
+    to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:CandidateUnknown
+    to_name: CandidateUnknown
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_name: Contains
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: FromEvents
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_name: Join
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_name: NewReader
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommit
+    to_name: Receipt.CandidateCommit
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommitDiffDigest
+    to_name: Receipt.CandidateCommitDiffDigest
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
+    to_name: Receipt.CandidateDigest
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateFirstParent
+    to_name: Receipt.CandidateFirstParent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateTree
+    to_name: Receipt.CandidateTree
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:Receipt.Diagnostics
+    to_name: Receipt.Diagnostics
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_name: Repeat
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_name: Replace
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_name: T
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:Value.Source
+    to_name: Value.Source
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_id: internal/runreceipt/receipt.go:Value.Text
+    to_name: Value.Text
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_name: common.Errorf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_name: common.Fatalf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW3AKnownCandidateIdentityIsReconstructed
+    to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_name: Contains
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: FromEvents
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_name: HasPrefix
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_name: Join
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_name: NewReader
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:OutcomePlanAdmissionRefused
+    to_name: OutcomePlanAdmissionRefused
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionProspective
+    to_name: PlanAdmissionProspective
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Class
+    to_name: PlanAdmissionRefusal.Class
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Declaration
+    to_name: PlanAdmissionRefusal.Declaration
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.GoverningEvidenceID
+    to_name: PlanAdmissionRefusal.GoverningEvidenceID
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.PlanAttemptID
+    to_name: PlanAdmissionRefusal.PlanAttemptID
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Reason
+    to_name: PlanAdmissionRefusal.Reason
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.RefusalID
+    to_name: PlanAdmissionRefusal.RefusalID
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.State
+    to_name: PlanAdmissionRefusal.State
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:Receipt.Completeness
+    to_name: Receipt.Completeness
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:Receipt.Diagnostics
+    to_name: Receipt.Diagnostics
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:Receipt.Outcome
+    to_name: Receipt.Outcome
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/receipt.go:Receipt.PlanAdmissionRefusal
+    to_name: Receipt.PlanAdmissionRefusal
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_name: Repeat
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_name: T
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_name: common.Errorf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_name: common.Fatalf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_id: internal/runreceipt/legacy/fromevents_test.go:refusalPayload
+    to_name: refusalPayload
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4APlanAdmissionRefusalIsReconstructedAsV13
+    to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_name: Contains
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_id: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: FromEvents
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_id: internal/runreceipt/receipt.go:Knownness~type
+    to_name: Knownness
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_id: internal/runreceipt/receipt.go:Malformed
+    to_name: Malformed
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_name: NewReader
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_id: internal/runreceipt/receipt.go:OutcomePlanAdmissionRefused
+    to_name: OutcomePlanAdmissionRefused
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Detail
+    to_name: PlanAdmissionRefusal.Detail
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.State
+    to_name: PlanAdmissionRefusal.State
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_id: internal/runreceipt/receipt.go:Receipt.Outcome
+    to_name: Receipt.Outcome
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_id: internal/runreceipt/receipt.go:Receipt.PlanAdmissionRefusal
+    to_name: Receipt.PlanAdmissionRefusal
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_name: Repeat
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_name: T
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_name: common.Errorf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_id: internal/runreceipt/legacy/fromevents_test.go:refusalEvent
+    to_name: refusalEvent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW4BNonCanonicalRefusalValuesAreNotKnown
+    to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_name: Contains
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: FromEvents
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/receipt.go:Incomplete
+    to_name: Incomplete
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_name: Join
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_name: NewReader
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/receipt.go:OutcomePlanAdmissionRefused
+    to_name: OutcomePlanAdmissionRefused
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionProspective
+    to_name: PlanAdmissionProspective
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Class
+    to_name: PlanAdmissionRefusal.Class
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Detail
+    to_name: PlanAdmissionRefusal.Detail
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.GoverningEvidenceID
+    to_name: PlanAdmissionRefusal.GoverningEvidenceID
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.PlanAttemptID
+    to_name: PlanAdmissionRefusal.PlanAttemptID
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.RefusalID
+    to_name: PlanAdmissionRefusal.RefusalID
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.State
+    to_name: PlanAdmissionRefusal.State
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/receipt.go:Receipt.Completeness
+    to_name: Receipt.Completeness
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/receipt.go:Receipt.Outcome
+    to_name: Receipt.Outcome
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/receipt.go:Receipt.PlanAdmissionRefusal
+    to_name: Receipt.PlanAdmissionRefusal
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_name: Repeat
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_name: T
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_name: common.Errorf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_name: common.Fatalf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_id: internal/runreceipt/legacy/fromevents_test.go:refusalPayload
+    to_name: refusalPayload
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5AHistoricalRefusalLacksNewerIdentitiesAndSaysSo
+    to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_name: Contains
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/legacy/fromevents.go:FromEvents
+    to_name: FromEvents
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_name: Join
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/receipt.go:Malformed
+    to_name: Malformed
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_name: NewReader
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/receipt.go:OutcomePlanAdmissionRefused
+    to_name: OutcomePlanAdmissionRefused
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Declaration
+    to_name: PlanAdmissionRefusal.Declaration
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Detail
+    to_name: PlanAdmissionRefusal.Detail
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.GoverningEvidenceID
+    to_name: PlanAdmissionRefusal.GoverningEvidenceID
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.Source
+    to_name: PlanAdmissionRefusal.Source
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/receipt.go:PlanAdmissionRefusal.State
+    to_name: PlanAdmissionRefusal.State
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/receipt.go:Receipt.Diagnostics
+    to_name: Receipt.Diagnostics
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/receipt.go:Receipt.Outcome
+    to_name: Receipt.Outcome
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/receipt.go:Receipt.PlanAdmissionRefusal
+    to_name: Receipt.PlanAdmissionRefusal
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_name: Repeat
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_name: Replace
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_name: T
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_name: TrimPrefix
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_name: TrimSuffix
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_name: common.Errorf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_name: common.Fatalf
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/legacy/fromevents_test.go:refusalEvent
+    to_name: refusalEvent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_id: internal/runreceipt/legacy/fromevents_test.go:refusalPayload
+    to_name: refusalPayload
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:TestW5BABoundPriorRefusalCompletesTheTerminal
+    to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:candidateIdentities
+    to_id: internal/runreceipt/receipt.go:Receipt~type
+    to_name: Receipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:candidateIdentities
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommit
+    to_name: Receipt.CandidateCommit
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:candidateIdentities
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommitDiffDigest
+    to_name: Receipt.CandidateCommitDiffDigest
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:candidateIdentities
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
+    to_name: Receipt.CandidateDigest
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:candidateIdentities
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateFirstParent
+    to_name: Receipt.CandidateFirstParent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:candidateIdentities
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateTree
+    to_name: Receipt.CandidateTree
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:candidateIdentities
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:candidateIdentities
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:completePresent
+    to_name: Repeat
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:completePresent
+    to_id: internal/runreceipt/legacy/fromevents_test.go:knownField
+    to_name: knownField
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:completePresent
+    to_id: internal/runreceipt/legacy/fromevents_test.go:receiptEvent
+    to_name: receiptEvent
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:completePresent
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
   - from: internal/runreceipt/legacy/fromevents_test.go:discovered
     to_name: Glob
     file: internal/runreceipt/legacy/fromevents_test.go
@@ -134180,6 +135883,37 @@ code_references:
     file: internal/runreceipt/legacy/fromevents_test.go
   - from: internal/runreceipt/legacy/fromevents_test.go:discovered
     to_name: testing
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:receiptEvent
+    to_name: Join
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:receiptEvent
+    to_name: Strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:receiptEvent
+    to_name: sort
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:receiptEvent
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:refusalEvent
+    to_name: Join
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:refusalEvent
+    to_name: Repeat
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:refusalEvent
+    to_name: Strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:refusalEvent
+    to_name: sort
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:refusalEvent
+    to_name: strings
+    file: internal/runreceipt/legacy/fromevents_test.go
+  - from: internal/runreceipt/legacy/fromevents_test.go:refusalPayload
+    to_id: internal/runreceipt/legacy/fromevents_test.go:refusalEvent
+    to_name: refusalEvent
     file: internal/runreceipt/legacy/fromevents_test.go
   - from: internal/runreceipt/receipt.go:Attempt.DeliveredVerdict
     to_id: internal/runreceipt/receipt.go:Attempt~type
@@ -151615,10 +153349,10 @@ code_references:
     to_name: ModeSelected
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
+    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -164641,11 +166375,11 @@ code_references:
     to_name: Engine.applyAnsweredCondition
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
@@ -176314,10 +178048,10 @@ code_references:
     to_name: Load
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
@@ -180347,10 +182081,10 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
@@ -181128,10 +182862,10 @@ code_references:
     to_name: Errorf
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
@@ -183745,10 +185479,10 @@ code_references:
     to_name: Engine.resolveRunner
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
@@ -186343,14 +188077,14 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/event/event.go:New
+    to_name: New
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/broker/broker.go:New
-    to_name: New
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -188340,11 +190074,11 @@ code_references:
     to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
+    to_id: internal/taskstate/state.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.DiffBytes
+    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -197697,11 +199431,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
@@ -197845,11 +199579,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
@@ -210087,10 +211821,10 @@ code_references:
     to_name: Interrupted.PlanAttemptRefusals
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
@@ -226366,11 +228100,11 @@ code_references:
     to_name: Join
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
