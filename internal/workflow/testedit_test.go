@@ -96,11 +96,11 @@ func TestAGrantedTestEditIsInspectedAgainstItsExactGrant(t *testing.T) {
 		return func(string) ([]byte, error) { return []byte(src), nil }
 	}
 	good := strings.Replace(teFSrc, "TestX", "TestY", 1)
-	if err := inspectTestEdits(edited, grants, after(good)); err != nil {
+	if err := teInspect(t, edited, grants, after(good)); err != nil {
 		t.Fatalf("an in-place edit inside the grant was refuted: %v", err)
 	}
 	// An untouched granted file is not a mismatch.
-	if err := inspectTestEdits("diff --git a/"+teS+" b/"+teS+"\n", grants, after("")); err != nil {
+	if err := teInspect(t, "diff --git a/"+teS+" b/"+teS+"\n", grants, after("")); err != nil {
 		t.Fatalf("an untouched grant was inspected: %v", err)
 	}
 	refutations := map[string]struct {
@@ -116,7 +116,7 @@ func TestAGrantedTestEditIsInspectedAgainstItsExactGrant(t *testing.T) {
 		"rename":           {"diff --git a/" + teF + " b/modfile/rule2_test.go\nrename from " + teF + "\nrename to modfile/rule2_test.go\n", good, "renames it"},
 	}
 	for name, r := range refutations {
-		err := inspectTestEdits(r.diff, grants, after(r.after))
+		err := teInspect(t, r.diff, grants, after(r.after))
 		if err == nil || !strings.HasPrefix(err.Error(), "test edit refuted:") || !strings.Contains(err.Error(), r.want) {
 			t.Errorf("%s: %v", name, err)
 		}
@@ -265,17 +265,17 @@ func TestAGrantedTestPathWithWhitespaceIsStillInspected(t *testing.T) {
 		t.Fatalf("the whitespace path was not seen as touched: %v", touched)
 	}
 	novel := strings.Replace(src, "\"strings\"\n", "\"strings\"\n\t\"bytes\"\n", 1)
-	err := inspectTestEdits(diff, grants, func(string) ([]byte, error) { return []byte(novel), nil })
+	err := teInspect(t, diff, grants, func(string) ([]byte, error) { return []byte(novel), nil })
 	if err == nil || !strings.Contains(err.Error(), "novel import") {
 		t.Fatalf("an illegal import change on a whitespace path slipped past inspection: %v", err)
 	}
 	pkg := strings.Replace(src, "package modfile", "package modfile_test", 1)
-	if err := inspectTestEdits(diff, grants, func(string) ([]byte, error) { return []byte(pkg), nil }); err == nil || !strings.Contains(err.Error(), "package clause") {
+	if err := teInspect(t, diff, grants, func(string) ([]byte, error) { return []byte(pkg), nil }); err == nil || !strings.Contains(err.Error(), "package clause") {
 		t.Fatalf("an illegal package change on a whitespace path slipped past inspection: %v", err)
 	}
 	// A rename of the whitespace path is seen too.
 	ren := "diff --git a/" + f + " b/modfile/c d_test.go\nrename from " + f + "\nrename to modfile/c d_test.go\n"
-	if err := inspectTestEdits(ren, grants, func(string) ([]byte, error) { return []byte(src), nil }); err == nil || !strings.Contains(err.Error(), "renames it") {
+	if err := teInspect(t, ren, grants, func(string) ([]byte, error) { return []byte(src), nil }); err == nil || !strings.Contains(err.Error(), "renames it") {
 		t.Fatalf("a rename of a whitespace path was not refuted: %v", err)
 	}
 }
@@ -1116,7 +1116,7 @@ func TestTheProjectedRefusalIsTheSentenceTheLateCheckWouldHaveProduced(t *testin
 	grants := teEditGrants(t)
 	decl := teTheMeasuredCase()
 	early := projectTestEditRefusals([]TestEditDeclaration{decl}, grants)
-	late := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teSourceFor(decl)), nil })
+	late := teInspect(t, teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teSourceFor(decl)), nil })
 	if early == nil || late == nil {
 		t.Fatalf("premise: both doors refuse this (early=%v late=%v)", early, late)
 	}
@@ -1133,7 +1133,7 @@ func TestTheCandidateTimeCheckStillRefusesWithoutAnyProjection(t *testing.T) {
 	if err := projectTestEditRefusals(nil, grants); err != nil {
 		t.Fatalf("an undeclared plan was refused early: %v", err)
 	}
-	late := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teCandidateWithNovelImport()), nil })
+	late := teInspect(t, teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teCandidateWithNovelImport()), nil })
 	if late == nil || !strings.Contains(late.Error(), "novel import") {
 		t.Fatalf("the candidate-time check stopped refusing a novel import: %v", late)
 	}
@@ -1242,7 +1242,7 @@ func TestEveryProjectedRefusalIsAlsoALateRefusal(t *testing.T) {
 		if !strings.Contains(early.Error(), c.want) {
 			t.Errorf("%s: the early door names something else (%q): %s", c.name, c.want, early)
 		}
-		late := inspectTestEdits(c.diff, grants, func(string) ([]byte, error) { return []byte(teSourceFor(c.decls[0])), nil })
+		late := teInspect(t, c.diff, grants, func(string) ([]byte, error) { return []byte(teSourceFor(c.decls[0])), nil })
 		if late == nil {
 			t.Errorf("%s: PROJECTED BUT NOT LATE-REFUSED -- the projection is no longer a subset: %s", c.name, early)
 			continue
@@ -1291,7 +1291,7 @@ func TestAnExplicitlyEmptyBuildConstraintListIsADeclarationAndAnOmittedOneIsNot(
 	if early == nil {
 		t.Fatal("a plan declaring that it strips the build constraint was admitted at plan admission")
 	}
-	late := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teSourceFor(declared)), nil })
+	late := teInspect(t, teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teSourceFor(declared)), nil })
 	if late == nil || early.Error() != late.Error() {
 		t.Fatalf("the early door refuses something the late door does not, identically:\n  early: %s\n  late:  %v", early, late)
 	}
@@ -1306,7 +1306,7 @@ func TestAnExplicitlyEmptyBuildConstraintListIsADeclarationAndAnOmittedOneIsNot(
 		t.Fatalf("an undeclared build constraint was decided at plan admission: %v", err)
 	}
 	stripped := strings.TrimPrefix(teFSrc, "//go:build go1.20\n")
-	if late := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(stripped), nil }); late == nil {
+	if late := teInspect(t, teDiffEdited, grants, func(string) ([]byte, error) { return []byte(stripped), nil }); late == nil {
 		t.Fatal("nothing refused the undeclared strip at either door")
 	}
 
@@ -1380,13 +1380,13 @@ func TestAnUndecidableEffectIsAdmittedEarlyAndRefusedLate(t *testing.T) {
 	// The plan proceeded, the implementer wrote the novel import anyway, and
 	// the candidate-time check -- which is the authority of record -- refused
 	// it.
-	late := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teCandidateWithNovelImport()), nil })
+	late := teInspect(t, teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teCandidateWithNovelImport()), nil })
 	if late == nil || !strings.Contains(late.Error(), "novel import") {
 		t.Fatalf("the undeclared novel import was never refused at all: %v", late)
 	}
 	// So did the stripped build constraint the plan never declared.
 	stripped := strings.TrimPrefix(teFSrc, "//go:build go1.20\n")
-	if late := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(stripped), nil }); late == nil ||
+	if late := teInspect(t, teDiffEdited, grants, func(string) ([]byte, error) { return []byte(stripped), nil }); late == nil ||
 		!strings.Contains(late.Error(), "build constraints") {
 		t.Fatalf("an undeclared build-constraint change was never refused at all: %v", late)
 	}
@@ -1396,7 +1396,7 @@ func TestAnUndecidableEffectIsAdmittedEarlyAndRefusedLate(t *testing.T) {
 	// file, which is not the reason an eager projector would have given. Two
 	// different conditions for one declaration is exactly what a projection
 	// may not choose between.
-	deleted := inspectTestEdits(teDiffDeleted, grants, func(string) ([]byte, error) { return []byte(teSourceFor(unknownOperation)), nil })
+	deleted := teInspect(t, teDiffDeleted, grants, func(string) ([]byte, error) { return []byte(teSourceFor(unknownOperation)), nil })
 	if deleted == nil || !strings.Contains(deleted.Error(), "deletes it") {
 		t.Fatalf("premise: the same unreadable declaration admits a candidate refused for deletion: %v", deleted)
 	}
@@ -1416,7 +1416,7 @@ func TestAnAdmissibleDeclarationIsNotRefusedAtPlanAdmission(t *testing.T) {
 		t.Fatalf("an edit inside the grant was refused at plan admission: %v", err)
 	}
 	// It reaches implementation and the late check agrees.
-	if err := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teSourceFor(fine)), nil }); err != nil {
+	if err := teInspect(t, teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teSourceFor(fine)), nil }); err != nil {
 		t.Fatalf("the candidate the admitted declaration describes was refuted late: %v", err)
 	}
 	// Repeating an admissible declaration states exactly what one of them
@@ -1547,18 +1547,18 @@ func TestDeclarationsOfOnePathThatDisagreeAreNotProjectedInEitherOrder(t *testin
 	// AND THE LATE CHECK REMAINS AUTHORITATIVE over the file the plan could not
 	// uniquely describe. Whichever candidate is actually produced is judged, by
 	// the same sentences, exactly as before projection existed.
-	late := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teCandidateWithNovelImport()), nil })
+	late := teInspect(t, teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teCandidateWithNovelImport()), nil })
 	if late == nil || !strings.Contains(late.Error(), "novel import") {
 		t.Fatalf("a novel import declared twice, inconsistently, was never refused at all: %v", late)
 	}
-	if late := inspectTestEdits(teDiffDeleted, grants, func(string) ([]byte, error) { return []byte(teFSrc), nil }); late == nil ||
+	if late := teInspect(t, teDiffDeleted, grants, func(string) ([]byte, error) { return []byte(teFSrc), nil }); late == nil ||
 		!strings.Contains(late.Error(), "deletes it") {
 		t.Fatalf("a deletion declared twice, inconsistently, was never refused at all: %v", late)
 	}
 	// A candidate that followed the ADMISSIBLE entry passes late -- which is
 	// precisely why no early refusal may be produced from this plan: the early
 	// door would have refused a run the authority of record admits.
-	if err := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teSourceFor(admissible)), nil }); err != nil {
+	if err := teInspect(t, teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teSourceFor(admissible)), nil }); err != nil {
 		t.Fatalf("premise: the admissible entry of the disagreeing pair describes a candidate the late check accepts: %v", err)
 	}
 }
@@ -1646,12 +1646,666 @@ func TestAnOperationOutsideTheClosedVocabularyIsNotReadAsAMemberOfIt(t *testing.
 	// ABSENCE OF A PROJECTION IS NOT PERMISSION. inspectTestEdits -- the
 	// authority of record, unchanged -- still refuses the candidate each near
 	// miss describes, with its own sentence.
-	late := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teSourceFor(refusable)), nil })
+	late := teInspect(t, teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teSourceFor(refusable)), nil })
 	if late == nil || !strings.Contains(late.Error(), "package clause") {
 		t.Fatalf("the candidate a near-missed edit describes was never refused at all: %v", late)
 	}
-	if late := inspectTestEdits(teDiffDeleted, grants, func(string) ([]byte, error) { return []byte(teFSrc), nil }); late == nil ||
+	if late := teInspect(t, teDiffDeleted, grants, func(string) ([]byte, error) { return []byte(teFSrc), nil }); late == nil ||
 		!strings.Contains(late.Error(), "deletes it") {
 		t.Fatalf("the deletion a near-missed operation describes was never refused at all: %v", late)
+	}
+}
+
+// MECHANICAL FIXTURE MIGRATION (ruling 91), and nothing more. Candidate
+// inspection now reads the test-edit record of the operative plan attempt at
+// the pinned world, so each pre-existing control above hands its grants over
+// as exactly that record: bound to one canonical PlanAttemptID, at teWorld.
+// Its diff, its grants, its candidate bytes and its expected outcome are
+// unchanged. The DF-23 behaviour is proven by the separate witnesses below.
+func teInspect(t *testing.T, diff string, grants []testEditGrant, candidate func(string) ([]byte, error)) error {
+	t.Helper()
+	a := teAttemptAt(t, "the M2.2 control plan", teWorld)
+	return inspectDiff(diff, a, testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants}, candidate)
+}
+
+// teAttemptAt is a canonical plan attempt derived AT world: its ID is
+// planAttemptID over that world, so the ID and the world it carries are one
+// identity, as the operative attempt's are.
+func teAttemptAt(t *testing.T, plan, world string) planAttempt {
+	t.Helper()
+	d := architectureDecision{Decision: "proceed", Plan: plan}
+	id, err := planAttemptID("t", attemptObjective, world, PlanByArchitect, "", d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return planAttempt{ID: id, TaskID: "t", World: world, PlanSource: PlanByArchitect, Plan: d}
+}
+
+// MECHANICAL FIXTURE MIGRATION (DF-23, finding f1). Inspection now reads the
+// frozen capture's exact path set and measures existence at the pinned world
+// and in the candidate tree, instead of re-parsing the rendered diff. Every
+// control above still states its candidate as a fixture diff; inspectDiff
+// translates that fixture into exactly the state the capture would hold --
+// the changed paths, rename detection off; absent at the world if the fixture
+// creates it; absent from the candidate if it deletes it -- and nothing else.
+// The fixtures are unquoted, so this reading of them is exact; the
+// quoted-path witnesses below construct their state directly.
+func inspectDiff(diff string, operative planAttempt, rec testEditRecord, candidate func(string) ([]byte, error)) error {
+	return inspectTestEdits(teDiffState(diff, candidate), operative, rec)
+}
+
+func teDiffState(diff string, candidate func(string) ([]byte, error)) candidateTestState {
+	notAtWorld, notInCandidate := map[string]bool{}, map[string]bool{}
+	var paths []string
+	for _, block := range strings.Split(diff, "diff --git a/")[1:] {
+		header, body, _ := strings.Cut(block, "\n")
+		from, to, _ := strings.Cut(header, " b/")
+		switch {
+		case strings.Contains(body, "new file mode"):
+			paths, notAtWorld[to] = append(paths, to), true
+		case strings.Contains(body, "deleted file mode"):
+			paths, notInCandidate[from] = append(paths, from), true
+		case strings.Contains(body, "rename from "):
+			paths = append(paths, from, to)
+			notInCandidate[from], notAtWorld[to] = true, true
+		default:
+			paths = append(paths, to)
+		}
+	}
+	return candidateTestState{
+		Paths:       paths,
+		World:       teWorld,
+		AtWorld:     teReader(notAtWorld, func(string) ([]byte, error) { return []byte("package x\n"), nil }),
+		InCandidate: teReader(notInCandidate, candidate),
+		Diff:        diff,
+	}
+}
+
+func teReader(absent map[string]bool, read func(string) ([]byte, error)) func(string) ([]byte, error) {
+	return func(p string) ([]byte, error) {
+		if absent[p] {
+			return nil, errNotAtWorld
+		}
+		return read(p)
+	}
+}
+
+// DF-23 -- EXISTING-TEST EDIT AUTHORITY IS ENUMERATED FROM THE CANDIDATE.
+//
+// Objective 61, run 1: the plan named internal/event/bus_test.go and
+// internal/runreceipt/receipt_test.go, routing granted neither, the candidate
+// edited both, and nothing refused it -- inspection iterated the grants, so an
+// ungranted test was never examined. These witnesses are separate from the
+// migrated controls above.
+
+const (
+	df23Receipt = "internal/runreceipt/receipt_test.go"
+	df23Bus     = "internal/event/bus_test.go"
+)
+
+func df23Edit(p string) string {
+	return "diff --git a/" + p + " b/" + p + "\nindex 1..2 100644\n--- a/" + p + "\n+++ b/" + p + "\n@@ -1 +1 @@\n-x\n+y\n"
+}
+
+// df23Candidate serves teF as an in-grant edit and anything else as some Go.
+func df23Candidate(p string) ([]byte, error) {
+	if p == teF {
+		return []byte(strings.Replace(teFSrc, "TestX", "TestY", 1)), nil
+	}
+	return []byte("package other\n"), nil
+}
+
+func df23Record(t *testing.T, plan string, grants []testEditGrant) (planAttempt, testEditRecord) {
+	t.Helper()
+	a := teAttemptAt(t, plan, teWorld)
+	return a, testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants}
+}
+
+// W1 -- the objective-61 run-1 shape: both ungranted tests edited, under an
+// explicit empty grant set and under a record granting only another test.
+func TestDF23W1AnUngrantedExistingTestEditIsRefused(t *testing.T) {
+	for name, grants := range map[string][]testEditGrant{"no grants at all": nil, "grants for another test": teEditGrants(t)} {
+		a, rec := df23Record(t, "objective 61", grants)
+		for _, f := range []string{df23Receipt, df23Bus} {
+			err := inspectDiff(df23Edit(f), a, rec, df23Candidate)
+			if err == nil || !strings.HasPrefix(err.Error(), "test edit refuted:") || !strings.Contains(err.Error(), f) ||
+				!strings.Contains(err.Error(), "holds no test-edit grant") {
+				t.Errorf("%s: an ungranted edit of %s was not refused: %v", name, f, err)
+			}
+			if !isProspectiveSurfaceRefutation(err) {
+				t.Errorf("%s: the refusal of %s is not terminal: %v", name, f, err)
+			}
+		}
+		both := df23Edit(df23Receipt) + df23Edit(df23Bus)
+		if err := inspectDiff(both, a, rec, df23Candidate); err == nil {
+			t.Errorf("%s: the measured candidate was admitted", name)
+		}
+	}
+	// No operative plan attempt, or a record at another world: no authority.
+	a, rec := df23Record(t, "objective 61", teEditGrants(t))
+	if err := inspectDiff(df23Edit(teF), planAttempt{World: teWorld}, rec, df23Candidate); err == nil || !strings.Contains(err.Error(), "no operative plan attempt") {
+		t.Errorf("an edit with no operative plan attempt was admitted: %v", err)
+	}
+	other := rec
+	other.World = "other-world"
+	if err := inspectDiff(df23Edit(teF), a, other, df23Candidate); err == nil || !strings.Contains(err.Error(), "not the pinned world") {
+		t.Errorf("a record read at another world authorized an edit: %v", err)
+	}
+	unpinned := a
+	unpinned.World = ""
+	if err := inspectDiff(df23Edit(teF), unpinned, rec, df23Candidate); err == nil || !strings.Contains(err.Error(), "not the candidate's base") {
+		t.Errorf("an edit under an attempt with no pinned world was admitted: %v", err)
+	}
+	// A grant inside the record that was read at another world.
+	g := teEditGrants(t)
+	g[0].World = "other-world"
+	if err := inspectDiff(df23Edit(teF), a, testEditRecord{PlanAttemptID: a.ID, World: teWorld, Grants: g}, df23Candidate); err == nil ||
+		!strings.Contains(err.Error(), "its grant was read at world") {
+		t.Errorf("a grant read at another world authorized an edit: %v", err)
+	}
+	// Two grants for one path are not exactly one.
+	dup := append(teEditGrants(t), teEditGrants(t)...)
+	if err := inspectDiff(df23Edit(teF), a, testEditRecord{PlanAttemptID: a.ID, World: teWorld, Grants: dup}, df23Candidate); err == nil ||
+		!strings.Contains(err.Error(), "not exactly one") {
+		t.Errorf("duplicate grants authorized an edit: %v", err)
+	}
+}
+
+// W1, review f2 -- THE ATTEMPT'S ID AND WORLD ARE ONE IDENTITY. An attempt
+// canonically derived at another world, with a record and grant bound to it
+// at that same world -- internally consistent -- authorizes nothing in a
+// candidate measured against teWorld: the operative world must be the base.
+// And an ID derived at teWorld does not borrow another world's record.
+func TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing(t *testing.T) {
+	const elsewhere = "1111111111111111111111111111111111111111"
+	there := teAttemptAt(t, "objective 61", elsewhere)
+	g := teEditGrants(t)
+	g[0].World = elsewhere
+	rec := testEditRecord{PlanAttemptID: there.ID, World: elsewhere, Grants: g}
+	if err := inspectDiff(df23Edit(teF), there, rec, df23Candidate); err == nil ||
+		!strings.Contains(err.Error(), "not the candidate's base") || !strings.Contains(err.Error(), teF) {
+		t.Errorf("an attempt pinned at another world authorized the candidate's edit: %v", err)
+	}
+	// The same plan derived at teWorld is a different canonical attempt: its
+	// ID is not the other world's, and the other world's record is refused.
+	here := teAttemptAt(t, "objective 61", teWorld)
+	if here.ID == there.ID {
+		t.Fatal("premise: the canonical ID does not depend on the world it was derived at")
+	}
+	if err := inspectDiff(df23Edit(teF), here, rec, df23Candidate); err == nil || !strings.Contains(err.Error(), "superseded or other attempt") {
+		t.Errorf("another world's attempt record authorized the operative attempt's edit: %v", err)
+	}
+	// Mixing: this attempt's ID paired with the other world is still refused.
+	mixed := here
+	mixed.World = elsewhere
+	if err := inspectDiff(df23Edit(teF), mixed, testEditRecord{PlanAttemptID: here.ID, World: elsewhere, Grants: g}, df23Candidate); err == nil ||
+		!strings.Contains(err.Error(), "not the candidate's base") {
+		t.Errorf("an attempt ID carried with another world authorized an edit: %v", err)
+	}
+	// Control: the attempt derived at teWorld with its own record proceeds.
+	if err := inspectDiff(df23Edit(teF), here, testEditRecord{PlanAttemptID: here.ID, World: teWorld, Grants: teEditGrants(t)}, df23Candidate); err != nil {
+		t.Errorf("the bound attempt's own grant was refused: %v", err)
+	}
+}
+
+// W2 -- control: the edit the current attempt granted proceeds.
+func TestDF23W2AGrantedExistingTestEditProceeds(t *testing.T) {
+	a, rec := df23Record(t, "objective 61", teEditGrants(t))
+	if err := inspectDiff(df23Edit(teF), a, rec, df23Candidate); err != nil {
+		t.Fatalf("an edit inside the current attempt's grant was refused: %v", err)
+	}
+	// A candidate that mutates no existing test needs no grant at all.
+	if err := inspectDiff(df23Edit(teS), a, testEditRecord{PlanAttemptID: a.ID, World: teWorld}, df23Candidate); err != nil {
+		t.Fatalf("a production-only candidate was refused: %v", err)
+	}
+}
+
+// df23Engine is a durable engine whose task is pinned at teWorld, so every
+// plan attempt routing begins is canonically derived AT teWorld -- the world
+// the fixture candidates are measured against.
+func df23Engine(t *testing.T, root, task string) *Engine {
+	t.Helper()
+	e, _ := attemptEngine(t)
+	if root != "" {
+		e.Repo.Root = root
+	}
+	df23Pin(t, e, task, teWorld)
+	return e
+}
+
+// df23Pin records world as task's candidate base, which governedBase -- and
+// so beginPlanAttempt -- reads as the world an attempt is derived at.
+func df23Pin(t *testing.T, e *Engine, task, world string) {
+	t.Helper()
+	id := candidateIdentityWithBase(world)
+	id.TaskID = task
+	if err := id.Save(e.Repo.Root); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// df23Route routes d through the production attempt transition: the attempt
+// begins at the pinned world, its whole grant state is recorded bound to it at
+// that world, and it is made operative.
+func df23Route(t *testing.T, e *Engine, task string, d architectureDecision, grants []testEditGrant) planAttempt {
+	t.Helper()
+	a, err := e.beginPlanAttempt(task, attemptObjective, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.recordTestEditGrants(task, "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants}); err != nil {
+		t.Fatal(err)
+	}
+	e.setTestEditGrants(task, grants)
+	if err := e.recordProspectiveGrants(task, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: a.World}); err != nil {
+		t.Fatal(err)
+	}
+	e.setProspectiveGrants(task, nil)
+	if _, err := e.adoptPlanAttempt(task, attemptObjective, d); err != nil {
+		t.Fatal(err)
+	}
+	return a
+}
+
+// df23Inspect is the candidate-inspection handoff as runCandidate makes it:
+// the operative attempt whole, and the test-edit record recorded for exactly
+// it, against a candidate measured at teWorld.
+func df23Inspect(e *Engine, taskID, diff string) error {
+	operative := e.operativePlanAttempt(taskID)
+	_, edits := e.recordedGrants(taskID, operative.ID)
+	return inspectDiff(diff, operative, edits, df23Candidate)
+}
+
+// W3 -- the same test path across a PRODUCTION re-plan: plan A's grant does
+// not authorize plan B, and B's own re-derived grant (plan C) does.
+func TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority(t *testing.T) {
+	const task = "task-df23-replan"
+	e := df23Engine(t, "", task)
+	planA := attemptPlan("plan A", teS, teF)
+	a := df23Route(t, e, task, planA, teEditGrants(t))
+	if a.World != teWorld {
+		t.Fatalf("premise: the attempt was derived at the pinned world, got %q", a.World)
+	}
+	if err := df23Inspect(e, task, df23Edit(teF)); err != nil {
+		t.Fatalf("premise: plan A's grant authorizes its edit: %v", err)
+	}
+	planB := attemptPlan("plan B", teS, teF)
+	b := df23Route(t, e, task, planB, nil)
+	if op := e.operativePlanAttempt(task); op.ID != b.ID || b.ID == a.ID {
+		t.Fatalf("premise: the re-plan made B operative (a=%s b=%s operative=%s)", short12(a.ID), short12(b.ID), short12(op.ID))
+	}
+	if err := df23Inspect(e, task, df23Edit(teF)); err == nil || !strings.Contains(err.Error(), "holds no test-edit grant") {
+		t.Fatalf("plan A's grant authorized plan B's edit of %s: %v", teF, err)
+	}
+	// Plan A's record, handed over whole, is bound to the superseded attempt.
+	_, stale := e.recordedGrants(task, a.ID)
+	if len(stale.Grants) != 1 {
+		t.Fatalf("premise: plan A's record still holds its grant: %+v", stale)
+	}
+	if err := inspectDiff(df23Edit(teF), e.operativePlanAttempt(task), stale, df23Candidate); err == nil || !strings.Contains(err.Error(), "superseded") {
+		t.Fatalf("a superseded attempt's record authorized the operative attempt's edit: %v", err)
+	}
+	// A further re-plan that re-derives the grant for the same path is authorized by its own record.
+	planC := attemptPlan("plan C", teS, teF)
+	df23Route(t, e, task, planC, teEditGrants(t))
+	if err := df23Inspect(e, task, df23Edit(teF)); err != nil {
+		t.Fatalf("the operative attempt's own re-derived grant was refused: %v", err)
+	}
+}
+
+// W3, resumed: a resume restores the operative attempt first and then accepts
+// only the grants recorded for it.
+func TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord(t *testing.T) {
+	const task = "task-df23-resume"
+	e := df23Engine(t, "", task)
+	planA := attemptPlan("plan A", teS, teF)
+	df23Route(t, e, task, planA, teEditGrants(t))
+	interrupted := interruptedFrom(t, e.Store, task)
+	fresh := &Engine{}
+	if err := fresh.restorePlanAttempt(interrupted, teWorld); err != nil {
+		t.Fatal(err)
+	}
+	if err := fresh.restoreTestEditGrants(interrupted, teEditGrants(t), []string{teS, teF}, teWorld); err != nil {
+		t.Fatal(err)
+	}
+	if err := df23Inspect(fresh, task, df23Edit(teF)); err != nil {
+		t.Fatalf("the resumed operative attempt's recorded grant was refused: %v", err)
+	}
+	if err := df23Inspect(fresh, task, df23Edit(df23Bus)); err == nil {
+		t.Fatal("a resumed task edited an ungranted existing test")
+	}
+}
+
+// W4 -- a newly created test is prospective CREATE's to govern, never an
+// existing-test edit, with or without any existing-test grant.
+func TestDF23W4ACreatedTestIsNotAnExistingTestEdit(t *testing.T) {
+	const created = "modfile/new_test.go"
+	diff := "diff --git a/" + created + " b/" + created + "\nnew file mode 100644\n--- /dev/null\n+++ b/" + created + "\n@@ -0,0 +1 @@\n+package modfile\n"
+	for name, grants := range map[string][]testEditGrant{"no grants": nil, "a grant for another test": teEditGrants(t)} {
+		a, rec := df23Record(t, "plan", grants)
+		if err := inspectDiff(diff, a, rec, df23Candidate); err != nil {
+			t.Errorf("%s: a created test was inspected as an existing-test edit: %v", name, err)
+		}
+	}
+}
+
+// W5 -- deleting or renaming an existing test is a mutation of the ORIGINAL
+// path, and needs authority over it; a rename does not escape as a CREATE.
+func TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused(t *testing.T) {
+	a, rec := df23Record(t, "plan", teEditGrants(t))
+	deleted := "diff --git a/" + df23Receipt + " b/" + df23Receipt + "\ndeleted file mode 100644\n"
+	if err := inspectDiff(deleted, a, rec, df23Candidate); err == nil ||
+		!strings.Contains(err.Error(), "deletes the existing test "+df23Receipt) || !strings.Contains(err.Error(), "holds no test-edit grant") {
+		t.Errorf("deleting an ungranted existing test was not refused: %v", err)
+	}
+	for name, dest := range map[string]string{"to another test": "internal/runreceipt/moved_test.go", "to a non-test": "internal/runreceipt/moved.go"} {
+		renamed := "diff --git a/" + df23Receipt + " b/" + dest + "\nsimilarity index 100%\nrename from " + df23Receipt + "\nrename to " + dest + "\n"
+		if err := inspectDiff(renamed, a, rec, df23Candidate); err == nil ||
+			!strings.Contains(err.Error(), "renames the existing test "+df23Receipt) || !strings.Contains(err.Error(), "holds no test-edit grant") {
+			t.Errorf("renaming an ungranted existing test %s was not refused on its source: %v", name, err)
+		}
+	}
+	// With authority over the source the edit-in-place rule still refuses both.
+	if err := inspectDiff(teDiffDeleted, a, rec, df23Candidate); err == nil || !strings.Contains(err.Error(), "deletes it") {
+		t.Errorf("deleting a granted test was admitted: %v", err)
+	}
+	if err := inspectDiff(teDiffRenamed, a, rec, df23Candidate); err == nil || !strings.Contains(err.Error(), "renames it") {
+		t.Errorf("renaming a granted test was admitted: %v", err)
+	}
+}
+
+// preDF23InspectTestEdits is the NEGATIVE CONTROL for W6a: inspectTestEdits as
+// it stood before DF-23 (main 5760b20), reproduced faithfully in its path
+// selection -- it iterates the GRANTS, skips a granted file the diff did not
+// touch, and never looks at any other path -- and in its in-place checks. Only
+// the order in which novel imports are reported is unsorted here; it decides
+// which import a refusal names, never whether one is refused.
+func preDF23InspectTestEdits(diff string, grants []testEditGrant, candidate func(path string) ([]byte, error)) error {
+	if len(grants) == 0 {
+		return nil
+	}
+	touched, created, deleted, renamed := diffFileStates(diff)
+	for _, g := range grants {
+		f := g.Path
+		if !touched[f] {
+			continue
+		}
+		switch {
+		case created[f]:
+			return refuteTestEditCreated(f)
+		case deleted[f]:
+			return refuteTestEditDeleted(f)
+		case renamed[f]:
+			return refuteTestEditRenamed(f)
+		}
+		after, err := candidate(f)
+		if err != nil {
+			return errors.New("test edit refuted: " + f + " could not be read from the candidate: " + err.Error())
+		}
+		facts, err := testFacts(after)
+		if err != nil {
+			return errors.New("test edit refuted: " + f + " could not be read as Go after the edit: " + err.Error())
+		}
+		if facts.Package != g.Facts.Package {
+			return refuteTestEditPackage(f, g.Facts.Package, facts.Package)
+		}
+		if strings.Join(facts.Constraints, "\n") != strings.Join(g.Facts.Constraints, "\n") {
+			return refuteTestEditConstraints(f, g.Facts.Constraints, facts.Constraints)
+		}
+		for imp := range facts.Imports {
+			if !g.Facts.Imports[imp] {
+				return refuteTestEditNovelImport(f, imp)
+			}
+		}
+	}
+	return nil
+}
+
+// W6a -- NEGATIVE CONTROL, executed. The pre-existing control's fixture
+// (TestAGrantedTestEditIsInspectedAgainstItsExactGrant), migrated exactly as
+// teInspect migrates it -- one record bound to a canonical attempt at teWorld
+// -- is run through BOTH inspectors. Its granted scenario passes both,
+// unchanged. The same migrated record with an ungranted existing test edited
+// beside it is ADMITTED by the pre-DF-23 grant-driven inspector and REFUSED by
+// the repaired one: the migration alone does not make the repair pass; the
+// candidate-first enumeration does.
+func TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse(t *testing.T) {
+	grants, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), authoredEvidence{}, teRead(map[string]string{teS: teSSrc, teF: teFSrc}))
+	good := func(string) ([]byte, error) { return []byte(strings.Replace(teFSrc, "TestX", "TestY", 1)), nil }
+	a := teAttemptAt(t, "the M2.2 control plan", teWorld)
+	rec := testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants}
+
+	// The control scenario, unchanged, passes both.
+	if err := preDF23InspectTestEdits(df23Edit(teF), rec.Grants, good); err != nil {
+		t.Fatalf("premise: the pre-DF-23 inspector admits the control's in-grant edit: %v", err)
+	}
+	if err := inspectDiff(df23Edit(teF), a, rec, good); err != nil {
+		t.Fatalf("the migrated control no longer passes: %v", err)
+	}
+	// The unauthorized edit: the migrated record does not refuse it on its own.
+	for _, diff := range []string{df23Edit(df23Receipt), df23Edit(teF) + df23Edit(df23Receipt)} {
+		if err := preDF23InspectTestEdits(diff, rec.Grants, good); err != nil {
+			t.Fatalf("the negative control is not faithful: the pre-DF-23 inspector refused through the migrated record: %v", err)
+		}
+		if err := inspectDiff(diff, a, rec, good); err == nil || !strings.Contains(err.Error(), df23Receipt) || !strings.Contains(err.Error(), "holds no test-edit grant") {
+			t.Fatalf("the repaired inspector admitted the ungranted existing test edit: %v", err)
+		}
+	}
+	// And the refusing controls still refuse under the pre-DF-23 inspector,
+	// so the control is the real old predicate, not a stub that admits all.
+	if err := preDF23InspectTestEdits(teDiffDeleted, rec.Grants, good); err == nil || !strings.Contains(err.Error(), "deletes it") {
+		t.Fatalf("the negative control does not reproduce the old in-place checks: %v", err)
+	}
+}
+
+// W7 -- complete enumeration: one granted and one ungranted mutation, in
+// either order, is refused on the ungranted path and only on it.
+func TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration(t *testing.T) {
+	a, rec := df23Record(t, "plan", teEditGrants(t))
+	for _, diff := range []string{df23Edit(teF) + df23Edit(df23Bus), df23Edit(df23Bus) + df23Edit(teF)} {
+		err := inspectDiff(diff, a, rec, df23Candidate)
+		if err == nil || !strings.Contains(err.Error(), df23Bus) || strings.Contains(err.Error(), teF) {
+			t.Errorf("the mixed candidate was not refused on the ungranted path alone: %v", err)
+		}
+	}
+	if err := inspectDiff(df23Edit(teF), a, rec, df23Candidate); err != nil {
+		t.Errorf("the granted mutation alone was refused: %v", err)
+	}
+}
+
+// W1/W7 AT CANDIDATE ADMISSION (review f3). The real governed loop
+// (runCandidate) over a real repository: the pinned world holds the two
+// objective-61 tests, the operative plan attempt is routed through the
+// production transition at that world, and the candidate edits the tests
+// beside the worker's own change. Admission must end with the path-specific
+// test-edit refusal BEFORE any audit or review -- under an explicit empty
+// grant record, and under a record granting one of the two (complete
+// enumeration). The control: with only the granted test edited, admission
+// passes inspection and reaches the review.
+func TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit(t *testing.T) {
+	const busSrc = "package event\n\nimport \"testing\"\n\nfunc TestBus(t *testing.T) {}\n"
+	const receiptSrc = "package runreceipt\n\nimport \"testing\"\n\nfunc TestReceipt(t *testing.T) {}\n"
+	edit := func(src string) string {
+		return strings.Replace(src, "(t *testing.T) {}", "(t *testing.T) { t.Log(1) }", 1)
+	}
+
+	type outcome struct {
+		err             error
+		changed, beyond bool
+	}
+	admit := func(t *testing.T, granted []string, edited ...string) outcome {
+		t.Helper()
+		h := newGateHarness(t, roles.Policy{}, roles.Fresh, string(roles.Accept))
+		e := h.engine
+		e.Store = sessionStore(t)
+		commitFixtureFile(t, h.work, df23Bus, busSrc)
+		world := commitFixtureFile(t, h.work, df23Receipt, receiptSrc)
+		h.tc.Identity = candidateIdentityWithBase(world)
+		df23Pin(t, e, "task-1", world)
+
+		// A grant as routing records one: the file's facts at the pinned world.
+		var grants []testEditGrant
+		for _, p := range granted {
+			facts, err := testFacts([]byte(map[string]string{df23Bus: busSrc, df23Receipt: receiptSrc}[p]))
+			if err != nil {
+				t.Fatal(err)
+			}
+			grants = append(grants, testEditGrant{Path: p, World: world, Facts: facts})
+		}
+		d := attemptPlan("objective 61", "main.go", df23Bus, df23Receipt)
+		a, err := e.beginPlanAttempt("task-1", "task", d)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if a.World != world {
+			t.Fatalf("premise: the attempt was derived at the candidate's base, got %q", a.World)
+		}
+		if err := e.recordTestEditGrants("task-1", "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants}); err != nil {
+			t.Fatal(err)
+		}
+		e.setTestEditGrants("task-1", grants)
+		if err := e.recordProspectiveGrants("task-1", "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: a.World}); err != nil {
+			t.Fatal(err)
+		}
+		e.setProspectiveGrants("task-1", nil)
+		if _, err := e.adoptPlanAttempt("task-1", "task", d); err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range edited {
+			src := map[string]string{df23Bus: busSrc, df23Receipt: receiptSrc}[p]
+			commitFixtureFile(t, h.work, p, edit(src))
+		}
+		h.tc.Files = []string{"main.go", df23Bus, df23Receipt}
+
+		_, _, _, _, err = e.runCandidate(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+			"Rewrite main.go so it prints a number.", h.worker, h.work, "")
+		var o outcome
+		o.err = err
+		for _, ev := range drainEvents(h.events) {
+			switch ev.Kind {
+			case event.CandidateChanged:
+				o.changed = true
+			case event.CandidateAudited, event.ReviewStarted, event.ReviewCompleted:
+				o.beyond = true
+			}
+		}
+		return o
+	}
+	refused := func(name string, o outcome, path string) {
+		t.Helper()
+		if !o.changed {
+			t.Fatalf("%s: premise: the loop never produced a candidate: %v", name, o.err)
+		}
+		if o.err == nil || !strings.HasPrefix(o.err.Error(), "test edit refuted:") || !strings.Contains(o.err.Error(), path) ||
+			!strings.Contains(o.err.Error(), "holds no test-edit grant") {
+			t.Errorf("%s: candidate admission did not refuse the ungranted edit of %s: %v", name, path, o.err)
+		}
+		if o.beyond {
+			t.Errorf("%s: the candidate reached audit or review before the test-edit refusal", name)
+		}
+	}
+
+	refused("empty grant record, receipt", admit(t, nil, df23Receipt), df23Receipt)
+	refused("empty grant record, bus", admit(t, nil, df23Bus), df23Bus)
+	mixed := admit(t, []string{df23Bus}, df23Bus, df23Receipt)
+	refused("mixed", mixed, df23Receipt)
+	if mixed.err != nil && strings.Contains(mixed.err.Error(), df23Bus) {
+		t.Errorf("mixed: the granted edit was named in the refusal: %v", mixed.err)
+	}
+	control := admit(t, []string{df23Bus}, df23Bus)
+	if control.err != nil && strings.Contains(control.err.Error(), "test edit refuted") {
+		t.Errorf("control: the granted edit was refused at admission: %v", control.err)
+	}
+	if !control.beyond {
+		t.Errorf("control: the granted candidate never reached audit or review: %v", control.err)
+	}
+}
+
+// f1 -- A TEST WHOSE NAME GIT QUOTES IS STILL ENUMERATED. Against a real
+// repository, through the frozen capture runCandidate inspects and the state
+// it hands over (candidateTestStateAt): an existing test whose name holds a
+// tab renders under a quoted `diff --git "a/..." "b/..."` header, which the
+// rendered-diff reading never saw. Edited, deleted, renamed away, and edited
+// beside a granted test, it is refused without a grant -- and the same
+// mutations under a grant for it are judged by the unchanged in-place rules.
+func TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture(t *testing.T) {
+	ctx := context.Background()
+	const quoted = "modfile/rule\tquoted_test.go"
+	const moved = "modfile/moved_test.go"
+	good := strings.Replace(teFSrc, "TestX", "TestY", 1)
+	repo, empty := mintRepo(t)
+	commitFixtureFile(t, repo.Root, teS, teSSrc)
+	commitFixtureFile(t, repo.Root, teF, teFSrc)
+	world := commitFixtureFile(t, repo.Root, quoted, teFSrc)
+
+	grantFor := func(paths ...string) testEditRecord {
+		var gs []testEditGrant
+		for _, p := range paths {
+			g := teEditGrants(t)[0]
+			g.Path, g.World = p, world
+			gs = append(gs, g)
+		}
+		a := teAttemptAt(t, "the quoted-path plan", world)
+		return testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: gs}
+	}
+	// candidateAt cuts a worktree at commit, applies files on top, and
+	// captures it against the pinned world exactly as runCandidate does.
+	candidateAt := func(name, commit string, files map[string]string) candidateTestState {
+		t.Helper()
+		path, err := repo.CreateWorktreeAt(ctx, name, commit)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = repo.RemoveWorktree(ctx, path) })
+		for rel, src := range files {
+			commitFixtureFile(t, path, rel, src)
+		}
+		wt := repo
+		wt.Root = path
+		capture, err := wt.CandidateCapture(ctx, world, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(capture.Diff, `"a/modfile/rule\tquoted_test.go"`) {
+			t.Fatalf("premise: Git does not quote the test's name in the rendered diff:\n%s", capture.Diff)
+		}
+		return candidateTestStateAt(ctx, path, world, capture.Tree, capture.Paths, capture.Diff)
+	}
+	inspect := func(state candidateTestState, rec testEditRecord) error {
+		return inspectTestEdits(state, teAttemptAt(t, "the quoted-path plan", world), rec)
+	}
+	refusedOn := func(name string, err error, verb string) {
+		t.Helper()
+		if err == nil || !strings.HasPrefix(err.Error(), "test edit refuted:") || !strings.Contains(err.Error(), verb+" the existing test "+quoted) ||
+			!strings.Contains(err.Error(), "holds no test-edit grant") || strings.Contains(err.Error(), teF+",") {
+			t.Errorf("%s: the quoted existing test was not refused on its own path: %v", name, err)
+		}
+	}
+
+	edited := candidateAt("quoted-edit", world, map[string]string{quoted: good})
+	refusedOn("edit", inspect(edited, grantFor(teF)), "edits")
+	if err := inspect(edited, grantFor(quoted)); err != nil {
+		t.Errorf("edit: the granted quoted test's in-grant edit was refused: %v", err)
+	}
+
+	// The candidate at the pre-world commit has deleted all three files.
+	deleted := candidateAt("quoted-delete", empty, nil)
+	refusedOn("delete", inspect(deleted, grantFor(teF)), "deletes")
+	if err := inspect(deleted, grantFor(quoted, teF)); err == nil || !strings.Contains(err.Error(), "deletes it") {
+		t.Errorf("delete: deleting the granted quoted test was admitted: %v", err)
+	}
+
+	// Renamed away: absent from the candidate, its bytes at another path.
+	renamed := candidateAt("quoted-rename", empty, map[string]string{teS: teSSrc, teF: teFSrc, moved: teFSrc})
+	refusedOn("rename source", inspect(renamed, grantFor(teF)), "deletes")
+	if err := inspect(renamed, grantFor(quoted)); err == nil || !strings.Contains(err.Error(), quoted) {
+		t.Errorf("rename source: renaming the granted quoted test away was admitted: %v", err)
+	}
+
+	// Mixed: the granted test's edit does not narrow the enumeration.
+	mixed := candidateAt("quoted-mixed", world, map[string]string{teF: good, quoted: good})
+	refusedOn("mixed", inspect(mixed, grantFor(teF)), "edits")
+	if err := inspect(mixed, grantFor(teF, quoted)); err != nil {
+		t.Errorf("mixed: both granted edits were refused: %v", err)
 	}
 }

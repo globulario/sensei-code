@@ -245,31 +245,119 @@ func buildConstraints(src []byte) []string {
 	return out
 }
 
-// inspectTestEdits checks every granted test file in the candidate against
-// its exact grant: edited in place (not created, deleted, or renamed), same
-// package clause, same build constraints, imports a subset of the imports at
-// the pinned world. A grant whose file the candidate did not touch is not a
-// mismatch. The first mismatch is returned as an error beginning
-// "test edit refuted:" and is terminal, as a prospective refutation is.
-func inspectTestEdits(diff string, grants []testEditGrant, candidate func(path string) ([]byte, error)) error {
-	if len(grants) == 0 {
-		return nil
-	}
-	touched, created, deleted, renamed := diffFileStates(diff)
-	for _, g := range grants {
-		f := g.Path
-		if !touched[f] {
-			continue
+// candidateTestState is the candidate as existing-test inspection reads it.
+//
+// Paths is the frozen capture's exact changed-path set (gitx.Capture.Paths:
+// `--name-status -z --no-renames`, never trimmed, split or unquoted). It is the
+// enumeration. It once was report.FromDiff over the rendered diff, which reads
+// only an unquoted `diff --git a/P b/P` header: a test whose name Git quotes --
+// one holding a tab, say -- produced no file change, so it was mutated, never
+// enumerated, and admitted with no grant.
+//
+// World is the revision AtWorld reads -- the candidate's pinned base -- and
+// AtWorld and InCandidate read a path there and in the frozen candidate tree;
+// an error wrapping errNotAtWorld establishes absence, and any other error
+// establishes nothing. Diff is the rendered review text, read only to NAME a
+// deletion that Git pairs with an addition as a rename. It never adds or
+// removes a path from the enumeration.
+type candidateTestState struct {
+	Paths       []string
+	World       string
+	AtWorld     func(path string) ([]byte, error)
+	InCandidate func(path string) ([]byte, error)
+	Diff        string
+}
+
+// candidateTestStateAt is the state runCandidate hands inspection: the frozen
+// capture's exact paths, read at the pinned world and in the frozen tree from
+// Git objects in root -- never from the mutable worktree. An empty revision
+// would make `git show :<path>` read the INDEX, so it is refused as
+// unestablished rather than read.
+func candidateTestStateAt(ctx context.Context, root, world, tree string, paths []string, diff string) candidateTestState {
+	show := func(rev string) func(string) ([]byte, error) {
+		return func(p string) ([]byte, error) {
+			if strings.TrimSpace(rev) == "" {
+				return nil, errors.New("no revision to read it at")
+			}
+			return gitShowAt(root)(ctx, rev, p)
 		}
+	}
+	return candidateTestState{Paths: paths, World: world, AtWorld: show(world), InCandidate: show(tree), Diff: diff}
+}
+
+// inspectTestEdits is candidate inspection of existing-test edit authority.
+//
+// THE CANDIDATE IS THE ENUMERATION; THE GRANTS ARE ONLY THE ANSWER. Every
+// existing *_test.go the candidate mutates -- edited in place, deleted, or the
+// SOURCE of a rename -- is enumerated from the candidate's exact path set
+// alone, before any grant is read, and each must then hold exactly one grant
+// in the test-edit record of the operative plan attempt. A mutated existing
+// test with no grant is refused: absence of a grant is refusal, not absence of
+// a check. It once iterated the grants instead, so a candidate that edited an
+// ungranted test was never examined (DF-23; objective 61, run 1, edited two
+// ungranted tests and was admitted).
+//
+// Authority is one bound identity: the operative attempt's canonical ID and
+// the world that ID was derived at, carried together. That world must be the
+// candidate's base -- the world its existence was measured at -- and the
+// record and its grant must be bound to that attempt at that world. A record
+// of another attempt -- a superseded plan's, however identical its paths --
+// or of another world confers no authority. Nothing here derives, mints or
+// re-binds a grant. A test the candidate CREATES, a rename's destination
+// included, is not an existing test: prospective CREATE authority governs it.
+//
+// Only once every mutation is authorized is each checked against its exact
+// grant: edited in place (not created, deleted, or renamed), same package
+// clause, same build constraints, imports a subset of the imports at the
+// pinned world. The first refusal is returned as an error beginning "test edit
+// refuted:" and is terminal, as a prospective refutation is.
+func inspectTestEdits(state candidateTestState, operative planAttempt, rec testEditRecord) error {
+	mutated, created, deleted, err := existingTestMutations(state)
+	if err != nil {
+		return err
+	}
+	renamed, renamedTo := renamePairs(state.Diff, deleted, created)
+	granted := make(map[string]testEditGrant, len(mutated))
+	for _, f := range mutated {
+		g, err := testEditAuthority(f, mutationVerb(f, deleted, renamed), operative, state.World, rec)
+		if err != nil {
+			return err
+		}
+		granted[f] = g
+	}
+	// A grant names an existing file to edit in place; the candidate creating
+	// it, or renaming another file onto it, is not that edit. The paths are
+	// the candidate's creations, enumerated above; the record answers only
+	// whether it grants one of them, and only a record bound to the operative
+	// attempt at the candidate's world answers at all -- every mutation above
+	// was already refused against any other.
+	if recordBinds(operative, state.World, rec) {
+		creations := make([]string, 0, len(created))
+		for c := range created {
+			creations = append(creations, c)
+		}
+		sort.Strings(creations)
+		for _, c := range creations {
+			for _, g := range rec.Grants {
+				if g.Path != c {
+					continue
+				}
+				if renamedTo[c] {
+					return refuteTestEditRenamed(c)
+				}
+				return refuteTestEditCreated(c)
+			}
+		}
+	}
+	for _, f := range mutated {
+		g := granted[f]
 		switch {
-		case created[f]:
-			return refuteTestEditCreated(f)
-		case deleted[f]:
-			return refuteTestEditDeleted(f)
 		case renamed[f]:
 			return refuteTestEditRenamed(f)
+		case deleted[f]:
+			return refuteTestEditDeleted(f)
 		}
-		after, err := candidate(f)
+		after, err := state.InCandidate(f)
 		if err != nil {
 			return fmt.Errorf("test edit refuted: %s could not be read from the candidate: %v", f, err)
 		}
@@ -295,6 +383,134 @@ func inspectTestEdits(diff string, grants []testEditGrant, candidate func(path s
 		}
 	}
 	return nil
+}
+
+// existingTestMutations classifies, from the candidate's exact path set alone
+// -- no grant is consulted, or passed -- every changed *_test.go by whether it exists at the pinned world and in the candidate. One present
+// at the world is an existing-test mutation, sorted: in the candidate it was
+// edited, absent from it it was deleted (a rename's source is a deletion: the
+// path set is measured with rename detection off). One absent at the world is
+// created, and is never an existing-test mutation.
+//
+// Existence is MEASURED: a read that neither returns the file nor establishes
+// its absence is refused, never read as either.
+func existingTestMutations(state candidateTestState) (mutated []string, created, deleted map[string]bool, err error) {
+	created, deleted = map[string]bool{}, map[string]bool{}
+	seen := map[string]bool{}
+	for _, f := range state.Paths {
+		if seen[f] || !strings.HasSuffix(path.Base(f), "_test.go") {
+			continue
+		}
+		seen[f] = true
+		before, err := existsIn(state.AtWorld, f)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("test edit refuted: the candidate changes %s, and whether it exists at the pinned world could not be established: %v", f, err)
+		}
+		if !before {
+			created[f] = true
+			continue
+		}
+		after, err := existsIn(state.InCandidate, f)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("test edit refuted: the candidate changes the existing test %s, and whether the candidate still holds it could not be established: %v", f, err)
+		}
+		if !after {
+			deleted[f] = true
+		}
+		mutated = append(mutated, f)
+	}
+	sort.Strings(mutated)
+	return mutated, created, deleted, nil
+}
+
+func existsIn(read func(string) ([]byte, error), f string) (bool, error) {
+	if read == nil {
+		return false, errors.New("no reader")
+	}
+	if _, err := read(f); err != nil {
+		if confirmedMissing(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+// renamePairs names, among the measured deletions and creations, the ones Git
+// renders as a rename. It only labels: a pair the rendering does not show (or
+// cannot, for a quoted path) stays a deletion and a creation, which inspection
+// refuses or leaves to CREATE exactly as it would the rename.
+func renamePairs(diff string, deleted, created map[string]bool) (renamed, renamedTo map[string]bool) {
+	renamed, renamedTo = map[string]bool{}, map[string]bool{}
+	for _, f := range report.FromDiff(diff).Files {
+		if f.Status == report.Renamed && deleted[f.OldPath] {
+			renamed[f.OldPath] = true
+			if created[f.Path] {
+				renamedTo[f.Path] = true
+			}
+		}
+	}
+	return renamed, renamedTo
+}
+
+func mutationVerb(f string, deleted, renamed map[string]bool) string {
+	switch {
+	case renamed[f]:
+		return "renames"
+	case deleted[f]:
+		return "deletes"
+	}
+	return "edits"
+}
+
+// recordBinds is whether rec is the test-edit record of the operative attempt
+// at the candidate's world: the one record that can answer for a mutation.
+func recordBinds(operative planAttempt, world string, rec testEditRecord) bool {
+	id, at := strings.TrimSpace(operative.ID), strings.TrimSpace(operative.World)
+	return id != "" && at != "" && at == strings.TrimSpace(world) &&
+		strings.TrimSpace(rec.PlanAttemptID) == id && strings.TrimSpace(rec.World) == at
+}
+
+// testEditAuthority is the one applicable grant for the existing test f the
+// candidate mutates, or the refusal that there is none: no operative plan
+// attempt, an attempt pinned at another world than the candidate's base, a
+// record bound to another attempt or world, no grant, more than one, or a
+// grant read at another world.
+func testEditAuthority(f, verb string, operative planAttempt, base string, rec testEditRecord) (testEditGrant, error) {
+	attemptID, world, base := strings.TrimSpace(operative.ID), strings.TrimSpace(operative.World), strings.TrimSpace(base)
+	if attemptID == "" {
+		return testEditGrant{}, fmt.Errorf("test edit refuted: the candidate %s the existing test %s, and no operative plan attempt is established, so no test-edit authority applies to it", verb, f)
+	}
+	if world == "" || base == "" || world != base {
+		return testEditGrant{}, fmt.Errorf("test edit refuted: the candidate %s the existing test %s, and the operative plan attempt %s is pinned at world %s, not the candidate's base %s; its authority does not describe this candidate",
+			verb, f, short12(attemptID), orNone(shortWorldID(world), "none"), orNone(shortWorldID(base), "none"))
+	}
+	if bound := strings.TrimSpace(rec.PlanAttemptID); bound != attemptID {
+		return testEditGrant{}, fmt.Errorf("test edit refuted: the candidate %s the existing test %s, and the test-edit record is bound to plan attempt %s, not the operative plan attempt %s; a superseded or other attempt's grants confer no authority",
+			verb, f, orNone(short12(bound), "none"), short12(attemptID))
+	}
+	if strings.TrimSpace(rec.World) != world {
+		return testEditGrant{}, fmt.Errorf("test edit refuted: the candidate %s the existing test %s, and the test-edit record of plan attempt %s was read at world %s, not the pinned world %s",
+			verb, f, short12(attemptID), orNone(shortWorldID(rec.World), "none"), shortWorldID(world))
+	}
+	var matches []testEditGrant
+	for _, g := range rec.Grants {
+		if g.Path == f {
+			matches = append(matches, g)
+		}
+	}
+	switch {
+	case len(matches) == 0:
+		return testEditGrant{}, fmt.Errorf("test edit refuted: the candidate %s the existing test %s, and plan attempt %s holds no test-edit grant for it; absence of a grant is refusal",
+			verb, f, short12(attemptID))
+	case len(matches) > 1:
+		return testEditGrant{}, fmt.Errorf("test edit refuted: the candidate %s the existing test %s, and plan attempt %s holds %d grants for it, not exactly one",
+			verb, f, short12(attemptID), len(matches))
+	case strings.TrimSpace(matches[0].World) != world:
+		return testEditGrant{}, fmt.Errorf("test edit refuted: the candidate %s the existing test %s, and its grant was read at world %s, not the pinned world %s",
+			verb, f, orNone(shortWorldID(matches[0].World), "none"), shortWorldID(world))
+	}
+	return matches[0], nil
 }
 
 // THE REFUSAL SENTENCES. One condition, one sentence, whichever door it is
@@ -768,6 +984,7 @@ func (e *Engine) restoreTestEditGrants(task session.Interrupted, recomputed []te
 		// existing-test edit authority, and neither does its resumption --
 		// whatever the world would authorise today.
 		e.setTestEditGrants(task.TaskID, nil)
+		e.noteRestoredTestEditRecord(task.TaskID, rec)
 		return nil
 	}
 	if err := matchTestEditGrants(planned, rec.Grants, world); err != nil {
@@ -838,7 +1055,22 @@ func (e *Engine) restoreTestEditGrants(task session.Interrupted, recomputed []te
 	// Whole-set installation: that DERIVED portion is the whole recorded
 	// authority, and it was verified exactly. Nothing partial is ever installed.
 	e.setTestEditGrants(task.TaskID, recomputed)
+	e.noteRestoredTestEditRecord(task.TaskID, rec)
 	return nil
+}
+
+// noteRestoredTestEditRecord keeps a VERIFIED restored record as the recorded
+// test-edit state of the attempt it is bound to -- which planAttemptGrantRefusal
+// has already proved is the operative one -- so candidate inspection of a
+// resumed task reads the same recorded authority a fresh run's does. A record
+// bound to no attempt is not kept: it authorizes no existing-test mutation.
+func (e *Engine) noteRestoredTestEditRecord(taskID string, rec testEditRecord) {
+	if strings.TrimSpace(rec.PlanAttemptID) == "" {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.planAttemptsOf(taskID).recordedEdits[rec.PlanAttemptID] = rec
 }
 
 func sameTestFacts(a, b testEditFacts) bool {

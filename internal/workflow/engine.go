@@ -2740,13 +2740,21 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				return candidateNotConverged, plan, lastReview, lastAudit, err
 			}
 		}
-		// Post-edit inspection of every granted existing test (M2.2): the
-		// candidate's file against the exact grant, before any review, with
-		// no retry -- the same discipline as a prospective refutation.
-		if edits := e.testEditGrants(taskID); len(edits) != 0 {
-			if err := inspectTestEdits(diff, edits, func(p string) ([]byte, error) { return os.ReadFile(filepath.Join(workspace, p)) }); err != nil {
-				return candidateNotConverged, plan, lastReview, lastAudit, err
-			}
+		// Post-edit inspection of every existing test the candidate mutates
+		// (M2.2, DF-23): enumerated from the frozen capture's exact path set,
+		// each against the one grant the OPERATIVE plan attempt recorded for
+		// it, before any review, with no retry -- the same discipline as a
+		// prospective refutation. Run unconditionally: a plan attempt with no
+		// grants is exactly the one whose test mutations must be refused. Both
+		// sides are read from Git objects -- the candidate's base and the
+		// frozen tree -- never from the mutable worktree. The operative attempt
+		// is handed over whole, so its ID and the world it was derived at stay
+		// one identity, and inspection proves that world is this base.
+		operative := e.operativePlanAttempt(taskID)
+		_, edits := e.recordedGrants(taskID, operative.ID)
+		mutations := candidateTestStateAt(ctx, workspace, tc.Identity.BaseSHA, capture.Tree, capture.Paths, diff)
+		if err := inspectTestEdits(mutations, operative, edits); err != nil {
+			return candidateNotConverged, plan, lastReview, lastAudit, err
 		}
 
 		auditArgs := map[string]any{"diff": diff, "task": task}
