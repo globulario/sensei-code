@@ -702,6 +702,95 @@ func sameDeclaredTestEdit(a, b declaredTestEdit) bool {
 	return slices.Equal(a.imports, b.imports)
 }
 
+// testEditDeclarations is a plan's whole test_edits set reduced once, by the
+// one rule both admission readers apply.
+type testEditDeclarations struct {
+	// bound holds each path whose declarations state ONE structural outcome.
+	bound map[string]declaredTestEdit
+	// declared holds each path at least one of whose declarations carries an
+	// operation inside the closed vocabulary, EXACTLY spelled: the paths the
+	// plan states it will change, whether or not its entries agree on how. An
+	// entry naming no file, or whose operation is absent or outside the
+	// vocabulary, declares nothing and puts no path here.
+	declared map[string]bool
+}
+
+// reduceTestEditDeclarations reduces a plan's test_edits set. Paths are
+// normalized first, because two spellings of one file are one binding.
+//
+// Multiplicity is resolved over the whole declaration set before a single
+// effect is compared, because it is a property of the set and not of any one
+// entry. A path that turns out to state no single outcome is dropped from the
+// bindings entirely rather than left holding its first entry; it stays
+// declared. See projectTestEditRefusals.
+func reduceTestEditDeclarations(declared []TestEditDeclaration) testEditDeclarations {
+	out := testEditDeclarations{bound: map[string]declaredTestEdit{}, declared: map[string]bool{}}
+	disagreed := map[string]bool{}
+	for _, d := range declared {
+		p := strings.TrimSpace(d.Path)
+		if p == "" {
+			// A declaration that names no file binds to nothing.
+			continue
+		}
+		p = path.Clean(p)
+		stated := declareTestEdit(d)
+		switch stated.operation {
+		case testEditOperationEdit, testEditOperationCreate, testEditOperationDelete, testEditOperationRename:
+			out.declared[p] = true
+		}
+		if disagreed[p] {
+			continue
+		}
+		if already, seen := out.bound[p]; seen {
+			if !sameDeclaredTestEdit(already, stated) {
+				delete(out.bound, p)
+				disagreed[p] = true
+			}
+			continue
+		}
+		out.bound[p] = stated
+	}
+	return out
+}
+
+// reconcileTestEditDeclarations is plan admission's reading of the test-edit
+// record routing just wrote for the pending attempt: EVERY DECLARED EXISTING-
+// TEST EDIT IS AN ADMISSION OBLIGATION (DF-37b). Each path the plan's
+// test_edits declares must hold exactly one valid grant in the record bound to
+// this attempt at its pinned world, or the plan is refused before any
+// implementer starts, naming the first ungranted path in sorted order.
+//
+// It mints, widens and drops nothing. The record is validated by the rule
+// restoration reads (matchTestEditGrants) and each declared path is answered
+// by the rule candidate inspection reads (testEditAuthority), so a missing,
+// duplicated, stale, superseded-attempt, other-world or malformed grant is
+// refused here for the reason it would be refused there. An operational
+// "no test-edit authority" status settles nothing: the path is still declared.
+// A plan that declares no existing-test edit is untouched.
+func reconcileTestEditDeclarations(declared []TestEditDeclaration, planned []string, attempt planAttempt, rec testEditRecord) error {
+	stated := reduceTestEditDeclarations(declared).declared
+	if len(stated) == 0 {
+		return nil
+	}
+	paths := make([]string, 0, len(stated))
+	for p := range stated {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	for _, f := range paths {
+		if _, err := testEditAuthority(f, "would mutate", attempt, attempt.World, rec); err != nil {
+			return err
+		}
+	}
+	// Every declared path holds one grant in this attempt's record; the
+	// record they were found in must itself be well formed.
+	if err := matchTestEditGrants(planned, rec.Grants, strings.TrimSpace(attempt.World)); err != nil {
+		return fmt.Errorf("test edit refuted: the plan declares existing-test edits of %s, and the test-edit record of plan attempt %s is malformed: %w",
+			strings.Join(paths, ", "), short12(attempt.ID), err)
+	}
+	return nil
+}
+
 // projectTestEditRefusals decides, at plan admission, the subset of
 // inspectTestEdits' refusals that the accepted plan and the pinned world
 // already determine.
@@ -750,32 +839,7 @@ func projectTestEditRefusals(declared []TestEditDeclaration, grants []testEditGr
 	if len(declared) == 0 || len(grants) == 0 {
 		return nil
 	}
-	// Multiplicity is resolved over the whole declaration set before a single
-	// effect is compared, because it is a property of the set and not of any
-	// one entry. A path that turns out to state no single outcome is dropped
-	// from the bindings entirely rather than left holding its first entry.
-	bound := map[string]declaredTestEdit{}
-	disagreed := map[string]bool{}
-	for _, d := range declared {
-		p := strings.TrimSpace(d.Path)
-		if p == "" {
-			// A declaration that names no file binds to nothing.
-			continue
-		}
-		p = path.Clean(p)
-		if disagreed[p] {
-			continue
-		}
-		stated := declareTestEdit(d)
-		if already, seen := bound[p]; seen {
-			if !sameDeclaredTestEdit(already, stated) {
-				delete(bound, p)
-				disagreed[p] = true
-			}
-			continue
-		}
-		bound[p] = stated
-	}
+	bound := reduceTestEditDeclarations(declared).bound
 	// The AUTHORITY enumerates, and the plan answers. Walking the grants rather
 	// than the declarations means the early door considers the files in the
 	// order the late door inspects them, so a plan that violates the rule on
