@@ -47975,6 +47975,60 @@ code_symbols:
     file: internal/workflow/observe_test.go
     symbol: observeAction
     kind: function
+  - id: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/package_import_derived_test.go
+    symbol: TestPackageImportArgvOmitsAnAbsentOwner
+    kind: function
+  - id: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/package_import_derived_test.go
+    symbol: TestPackageImportConfinementIsAClosedRecognisedFamily
+    kind: function
+  - id: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/package_import_derived_test.go
+    symbol: TestPackageImportPostProcessingIsVersionTwo
+    kind: function
+  - id: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/package_import_derived_test.go
+    symbol: TestPackageImportReceiptsFailClosed
+    kind: function
+  - id: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/package_import_derived_test.go
+    symbol: TestPackageImportRecipeIdentity
+    kind: function
+  - id: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/package_import_derived_test.go
+    symbol: TestPackageImportRecipeValidation
+    kind: function
+  - id: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/package_import_derived_test.go
+    symbol: TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    kind: function
+  - id: internal/workflow/package_import_derived_test.go:importKind
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/package_import_derived_test.go
+    symbol: importKind
+    kind: const
+  - id: internal/workflow/package_import_derived_test.go:stubSensei
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/package_import_derived_test.go
+    symbol: stubSensei
+    kind: function
   - id: internal/workflow/parity_test.go:TestALongConversationIsBoundedAndSaysSo
     namespace: structural.scip
     language: go
@@ -50452,6 +50506,12 @@ code_symbols:
     language: go
     file: internal/workflow/relevance.go
     symbol: RequirementMutationConfinement
+    kind: const
+  - id: internal/workflow/relevance.go:RequirementPackageImportConfinement
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/relevance.go
+    symbol: RequirementPackageImportConfinement
     kind: const
   - id: internal/workflow/relevance.go:RequirementUnqualified
     namespace: structural.scip
