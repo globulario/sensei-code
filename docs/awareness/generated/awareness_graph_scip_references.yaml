@@ -1089,6 +1089,30 @@ code_references:
     to_name: Join
     file: cmd/corpus/main.go
   - from: cmd/corpus/main.go:recipeIdentity
+    to_id: internal/derived/derived.go:Recipe~type
+    to_name: Recipe
+    file: cmd/corpus/main.go
+  - from: cmd/corpus/main.go:recipeIdentity
+    to_id: internal/derived/derived.go:Recipe.Dir
+    to_name: Recipe.Dir
+    file: cmd/corpus/main.go
+  - from: cmd/corpus/main.go:recipeIdentity
+    to_id: internal/derived/write.go:Recipe.Identity
+    to_name: Recipe.Identity
+    file: cmd/corpus/main.go
+  - from: cmd/corpus/main.go:recipeIdentity
+    to_id: internal/derived/derived.go:Recipe.Kind
+    to_name: Recipe.Kind
+    file: cmd/corpus/main.go
+  - from: cmd/corpus/main.go:recipeIdentity
+    to_id: internal/derived/derived.go:Recipe.Owner
+    to_name: Recipe.Owner
+    file: cmd/corpus/main.go
+  - from: cmd/corpus/main.go:recipeIdentity
+    to_id: internal/derived/derived.go:Recipe.SearchPaths
+    to_name: Recipe.SearchPaths
+    file: cmd/corpus/main.go
+  - from: cmd/corpus/main.go:recipeIdentity
     to_name: Sprint
     file: cmd/corpus/main.go
   - from: cmd/corpus/main.go:recipeIdentity
@@ -1108,6 +1132,9 @@ code_references:
     file: cmd/corpus/main.go
   - from: cmd/corpus/main.go:recipeIdentity
     to_name: fmt
+    file: cmd/corpus/main.go
+  - from: cmd/corpus/main.go:recipeIdentity
+    to_name: github.com/globulario/sensei-code/internal/derived
     file: cmd/corpus/main.go
   - from: cmd/corpus/main.go:recipeIdentity
     to_name: sort
@@ -4872,11 +4899,11 @@ code_references:
     to_name: Join
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
@@ -6275,11 +6302,11 @@ code_references:
     to_name: Bus.Subscribe
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/ghwebhook/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/config.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6372,7 +6399,7 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6380,7 +6407,7 @@ code_references:
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6454,11 +6481,11 @@ code_references:
     to_name: Server.CloseLocal
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -7230,11 +7257,11 @@ code_references:
     to_name: Reviewer
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/ghbridge/runner.go:Runner~type
+    to_id: internal/agent/agent.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/agent/agent.go:Runner~type
+    to_id: internal/ghbridge/runner.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
@@ -7769,11 +7796,11 @@ code_references:
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -8197,15 +8224,15 @@ code_references:
     to_name: Load
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
+    to_id: internal/workflow/engine.go:New
+    to_name: New
+    file: cmd/sensei-code/main.go
+  - from: cmd/sensei-code/main.go:main
     to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
     to_id: internal/tui/model.go:New
-    to_name: New
-    file: cmd/sensei-code/main.go
-  - from: cmd/sensei-code/main.go:main
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
@@ -11270,11 +11297,11 @@ code_references:
     to_name: Interrupted.TaskID
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
@@ -28168,10 +28195,10 @@ code_references:
     to_name: Client.http
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
+    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
@@ -31590,11 +31617,11 @@ code_references:
     to_name: Agent.Name
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/behavioral/behavioral.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
@@ -35723,11 +35750,11 @@ code_references:
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
@@ -46272,6 +46299,9 @@ code_references:
     to_name: Sprintf
     file: internal/derived/derived.go
   - from: internal/derived/derived.go:Recipe.String
+    to_name: TrimSpace
+    file: internal/derived/derived.go
+  - from: internal/derived/derived.go:Recipe.String
     to_name: fmt
     file: internal/derived/derived.go
   - from: internal/derived/derived.go:Recipe.String
@@ -53625,10 +53655,10 @@ code_references:
     to_name: Issue.Number
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
@@ -91845,10 +91875,10 @@ code_references:
     to_name: Issue.Number
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
@@ -92745,10 +92775,10 @@ code_references:
     to_name: Event
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
@@ -164611,11 +164641,11 @@ code_references:
     to_name: Engine.applyAnsweredCondition
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
@@ -175903,11 +175933,11 @@ code_references:
     to_name: Engine.emit
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
@@ -179628,10 +179658,10 @@ code_references:
     to_name: Identity.BindGraph
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
@@ -180317,10 +180347,10 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
@@ -181098,10 +181128,10 @@ code_references:
     to_name: Errorf
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
@@ -183264,11 +183294,11 @@ code_references:
     to_name: Is
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/behavioral/behavioral.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/event/event.go:New
+    to_id: internal/behavioral/behavioral.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
@@ -183715,10 +183745,10 @@ code_references:
     to_name: Engine.resolveRunner
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
@@ -186313,10 +186343,10 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -188282,19 +188312,19 @@ code_references:
     to_name: Evidence
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.AuditDetail
-    to_name: Evidence.AuditDetail
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/candidate/disposition.go:Evidence.AuditDetail
     to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
-    to_name: Evidence.AuditVerdict
+    to_id: internal/taskstate/state.go:Evidence.AuditDetail
+    to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
+    to_name: Evidence.AuditVerdict
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:candidateEvidence
+    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -188310,11 +188340,11 @@ code_references:
     to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.DiffBytes
+    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
+    to_id: internal/taskstate/state.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -197667,15 +197697,15 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
+    to_id: internal/session/store.go:New
+    to_name: New
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:architectRoster
     to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
     to_id: internal/workflow/engine.go:New
-    to_name: New
-    file: internal/workflow/external_block_test.go
-  - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
@@ -197815,11 +197845,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
@@ -205886,6 +205916,601 @@ code_references:
     to_id: internal/workflow/consequence.go:StageObserve
     to_name: StageObserve
     file: internal/workflow/observe_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_name: Background
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_id: internal/derived/derived.go:CLI~type
+    to_name: CLI
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_id: internal/derived/derived.go:CLI.Bin
+    to_name: CLI.Bin
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_id: internal/derived/derived.go:CLI.Revalidate
+    to_name: CLI.Revalidate
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_name: Fields
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_name: Join
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_name: ReadFile
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_id: internal/derived/derived.go:Recipe~type
+    to_name: Recipe
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_id: internal/derived/derived.go:Recipe.Dir
+    to_name: Recipe.Dir
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_id: internal/derived/derived.go:Recipe.Kind
+    to_name: Recipe.Kind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_id: internal/derived/derived.go:Recipe.Owner
+    to_name: Recipe.Owner
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_id: internal/derived/derived.go:Recipe.SearchPaths
+    to_name: Recipe.SearchPaths
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_name: T
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_name: common.Errorf
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_name: common.Fatalf
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_name: context
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_name: github.com/globulario/sensei-code/internal/derived
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_id: internal/workflow/package_import_derived_test.go:importKind
+    to_name: importKind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_name: os
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_name: strings
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_id: internal/workflow/package_import_derived_test.go:stubSensei
+    to_name: stubSensei
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportArgvOmitsAnAbsentOwner
+    to_name: testing
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/derived/derived.go:Recipe~type
+    to_name: Recipe
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/derived/derived.go:Recipe.Dir
+    to_name: Recipe.Dir
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/derived/derived.go:Recipe.Kind
+    to_name: Recipe.Kind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/derived/derived.go:Recipe.SearchPaths
+    to_name: Recipe.SearchPaths
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/workflow/relevance.go:Requirement~type
+    to_name: Requirement
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/workflow/relevance.go:RequirementInvocationConfinement
+    to_name: RequirementInvocationConfinement
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/workflow/relevance.go:RequirementLockDiscipline
+    to_name: RequirementLockDiscipline
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/workflow/relevance.go:RequirementMutationConfinement
+    to_name: RequirementMutationConfinement
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/workflow/relevance.go:RequirementPackageImportConfinement
+    to_name: RequirementPackageImportConfinement
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/workflow/relevance.go:RequirementUnqualified
+    to_name: RequirementUnqualified
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/workflow/relevance.go:RequirementUnrecognised
+    to_name: RequirementUnrecognised
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_name: T
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/derived/write.go:Validate
+    to_name: Validate
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_name: common.Errorf
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_name: common.Fatal
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_name: common.Fatalf
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_name: github.com/globulario/sensei-code/internal/derived
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/workflow/package_import_derived_test.go:importKind
+    to_name: importKind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/workflow/relevance.go:requirementOfFamily
+    to_name: requirementOfFamily
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_id: internal/workflow/relevance.go:satisfies
+    to_name: satisfies
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportConfinementIsAClosedRecognisedFamily
+    to_name: testing
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/receipt.go:AppendReceipt
+    to_name: AppendReceipt
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/receipt.go:DigestOf
+    to_name: DigestOf
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/receipt.go:InferenceOutcome~type
+    to_name: InferenceOutcome
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/receipt.go:InferenceReceipt~type
+    to_name: InferenceReceipt
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/receipt.go:InferenceReceipt.CandidateDigest
+    to_name: InferenceReceipt.CandidateDigest
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/receipt.go:InferenceReceipt.CandidateID
+    to_name: InferenceReceipt.CandidateID
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/receipt.go:InferenceReceipt.ModelName
+    to_name: InferenceReceipt.ModelName
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/receipt.go:InferenceReceipt.Outcome
+    to_name: InferenceReceipt.Outcome
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/receipt.go:InferenceReceipt.PostProcessing
+    to_name: InferenceReceipt.PostProcessing
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/receipt.go:LoadReceipts
+    to_name: LoadReceipts
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/receipt.go:PostProcessingVersion
+    to_name: PostProcessingVersion
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/derived.go:Recipe~type
+    to_name: Recipe
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/derived.go:Recipe.Dir
+    to_name: Recipe.Dir
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/write.go:Recipe.Identity
+    to_name: Recipe.Identity
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/derived.go:Recipe.Kind
+    to_name: Recipe.Kind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/derived/derived.go:Recipe.SearchPaths
+    to_name: Recipe.SearchPaths
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_name: T
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_name: common.Fatal
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_name: common.Fatalf
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_name: common.TempDir
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_name: github.com/globulario/sensei-code/internal/derived
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_id: internal/workflow/package_import_derived_test.go:importKind
+    to_name: importKind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportPostProcessingIsVersionTwo
+    to_name: testing
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:Anchor.Covers
+    to_name: Anchor.Covers
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:Anchor.Files
+    to_name: Anchor.Files
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:Anchor.Kind
+    to_name: Anchor.Kind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:AnchorsFor
+    to_name: AnchorsFor
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_name: Background
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:CLI~type
+    to_name: CLI
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:CLI.Bin
+    to_name: CLI.Bin
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:Outcome~type
+    to_name: Outcome
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:Recipe~type
+    to_name: Recipe
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:Recipe.Dir
+    to_name: Recipe.Dir
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:Recipe.Kind
+    to_name: Recipe.Kind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:Recipe.SearchPaths
+    to_name: Recipe.SearchPaths
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:Refuted
+    to_name: Refuted
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:Result.Anchor
+    to_name: Result.Anchor
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:Result.Outcome
+    to_name: Result.Outcome
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_name: T
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:Unknown
+    to_name: Unknown
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/derived/derived.go:Unresolved
+    to_name: Unresolved
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_name: common.Errorf
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_name: common.Fatalf
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_name: context
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_name: github.com/globulario/sensei-code/internal/derived
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/workflow/package_import_derived_test.go:importKind
+    to_name: importKind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_id: internal/workflow/package_import_derived_test.go:stubSensei
+    to_name: stubSensei
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportReceiptsFailClosed
+    to_name: testing
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    to_id: internal/derived/derived.go:Recipe~type
+    to_name: Recipe
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    to_id: internal/derived/derived.go:Recipe.Dir
+    to_name: Recipe.Dir
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    to_id: internal/derived/write.go:Recipe.Identity
+    to_name: Recipe.Identity
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    to_id: internal/derived/derived.go:Recipe.Kind
+    to_name: Recipe.Kind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    to_id: internal/derived/derived.go:Recipe.Owner
+    to_name: Recipe.Owner
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    to_id: internal/derived/derived.go:Recipe.SearchPaths
+    to_name: Recipe.SearchPaths
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    to_id: internal/derived/derived.go:Recipe.Why
+    to_name: Recipe.Why
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    to_name: T
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    to_name: common.Errorf
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    to_name: common.Fatalf
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    to_name: github.com/globulario/sensei-code/internal/derived
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    to_id: internal/workflow/package_import_derived_test.go:importKind
+    to_name: importKind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeIdentity
+    to_name: testing
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    to_id: internal/derived/derived.go:Recipe~type
+    to_name: Recipe
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    to_id: internal/derived/derived.go:Recipe.Dir
+    to_name: Recipe.Dir
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    to_id: internal/derived/derived.go:Recipe.Kind
+    to_name: Recipe.Kind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    to_id: internal/derived/derived.go:Recipe.Owner
+    to_name: Recipe.Owner
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    to_id: internal/derived/derived.go:Recipe.SearchPaths
+    to_name: Recipe.SearchPaths
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    to_name: T
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    to_id: internal/derived/write.go:Validate
+    to_name: Validate
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    to_name: common.Error
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    to_name: common.Errorf
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    to_name: common.Fatalf
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    to_name: github.com/globulario/sensei-code/internal/derived
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    to_id: internal/workflow/package_import_derived_test.go:importKind
+    to_name: importKind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestPackageImportRecipeValidation
+    to_name: testing
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/consequence.go:Action~type
+    to_name: Action
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/consequence.go:Action.DerivedCoverage
+    to_name: Action.DerivedCoverage
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/consequence.go:Action.Files
+    to_name: Action.Files
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/consequence.go:Action.Stage
+    to_name: Action.Stage
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_name: Background
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_name: Contains
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/relevance.go:CoverageAnchor~type
+    to_name: CoverageAnchor
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/relevance.go:CoverageAnchor.Describe
+    to_name: CoverageAnchor.Describe
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/relevance.go:CoverageAnchor.File
+    to_name: CoverageAnchor.File
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/relevance.go:CoverageAnchor.Requirement
+    to_name: CoverageAnchor.Requirement
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/engine.go:Engine.Repo
+    to_name: Engine.Repo
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/engine.go:Engine.coverageAtWorld
+    to_name: Engine.coverageAtWorld
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_name: Getenv
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/gitx/git.go:Repo.Root
+    to_name: Repo.Root
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/relevance.go:RequirementLockDiscipline
+    to_name: RequirementLockDiscipline
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/relevance.go:RequirementPackageImportConfinement
+    to_name: RequirementPackageImportConfinement
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/authority.go:Routing.ClosesGap
+    to_name: Routing.ClosesGap
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/authority.go:Routing.Granted
+    to_name: Routing.Granted
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/consequence.go:StageCandidateEdit
+    to_name: StageCandidateEdit
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_name: T
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_name: TrimSpace
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/prospective_test.go:commitFixtureFile
+    to_name: commitFixtureFile
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/engine.go:committedRecipesPath
+    to_name: committedRecipesPath
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_name: common.Fatal
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_name: common.Fatalf
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_name: common.Skip
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_name: context
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/engine.go:coverageComputation.coverage
+    to_name: coverageComputation.coverage
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/engine.go:coverageComputation.world
+    to_name: coverageComputation.world
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/relevance.go:derivationClosesGap
+    to_name: derivationClosesGap
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/relevance_test.go:emptyOverBus
+    to_name: emptyOverBus
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/package_import_derived_test.go:importKind
+    to_name: importKind
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/mint_test.go:mintRepo
+    to_name: mintRepo
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_name: os
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/authority_test.go:plannedEdit
+    to_name: plannedEdit
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/authority.go:routeAuthorityForAction
+    to_name: routeAuthorityForAction
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_id: internal/workflow/authority_test.go:scopedPreflight
+    to_name: scopedPreflight
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_name: strings
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:TestW5ACommittedImportRecipeCoversALaterPinnedWorld
+    to_name: testing
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:stubSensei
+    to_name: T
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:stubSensei
+    to_name: WriteFile
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:stubSensei
+    to_name: common.Fatal
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:stubSensei
+    to_name: common.Helper
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:stubSensei
+    to_name: common.TempDir
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:stubSensei
+    to_name: os
+    file: internal/workflow/package_import_derived_test.go
+  - from: internal/workflow/package_import_derived_test.go:stubSensei
+    to_name: testing
+    file: internal/workflow/package_import_derived_test.go
   - from: internal/workflow/parity_test.go:TestALongConversationIsBoundedAndSaysSo
     to_name: Contains
     file: internal/workflow/parity_test.go
@@ -208087,10 +208712,10 @@ code_references:
     to_name: Interrupted.PlanAttemptRefusals
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61OnlyARecordedReturnToTheArchitectIsOwed
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61OnlyARecordedReturnToTheArchitectIsOwed
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61OnlyARecordedReturnToTheArchitectIsOwed
@@ -223697,6 +224322,10 @@ code_references:
   - from: internal/workflow/relevance.go:requirementOfFamily
     to_id: internal/workflow/relevance.go:RequirementMutationConfinement
     to_name: RequirementMutationConfinement
+    file: internal/workflow/relevance.go
+  - from: internal/workflow/relevance.go:requirementOfFamily
+    to_id: internal/workflow/relevance.go:RequirementPackageImportConfinement
+    to_name: RequirementPackageImportConfinement
     file: internal/workflow/relevance.go
   - from: internal/workflow/relevance.go:requirementOfFamily
     to_id: internal/workflow/relevance.go:RequirementUnrecognised
