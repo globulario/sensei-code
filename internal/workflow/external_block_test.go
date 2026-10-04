@@ -1090,3 +1090,201 @@ func TestAnUnboundArchitectIsRefusedAndTheRosterDoesNotAdvance(t *testing.T) {
 		t.Fatal("a binding refusal was parked as external state")
 	}
 }
+
+// PROVIDER INVOCATION FACTS ARE SETTLED BEFORE ROUTING (DF-41A2). runCandidate
+// settles every implementer invocation before it chooses its existing route,
+// and the route it then chooses is the one it chose before settlement existed.
+
+// openOperation is a structured invocation observation that returned a report
+// while one operation it started is still open: the shape a later policy
+// might call incomplete.
+func openOperation(report string) *agent.Invocation {
+	return &agent.Invocation{Returned: true, Exited: true, Report: report,
+		Transport: agent.Transport{Adapter: agent.AdapterStreamJSON, Lifecycle: true},
+		Lifecycle: []agent.LifecycleObservation{
+			{Seq: 0, Kind: agent.LifecycleStarted, Operation: "A"},
+			{Seq: 1, Kind: agent.LifecycleUpdate, Operation: "A"},
+		}}
+}
+
+// observingImplementer runs the real implementer process when it has one, and
+// returns the scripted observation and error in place of what it observed.
+// unobserved returns no observation at all, as an adapter that makes none.
+type observingImplementer struct {
+	inner      agent.Runner
+	inv        *agent.Invocation
+	unobserved bool
+	err        error
+	calls      *atomic.Int32
+}
+
+func (r observingImplementer) Run(ctx context.Context, req agent.Request, emit func(event.Event)) (agent.Result, error) {
+	r.calls.Add(1)
+	var result agent.Result
+	var err error
+	if r.inner != nil {
+		result, err = r.inner.Run(ctx, req, emit)
+	}
+	if r.inv != nil || r.unobserved {
+		result.Invocation = r.inv
+	}
+	if r.err != nil {
+		return agent.Result{Invocation: result.Invocation}, r.err
+	}
+	return result, err
+}
+
+// observingResolver serves the implementer through observingImplementer,
+// over the real process when real is set, and the reviewer as the harness does.
+type observingResolver struct {
+	real       bool
+	inv        *agent.Invocation
+	unobserved bool
+	err        error
+	calls      *atomic.Int32
+	reviewer   agent.Runner
+}
+
+func (r observingResolver) Resolve(spec RunnerSpec) (Resolved, error) {
+	if spec.Role != roles.Implementer {
+		return Resolved{Runner: r.reviewer, Name: "remote:abc", Label: "remote:abc"}, nil
+	}
+	run := observingImplementer{inv: r.inv, unobserved: r.unobserved, err: r.err, calls: r.calls}
+	if r.real {
+		run.inner = CLIResolved(spec, "session-1").Runner
+	}
+	return Resolved{Runner: run, Name: spec.Agent.Name, Label: spec.Agent.Name}, nil
+}
+
+func settlingHarness(t *testing.T, r observingResolver) (*gateHarness, *atomic.Int32) {
+	t.Helper()
+	h := newGateHarness(t, roles.Policy{Reason: "blast radius local with approval gate none"}, roles.Unverified, "accept")
+	r.calls = &atomic.Int32{}
+	r.reviewer = answeringRunner{text: `{"decision":"accept","summary":"ok"}`, mode: roles.Unverified}
+	h.engine.Runners = r
+	return h, r.calls
+}
+
+func (h *gateHarness) candidate() (candidateOutcome, error) {
+	outcome, _, _, _, err := h.engine.runCandidate(context.Background(), h.sc, certifiedStart{},
+		"task-1", h.tc, "Rewrite main.go so it prints a number.", h.worker, h.work, "")
+	return outcome, err
+}
+
+// W3 ROLE-UNAVAILABLE SETTLES FIRST. The invocation returned facts and was
+// classified unavailable; the facts are settled, and the route is the block.
+func TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute(t *testing.T) {
+	h, calls := settlingHarness(t, observingResolver{inv: openOperation("partial work"), err: quota()})
+	outcome, err := h.candidate()
+
+	var blocked *RoleUnavailable
+	if !errors.As(err, &blocked) || blocked.Role != roles.Implementer || blocked.Provider != "claude" || outcome != candidateNotConverged {
+		t.Fatalf("the role-unavailable route changed: outcome=%q err=%v", outcome, err)
+	}
+	settled := h.engine.settledInvocations("task-1")
+	if len(settled) != 1 {
+		t.Fatalf("the unavailable invocation was routed without being settled: %d settled", len(settled))
+	}
+	s := settled[0]
+	if !s.Returned || s.Report != "partial work" || !s.Transport.Lifecycle || len(s.Open()) != 1 || s.Cycle != 1 {
+		t.Fatalf("the invocation's facts disappeared before settlement: %+v", s)
+	}
+	if !errors.Is(s.Err, provider.ErrUnavailable) {
+		t.Fatalf("the settled fact lost the direct error: %v", s.Err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("the implementer was asked %d times", calls.Load())
+	}
+}
+
+// W2 + W9 ON THE ROUTE. An ordinary error-bearing return is settled with its
+// report, and then routed exactly as an error.
+func TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError(t *testing.T) {
+	failure := errors.New("claude exited 2")
+	h, calls := settlingHarness(t, observingResolver{inv: openOperation("Changed main.go.\n" + faAccounting), err: failure})
+	outcome, err := h.candidate()
+
+	var blocked *RoleUnavailable
+	if outcome != candidateNotConverged || errors.As(err, &blocked) || !errors.Is(err, failure) ||
+		err.Error() != "implementor cycle 1: claude exited 2" {
+		t.Fatalf("the ordinary error route changed: outcome=%q err=%v", outcome, err)
+	}
+	settled := h.engine.settledInvocations("task-1")
+	if len(settled) != 1 || !settled[0].Returned || settled[0].Err != failure ||
+		settled[0].Report != "Changed main.go.\n"+faAccounting || len(settled[0].Operations) != 1 {
+		t.Fatalf("the error-bearing invocation was not settled with its facts: %+v", settled)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("the implementer was asked %d times", calls.Load())
+	}
+}
+
+// W10 SETTLEMENT IS POLICY-NEUTRAL. The same success, ordinary-error and
+// role-unavailable scenarios end where they ended, whatever was observed.
+func TestW10SettlementDoesNotChangeTheRoute(t *testing.T) {
+	type ending struct {
+		outcome candidateOutcome
+		err     string
+		blocked bool
+	}
+	end := func(r observingResolver) ending {
+		h, _ := settlingHarness(t, r)
+		outcome, err := h.candidate()
+		var blocked *RoleUnavailable
+		e := ending{outcome: outcome, blocked: errors.As(err, &blocked)}
+		if err != nil {
+			e.err = err.Error()
+		}
+		return e
+	}
+	failure := errors.New("claude exited 2")
+	for name, pair := range map[string][2]observingResolver{
+		"success":          {{real: true}, {real: true, inv: openOperation("done")}},
+		"ordinary error":   {{err: failure}, {err: failure, inv: openOperation("done")}},
+		"role unavailable": {{err: quota()}, {err: quota(), inv: openOperation("done")}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bare, observed := end(pair[0]), end(pair[1])
+			if bare != observed {
+				t.Fatalf("settled observations changed the route: without %+v, with %+v", bare, observed)
+			}
+		})
+	}
+}
+
+// W1 ON THE ROUTE. An adapter that supplies no observation reaches the
+// ordinary success route, and the settled fact still does not say it returned.
+func TestW1TheSuccessRouteDoesNotManufactureReturned(t *testing.T) {
+	h, _ := settlingHarness(t, observingResolver{real: true, unobserved: true})
+	if _, err := h.candidate(); err != nil {
+		t.Fatalf("premise: the success route ran: %v", err)
+	}
+	settled := h.engine.settledInvocations("task-1")
+	if len(settled) != 1 || settled[0].Observed || settled[0].Returned || settled[0].Err != nil {
+		t.Fatalf("the success route manufactured a return: %+v", settled)
+	}
+}
+
+// W12 A3 BOUNDARY. A successful invocation with an open operation is what a
+// later policy could call incomplete. Here it is settled, the candidate is
+// routed as any success is, and the implementer is not asked again.
+func TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry(t *testing.T) {
+	baseline, _ := settlingHarness(t, observingResolver{real: true})
+	want, err := baseline.candidate()
+	if err != nil || !want.Accepted() {
+		t.Fatalf("premise: the baseline success is accepted: %q %v", want, err)
+	}
+	h, calls := settlingHarness(t, observingResolver{real: true, inv: openOperation("done")})
+	h.engine.Config.Workflow.ReviewCycles = 3
+	got, err := h.candidate()
+	if err != nil || got != want {
+		t.Fatalf("an open operation changed the route: %q %v, want %q", got, err, want)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("an open operation caused a retry: the implementer was asked %d times", calls.Load())
+	}
+	settled := h.engine.settledInvocations("task-1")
+	if len(settled) != 1 || !settled[0].Returned || len(settled[0].Open()) != 1 {
+		t.Fatalf("the open operation was not settled: %+v", settled)
+	}
+}

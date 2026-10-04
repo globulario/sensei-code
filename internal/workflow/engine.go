@@ -121,6 +121,9 @@ type Engine struct {
 	// receipts holds what each task has MEASURED so far, recorded at the moment
 	// of measurement rather than reconstructed at the end. See receipt.go.
 	receipts map[string]*receiptFacts
+	// invocations holds each implementer invocation of a task, settled before
+	// any routing read it. In memory only: persistence is not this record's job.
+	invocations map[string][]settledInvocation
 	// closures counts gap-closure rounds already spent on one condition within
 	// one task, so a gap that does not actually close cannot loop forever.
 	//
@@ -2892,6 +2895,129 @@ func existingProductionMutations(state candidateTestState) (mutated []string, de
 	return mutated, deleted, renamed, nil
 }
 
+// settledInvocation is the canonical fact of what one implementer invocation
+// returned, established before routing interprets it. It is an observation
+// boundary, not a policy: it does not say whether the turn was complete, and
+// nothing routes differently because it exists.
+type settledInvocation struct {
+	Cycle    int
+	Provider string
+	// Observed says the adapter supplied an observation. Without one nothing
+	// below can be true: reaching the success branch is not an observation.
+	Observed bool
+	// Returned is the adapter's observation that an invocation result came
+	// back, whether or not that result carried an error.
+	Returned bool
+	// TransportFailed is an invocation that failed before any result existed.
+	TransportFailed bool
+	// Err is the direct error the invocation returned.
+	Err error
+	// Report is the report text the invocation actually returned.
+	Report string
+	// Text is the text the adapter handed back for its callers, which the
+	// existing success route reads.
+	Text      string
+	Transport agent.Transport
+	Exited    bool
+	ExitCode  int
+	// Lifecycle is the transport's ordered observations, kept as observed.
+	Lifecycle []agent.LifecycleObservation
+	// Operations are the operation generations, in order of their starts.
+	Operations []settledOperation
+	// Orphans are update and terminal observations no open generation
+	// started; they account for nothing.
+	Orphans []agent.LifecycleObservation
+}
+
+// settledOperation is one generation of an operation id: a start and whatever
+// was attributed to it before the next start of the same id.
+type settledOperation struct {
+	ID         string
+	Generation int
+	Started    int
+	Updates    []int
+	Terminated bool
+	Terminal   int
+}
+
+// Open reports operations started and never terminated.
+func (s settledInvocation) Open() []settledOperation {
+	var open []settledOperation
+	for _, op := range s.Operations {
+		if !op.Terminated {
+			open = append(open, op)
+		}
+	}
+	return open
+}
+
+// settleInvocation reduces one invocation's observations and its direct error
+// to the settled fact. Deterministic in its inputs, and it reads no prose.
+//
+// Lifecycle is attributed only for a transport with that capability, in
+// stream order: an update or terminal belongs to the open generation its id
+// started earlier, and to nothing otherwise. A terminal never starts an
+// operation, and a later start of the same id is a new generation that an
+// earlier terminal cannot close.
+func settleInvocation(providerName string, cycle int, result agent.Result, err error) settledInvocation {
+	s := settledInvocation{Cycle: cycle, Provider: providerName, Err: err, Text: result.Text}
+	inv := result.Invocation
+	if inv == nil {
+		return s
+	}
+	s.Observed = true
+	s.Transport = inv.Transport
+	s.TransportFailed = inv.TransportFailed
+	s.Returned = inv.Returned && !inv.TransportFailed
+	if s.Returned {
+		s.Report = inv.Report
+	}
+	s.Exited, s.ExitCode = inv.Exited, inv.ExitCode
+	if !inv.Transport.Lifecycle {
+		return s
+	}
+	s.Lifecycle = append([]agent.LifecycleObservation(nil), inv.Lifecycle...)
+	open := map[string]int{}
+	generations := map[string]int{}
+	for _, o := range s.Lifecycle {
+		switch o.Kind {
+		case agent.LifecycleStarted:
+			generations[o.Operation]++
+			open[o.Operation] = len(s.Operations)
+			s.Operations = append(s.Operations, settledOperation{ID: o.Operation, Generation: generations[o.Operation], Started: o.Seq})
+		case agent.LifecycleUpdate, agent.LifecycleTerminal:
+			i, ok := open[o.Operation]
+			if !ok {
+				s.Orphans = append(s.Orphans, o)
+				continue
+			}
+			if o.Kind == agent.LifecycleUpdate {
+				s.Operations[i].Updates = append(s.Operations[i].Updates, o.Seq)
+				continue
+			}
+			s.Operations[i].Terminated, s.Operations[i].Terminal = true, o.Seq
+			delete(open, o.Operation)
+		}
+	}
+	return s
+}
+
+func (e *Engine) recordInvocation(taskID string, s settledInvocation) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.invocations == nil {
+		e.invocations = make(map[string][]settledInvocation)
+	}
+	e.invocations[taskID] = append(e.invocations[taskID], s)
+}
+
+// settledInvocations returns a task's settled implementer invocations, oldest first.
+func (e *Engine) settledInvocations(taskID string) []settledInvocation {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]settledInvocation(nil), e.invocations[taskID]...)
+}
+
 // tc is a pointer because the change report is produced here and read by the
 // caller when it offers publication. Taking it by value silently dropped the
 // report, and the pull request body went out with the evidence missing.
@@ -2972,16 +3098,20 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// Discarding it left an inspection with nothing to show but a
 			// transcript nobody had judged.
 			result, err := impl.Runner.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt, Graph: e.graphFor(taskID)}, e.emit)
-			if err != nil {
+			// Settled BEFORE any route reads the invocation, so neither an
+			// error nor a role unavailability can discard what it returned.
+			settled := settleInvocation(impl.Name, cycle, result, err)
+			e.recordInvocation(taskID, settled)
+			if settled.Err != nil {
 				// Attributed HERE, where the implementer turn was asked, so
 				// nothing downstream has to guess which role a provider
 				// refusal belongs to.
-				if blocked := roleUnavailable(roles.Implementer, impl.Name, err); blocked != nil {
+				if blocked := roleUnavailable(roles.Implementer, impl.Name, settled.Err); blocked != nil {
 					return candidateNotConverged, plan, lastReview, lastAudit, blocked
 				}
-				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
+				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, settled.Err)
 			}
-			report = strings.TrimSpace(result.Text)
+			report = strings.TrimSpace(settled.Text)
 			workerRan = true
 		}
 
