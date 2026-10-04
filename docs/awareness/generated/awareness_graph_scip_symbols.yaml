@@ -3353,6 +3353,24 @@ code_symbols:
     file: internal/agent/agent.go
     symbol: Activity
     kind: function
+  - id: internal/agent/agent.go:AdapterCodexAppServer
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: AdapterCodexAppServer
+    kind: const
+  - id: internal/agent/agent.go:AdapterPlainText
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: AdapterPlainText
+    kind: const
+  - id: internal/agent/agent.go:AdapterStreamJSON
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: AdapterStreamJSON
+    kind: const
   - id: internal/agent/agent.go:CLI.Args
     namespace: structural.scip
     language: go
@@ -3479,6 +3497,108 @@ code_symbols:
     file: internal/agent/agent.go
     symbol: GraphBinding
     kind: type
+  - id: internal/agent/agent.go:Invocation.ExitCode
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: Invocation.ExitCode
+    kind: var
+  - id: internal/agent/agent.go:Invocation.Exited
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: Invocation.Exited
+    kind: var
+  - id: internal/agent/agent.go:Invocation.Lifecycle
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: Invocation.Lifecycle
+    kind: var
+  - id: internal/agent/agent.go:Invocation.Report
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: Invocation.Report
+    kind: var
+  - id: internal/agent/agent.go:Invocation.Returned
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: Invocation.Returned
+    kind: var
+  - id: internal/agent/agent.go:Invocation.Transport
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: Invocation.Transport
+    kind: var
+  - id: internal/agent/agent.go:Invocation.TransportFailed
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: Invocation.TransportFailed
+    kind: var
+  - id: internal/agent/agent.go:Invocation.observe
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: Invocation.observe
+    kind: method
+  - id: internal/agent/agent.go:Invocation~type
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: Invocation
+    kind: type
+  - id: internal/agent/agent.go:LifecycleKind~type
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: LifecycleKind
+    kind: type
+  - id: internal/agent/agent.go:LifecycleObservation.Kind
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: LifecycleObservation.Kind
+    kind: var
+  - id: internal/agent/agent.go:LifecycleObservation.Operation
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: LifecycleObservation.Operation
+    kind: var
+  - id: internal/agent/agent.go:LifecycleObservation.Seq
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: LifecycleObservation.Seq
+    kind: var
+  - id: internal/agent/agent.go:LifecycleObservation~type
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: LifecycleObservation
+    kind: type
+  - id: internal/agent/agent.go:LifecycleStarted
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: LifecycleStarted
+    kind: const
+  - id: internal/agent/agent.go:LifecycleTerminal
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: LifecycleTerminal
+    kind: const
+  - id: internal/agent/agent.go:LifecycleUpdate
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: LifecycleUpdate
+    kind: const
   - id: internal/agent/agent.go:Request.Binding
     namespace: structural.scip
     language: go
@@ -3533,6 +3653,12 @@ code_symbols:
     file: internal/agent/agent.go
     symbol: Request
     kind: type
+  - id: internal/agent/agent.go:Result.Invocation
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: Result.Invocation
+    kind: var
   - id: internal/agent/agent.go:Result.ReviewDigest
     namespace: structural.scip
     language: go
@@ -3581,17 +3707,41 @@ code_symbols:
     file: internal/agent/agent.go
     symbol: Runner
     kind: type
+  - id: internal/agent/agent.go:Transport.Adapter
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: Transport.Adapter
+    kind: var
+  - id: internal/agent/agent.go:Transport.Lifecycle
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: Transport.Lifecycle
+    kind: var
+  - id: internal/agent/agent.go:Transport~type
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: Transport
+    kind: type
+  - id: internal/agent/agent.go:cliTransport
+    namespace: structural.scip
+    language: go
+    file: internal/agent/agent.go
+    symbol: cliTransport
+    kind: function
   - id: internal/agent/agent.go:firstSentence
     namespace: structural.scip
     language: go
     file: internal/agent/agent.go
     symbol: firstSentence
     kind: function
-  - id: internal/agent/agent.go:normalizeOutput
+  - id: internal/agent/agent.go:readOutput
     namespace: structural.scip
     language: go
     file: internal/agent/agent.go
-    symbol: normalizeOutput
+    symbol: readOutput
     kind: function
   - id: internal/agent/agent.go:sanitize
     namespace: structural.scip
@@ -43325,6 +43475,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.installOperativePlanAttempt
     kind: method
+  - id: internal/workflow/engine.go:Engine.invocations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.invocations
+    kind: var
   - id: internal/workflow/engine.go:Engine.markObserving
     namespace: structural.scip
     language: go
@@ -43564,6 +43720,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.recordFindings
+    kind: method
+  - id: internal/workflow/engine.go:Engine.recordInvocation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.recordInvocation
     kind: method
   - id: internal/workflow/engine.go:Engine.recordObjective
     namespace: structural.scip
@@ -43834,6 +43996,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.settleGapFor
+    kind: method
+  - id: internal/workflow/engine.go:Engine.settledInvocations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.settledInvocations
     kind: method
   - id: internal/workflow/engine.go:Engine.spendClosure
     namespace: structural.scip
@@ -45515,6 +45683,150 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: senseiProposer
     kind: type
+  - id: internal/workflow/engine.go:settleInvocation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settleInvocation
+    kind: function
+  - id: internal/workflow/engine.go:settledInvocation.Cycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.Cycle
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation.Err
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.Err
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation.ExitCode
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.ExitCode
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation.Exited
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.Exited
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation.Lifecycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.Lifecycle
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation.Observed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.Observed
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation.Open
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.Open
+    kind: method
+  - id: internal/workflow/engine.go:settledInvocation.Operations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.Operations
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation.Orphans
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.Orphans
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation.Provider
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.Provider
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation.Report
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.Report
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation.Returned
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.Returned
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation.Text
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.Text
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation.Transport
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.Transport
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation.TransportFailed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.TransportFailed
+    kind: var
+  - id: internal/workflow/engine.go:settledInvocation~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation
+    kind: type
+  - id: internal/workflow/engine.go:settledOperation.Generation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledOperation.Generation
+    kind: var
+  - id: internal/workflow/engine.go:settledOperation.ID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledOperation.ID
+    kind: var
+  - id: internal/workflow/engine.go:settledOperation.Started
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledOperation.Started
+    kind: var
+  - id: internal/workflow/engine.go:settledOperation.Terminal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledOperation.Terminal
+    kind: var
+  - id: internal/workflow/engine.go:settledOperation.Terminated
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledOperation.Terminated
+    kind: var
+  - id: internal/workflow/engine.go:settledOperation.Updates
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledOperation.Updates
+    kind: var
+  - id: internal/workflow/engine.go:settledOperation~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledOperation
+    kind: type
   - id: internal/workflow/engine.go:short12
     namespace: structural.scip
     language: go
@@ -46613,6 +46925,36 @@ code_symbols:
     file: internal/workflow/external_block_test.go
     symbol: TestTheDecisionIsAttributedToTheEntryThatAnsweredIt
     kind: function
+  - id: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: TestW10SettlementDoesNotChangeTheRoute
+    kind: function
+  - id: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    kind: function
+  - id: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: TestW1TheSuccessRouteDoesNotManufactureReturned
+    kind: function
+  - id: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    kind: function
+  - id: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    kind: function
   - id: internal/workflow/external_block_test.go:architectEntry.provider
     namespace: structural.scip
     language: go
@@ -46655,6 +46997,12 @@ code_symbols:
     file: internal/workflow/external_block_test.go
     symbol: blockedEngine
     kind: function
+  - id: internal/workflow/external_block_test.go:gateHarness.candidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: gateHarness.candidate
+    kind: method
   - id: internal/workflow/external_block_test.go:implementerResolver.Resolve
     namespace: structural.scip
     language: go
@@ -46691,6 +47039,102 @@ code_symbols:
     file: internal/workflow/external_block_test.go
     symbol: implementerResolver
     kind: type
+  - id: internal/workflow/external_block_test.go:observingImplementer.Run
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingImplementer.Run
+    kind: method
+  - id: internal/workflow/external_block_test.go:observingImplementer.calls
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingImplementer.calls
+    kind: var
+  - id: internal/workflow/external_block_test.go:observingImplementer.err
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingImplementer.err
+    kind: var
+  - id: internal/workflow/external_block_test.go:observingImplementer.inner
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingImplementer.inner
+    kind: var
+  - id: internal/workflow/external_block_test.go:observingImplementer.inv
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingImplementer.inv
+    kind: var
+  - id: internal/workflow/external_block_test.go:observingImplementer.unobserved
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingImplementer.unobserved
+    kind: var
+  - id: internal/workflow/external_block_test.go:observingImplementer~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingImplementer
+    kind: type
+  - id: internal/workflow/external_block_test.go:observingResolver.Resolve
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingResolver.Resolve
+    kind: method
+  - id: internal/workflow/external_block_test.go:observingResolver.calls
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingResolver.calls
+    kind: var
+  - id: internal/workflow/external_block_test.go:observingResolver.err
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingResolver.err
+    kind: var
+  - id: internal/workflow/external_block_test.go:observingResolver.inv
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingResolver.inv
+    kind: var
+  - id: internal/workflow/external_block_test.go:observingResolver.real
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingResolver.real
+    kind: var
+  - id: internal/workflow/external_block_test.go:observingResolver.reviewer
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingResolver.reviewer
+    kind: var
+  - id: internal/workflow/external_block_test.go:observingResolver.unobserved
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingResolver.unobserved
+    kind: var
+  - id: internal/workflow/external_block_test.go:observingResolver~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: observingResolver
+    kind: type
+  - id: internal/workflow/external_block_test.go:openOperation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: openOperation
+    kind: function
   - id: internal/workflow/external_block_test.go:quota
     namespace: structural.scip
     language: go
@@ -46745,6 +47189,12 @@ code_symbols:
     file: internal/workflow/external_block_test.go
     symbol: rosterResolver
     kind: type
+  - id: internal/workflow/external_block_test.go:settlingHarness
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/external_block_test.go
+    symbol: settlingHarness
+    kind: function
   - id: internal/workflow/external_block_test.go:unavailableRunner.Run
     namespace: structural.scip
     language: go
@@ -46792,6 +47242,12 @@ code_symbols:
     language: go
     file: internal/workflow/finding_accounting_test.go
     symbol: TestFindingAccountingObjectNestedInAnArrayAccountsNothing
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: TestW11ASettledReportStillComposesWithStructuralAccounting
     kind: function
   - id: internal/workflow/finding_accounting_test.go:TestW14ProseMentioningTheKeyBeforeTheAccountingDoesNotHideIt
     namespace: structural.scip
@@ -53279,17 +53735,113 @@ code_symbols:
     file: internal/workflow/runners_test.go
     symbol: TestTheDefaultResolverIsTheOnlyPlaceAnAdapterIsConstructed
     kind: function
+  - id: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: TestW1ReturnedIsObservedNotInferred
+    kind: function
+  - id: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: TestW2AnErrorBearingReturnIsStillSettled
+    kind: function
+  - id: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    kind: function
+  - id: internal/workflow/runners_test.go:TestW5PlainTextIsNotTelemetry
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: TestW5PlainTextIsNotTelemetry
+    kind: function
+  - id: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: TestW6StructuredEventOrderAttributesTerminals
+    kind: function
+  - id: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: TestW7AnOrphanTerminalAccountsForNothing
+    kind: function
+  - id: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    kind: function
+  - id: internal/workflow/runners_test.go:TestW9AnErrorDoesNotEraseTheReport
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: TestW9AnErrorDoesNotEraseTheReport
+    kind: function
   - id: internal/workflow/runners_test.go:TestWithNoResolverTheAdapterIsStillTheProviderCommandLine
     namespace: structural.scip
     language: go
     file: internal/workflow/runners_test.go
     symbol: TestWithNoResolverTheAdapterIsStillTheProviderCommandLine
     kind: function
+  - id: internal/workflow/runners_test.go:invokeClaude
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: invokeClaude
+    kind: function
+  - id: internal/workflow/runners_test.go:lines
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: lines
+    kind: function
+  - id: internal/workflow/runners_test.go:runClaude
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: runClaude
+    kind: function
+  - id: internal/workflow/runners_test.go:settledStructuredReport
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: settledStructuredReport
+    kind: function
   - id: internal/workflow/runners_test.go:specFor
     namespace: structural.scip
     language: go
     file: internal/workflow/runners_test.go
     symbol: specFor
+    kind: function
+  - id: internal/workflow/runners_test.go:streamProgress
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: streamProgress
+    kind: function
+  - id: internal/workflow/runners_test.go:streamResult
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: streamResult
+    kind: function
+  - id: internal/workflow/runners_test.go:streamStart
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: streamStart
+    kind: function
+  - id: internal/workflow/runners_test.go:streamTerminal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: streamTerminal
     kind: function
   - id: internal/workflow/runners_test.go:stubResolver.Resolve
     namespace: structural.scip

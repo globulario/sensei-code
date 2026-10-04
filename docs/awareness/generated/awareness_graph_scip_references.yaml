@@ -6399,15 +6399,15 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/workflow/engine.go:New
-    to_name: New
-    file: cmd/sensei-code/control.go
-  - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/control/server.go:New
+    to_name: New
+    file: cmd/sensei-code/control.go
+  - from: cmd/sensei-code/control.go:runControlSurface
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6469,11 +6469,11 @@ code_references:
     to_name: SIGTERM
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Close
+    to_id: internal/ghwebhook/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Close
+    to_id: internal/control/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6481,11 +6481,11 @@ code_references:
     to_name: Server.CloseLocal
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -7796,11 +7796,11 @@ code_references:
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -11297,11 +11297,11 @@ code_references:
     to_name: Interrupted.TaskID
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
@@ -16474,11 +16474,11 @@ code_references:
     to_name: ID
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
@@ -18153,11 +18153,11 @@ code_references:
     to_name: testing
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/control/server.go:Endpoint
+    to_id: internal/ghwebhook/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/ghwebhook/server.go:Endpoint
+    to_id: internal/control/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
@@ -19208,6 +19208,10 @@ code_references:
     to_name: toolTarget
     file: internal/agent/agent.go
   - from: internal/agent/agent.go:CLI.Run
+    to_id: internal/agent/agent.go:AdapterCodexAppServer
+    to_name: AdapterCodexAppServer
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:CLI.Run
     to_id: internal/event/event.go:AgentFinished
     to_name: AgentFinished
     file: internal/agent/agent.go
@@ -19313,6 +19317,34 @@ code_references:
     to_name: GraphBinding.DivergenceIn
     file: internal/agent/agent.go
   - from: internal/agent/agent.go:CLI.Run
+    to_id: internal/agent/agent.go:Invocation~type
+    to_name: Invocation
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:CLI.Run
+    to_id: internal/agent/agent.go:Invocation.ExitCode
+    to_name: Invocation.ExitCode
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:CLI.Run
+    to_id: internal/agent/agent.go:Invocation.Exited
+    to_name: Invocation.Exited
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:CLI.Run
+    to_id: internal/agent/agent.go:Invocation.Report
+    to_name: Invocation.Report
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:CLI.Run
+    to_id: internal/agent/agent.go:Invocation.Returned
+    to_name: Invocation.Returned
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:CLI.Run
+    to_id: internal/agent/agent.go:Invocation.Transport
+    to_name: Invocation.Transport
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:CLI.Run
+    to_id: internal/agent/agent.go:Invocation.TransportFailed
+    to_name: Invocation.TransportFailed
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:CLI.Run
     to_id: internal/processx/runner.go:Line~type
     to_name: Line
     file: internal/agent/agent.go
@@ -19368,6 +19400,14 @@ code_references:
     to_name: Result
     file: internal/agent/agent.go
   - from: internal/agent/agent.go:CLI.Run
+    to_id: internal/processx/runner.go:Result.ExitCode
+    to_name: Result.ExitCode
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:CLI.Run
+    to_id: internal/agent/agent.go:Result.Invocation
+    to_name: Result.Invocation
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:CLI.Run
     to_id: internal/agent/agent.go:Result.Session
     to_name: Result.Session
     file: internal/agent/agent.go
@@ -19395,10 +19435,22 @@ code_references:
     to_name: Split
     file: internal/agent/agent.go
   - from: internal/agent/agent.go:CLI.Run
+    to_id: internal/agent/agent.go:Transport~type
+    to_name: Transport
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:CLI.Run
+    to_id: internal/agent/agent.go:Transport.Adapter
+    to_name: Transport.Adapter
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:CLI.Run
     to_name: TrimSpace
     file: internal/agent/agent.go
   - from: internal/agent/agent.go:CLI.Run
     to_name: bytes
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:CLI.Run
+    to_id: internal/agent/agent.go:cliTransport
+    to_name: cliTransport
     file: internal/agent/agent.go
   - from: internal/agent/agent.go:CLI.Run
     to_name: context
@@ -19419,8 +19471,8 @@ code_references:
     to_name: github.com/globulario/sensei-code/internal/roles
     file: internal/agent/agent.go
   - from: internal/agent/agent.go:CLI.Run
-    to_id: internal/agent/agent.go:normalizeOutput
-    to_name: normalizeOutput
+    to_id: internal/agent/agent.go:readOutput
+    to_name: readOutput
     file: internal/agent/agent.go
   - from: internal/agent/agent.go:CLI.Run
     to_name: strings
@@ -19569,6 +19621,40 @@ code_references:
   - from: internal/agent/agent.go:GraphBinding.DivergenceIn
     to_name: strings
     file: internal/agent/agent.go
+  - from: internal/agent/agent.go:Invocation.observe
+    to_id: internal/agent/agent.go:Invocation~type
+    to_name: Invocation
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:Invocation.observe
+    to_id: internal/agent/agent.go:Invocation.Lifecycle
+    to_name: Invocation.Lifecycle
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:Invocation.observe
+    to_id: internal/agent/agent.go:LifecycleKind~type
+    to_name: LifecycleKind
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:Invocation.observe
+    to_id: internal/agent/agent.go:LifecycleObservation~type
+    to_name: LifecycleObservation
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:Invocation.observe
+    to_id: internal/agent/agent.go:LifecycleObservation.Kind
+    to_name: LifecycleObservation.Kind
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:Invocation.observe
+    to_id: internal/agent/agent.go:LifecycleObservation.Operation
+    to_name: LifecycleObservation.Operation
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:Invocation.observe
+    to_id: internal/agent/agent.go:LifecycleObservation.Seq
+    to_name: LifecycleObservation.Seq
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:Invocation.observe
+    to_name: TrimSpace
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:Invocation.observe
+    to_name: strings
+    file: internal/agent/agent.go
   - from: internal/agent/agent.go:Request.session
     to_id: internal/roles/roles.go:Continue
     to_name: Continue
@@ -19604,6 +19690,26 @@ code_references:
   - from: internal/agent/agent.go:Request.session
     to_name: github.com/globulario/sensei-code/internal/roles
     file: internal/agent/agent.go
+  - from: internal/agent/agent.go:cliTransport
+    to_id: internal/agent/agent.go:AdapterPlainText
+    to_name: AdapterPlainText
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:cliTransport
+    to_id: internal/agent/agent.go:AdapterStreamJSON
+    to_name: AdapterStreamJSON
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:cliTransport
+    to_id: internal/agent/agent.go:Transport~type
+    to_name: Transport
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:cliTransport
+    to_id: internal/agent/agent.go:Transport.Adapter
+    to_name: Transport.Adapter
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:cliTransport
+    to_id: internal/agent/agent.go:Transport.Lifecycle
+    to_name: Transport.Lifecycle
+    file: internal/agent/agent.go
   - from: internal/agent/agent.go:firstSentence
     to_name: IndexByte
     file: internal/agent/agent.go
@@ -19617,25 +19723,64 @@ code_references:
     to_id: internal/agent/agent.go:truncate
     to_name: truncate
     file: internal/agent/agent.go
-  - from: internal/agent/agent.go:normalizeOutput
+  - from: internal/agent/agent.go:readOutput
+    to_id: internal/agent/agent.go:Invocation~type
+    to_name: Invocation
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:readOutput
+    to_id: internal/agent/agent.go:Invocation.Report
+    to_name: Invocation.Report
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:readOutput
+    to_id: internal/agent/agent.go:Invocation.Returned
+    to_name: Invocation.Returned
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:readOutput
+    to_id: internal/agent/agent.go:Invocation.Transport
+    to_name: Invocation.Transport
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:readOutput
+    to_id: internal/agent/agent.go:Invocation.observe
+    to_name: Invocation.observe
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:readOutput
+    to_id: internal/agent/agent.go:LifecycleStarted
+    to_name: LifecycleStarted
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:readOutput
+    to_id: internal/agent/agent.go:LifecycleTerminal
+    to_name: LifecycleTerminal
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:readOutput
+    to_id: internal/agent/agent.go:LifecycleUpdate
+    to_name: LifecycleUpdate
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:readOutput
+    to_name: RawMessage
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:readOutput
     to_name: Split
     file: internal/agent/agent.go
-  - from: internal/agent/agent.go:normalizeOutput
+  - from: internal/agent/agent.go:readOutput
     to_name: Sprintf
     file: internal/agent/agent.go
-  - from: internal/agent/agent.go:normalizeOutput
+  - from: internal/agent/agent.go:readOutput
+    to_id: internal/agent/agent.go:Transport.Lifecycle
+    to_name: Transport.Lifecycle
+    file: internal/agent/agent.go
+  - from: internal/agent/agent.go:readOutput
     to_name: TrimSpace
     file: internal/agent/agent.go
-  - from: internal/agent/agent.go:normalizeOutput
+  - from: internal/agent/agent.go:readOutput
     to_name: Unmarshal
     file: internal/agent/agent.go
-  - from: internal/agent/agent.go:normalizeOutput
+  - from: internal/agent/agent.go:readOutput
     to_name: encoding/json
     file: internal/agent/agent.go
-  - from: internal/agent/agent.go:normalizeOutput
+  - from: internal/agent/agent.go:readOutput
     to_name: fmt
     file: internal/agent/agent.go
-  - from: internal/agent/agent.go:normalizeOutput
+  - from: internal/agent/agent.go:readOutput
     to_name: strings
     file: internal/agent/agent.go
   - from: internal/agent/agent.go:sanitize
@@ -28202,10 +28347,10 @@ code_references:
     to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
+    to_id: internal/behavioral/behavioral.go:Config.InsecureSkipVerify
     to_name: Config.InsecureSkipVerify
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_id: internal/behavioral/behavioral.go:Config.InsecureSkipVerify
     to_name: Config.InsecureSkipVerify
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
@@ -34074,11 +34219,11 @@ code_references:
     to_name: Mint
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
@@ -35746,11 +35891,11 @@ code_references:
     to_name: Minute
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
@@ -41844,17 +41989,17 @@ code_references:
     to_name: Second
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
+    to_name: Server
+    file: internal/control/server.go
+  - from: internal/control/server.go:Server.Listen
     to_id: internal/control/server.go:Server~type
     to_name: Server
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
-    to_name: Server
-    file: internal/control/server.go
-  - from: internal/control/server.go:Server.Listen
-    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
@@ -48308,11 +48453,11 @@ code_references:
     to_name: Unknown
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/mcpconfig/mcpconfig.go:Unproven
+    to_id: internal/doctor/doctor.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/doctor/doctor.go:Unproven
+    to_id: internal/mcpconfig/mcpconfig.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
@@ -53655,10 +53800,10 @@ code_references:
     to_name: Issue.Number
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
@@ -91875,10 +92020,10 @@ code_references:
     to_name: Issue.Number
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
@@ -97740,17 +97885,17 @@ code_references:
     to_name: Second
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_name: Server
-    file: internal/ghwebhook/server.go
-  - from: internal/ghwebhook/server.go:Server.Listen
     to_id: internal/ghwebhook/server.go:Server~type
     to_name: Server
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_id: internal/ghwebhook/server.go:Server.Handler
+    to_name: Server
+    file: internal/ghwebhook/server.go
+  - from: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
@@ -110539,10 +110684,10 @@ code_references:
     to_name: testing
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
+    to_id: internal/processx/runner.go:Environ
     to_name: Environ
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
-    to_id: internal/processx/runner.go:Environ
     to_name: Environ
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
@@ -153333,11 +153478,11 @@ code_references:
     to_name: KeyPressMsg.String
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/mcpconfig/mcpconfig.go:Label
+    to_id: internal/provider/provider.go:Label
     to_name: Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/provider/provider.go:Label
+    to_id: internal/mcpconfig/mcpconfig.go:Label
     to_name: Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -153349,10 +153494,10 @@ code_references:
     to_name: ModeSelected
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
+    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -177667,11 +177812,11 @@ code_references:
     to_name: Engine.emit
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
@@ -178048,10 +178193,10 @@ code_references:
     to_name: Load
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
@@ -182862,10 +183007,10 @@ code_references:
     to_name: Errorf
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
@@ -184377,6 +184522,28 @@ code_references:
   - from: internal/workflow/engine.go:Engine.recordFindings
     to_name: github.com/globulario/sensei-code/internal/finding
     file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordInvocation
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordInvocation
+    to_id: internal/workflow/engine.go:Engine.invocations
+    to_name: Engine.invocations
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordInvocation
+    to_id: internal/workflow/engine.go:Engine.mu
+    to_name: Engine.mu
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordInvocation
+    to_name: Mutex.Lock
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordInvocation
+    to_name: Mutex.Unlock
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordInvocation
+    to_id: internal/workflow/engine.go:settledInvocation~type
+    to_name: settledInvocation
+    file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.recordObjective
     to_id: internal/workflow/engine.go:Engine~type
     to_name: Engine
@@ -185479,10 +185646,10 @@ code_references:
     to_name: Engine.resolveRunner
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
@@ -187900,6 +188067,10 @@ code_references:
     to_name: Engine.recordDecision
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/workflow/engine.go:Engine.recordInvocation
+    to_name: Engine.recordInvocation
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/adversarial.go:Engine.recordReconciliation
     to_name: Engine.recordReconciliation
     file: internal/workflow/engine.go
@@ -188162,10 +188333,6 @@ code_references:
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/runners.go:Resolved.Runner
     to_name: Resolved.Runner
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/agent/agent.go:Result.Text
-    to_name: Result.Text
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/event/event.go:ReviewContradiction
@@ -188605,6 +188772,18 @@ code_references:
     to_name: roleUnavailable
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/workflow/engine.go:settleInvocation
+    to_name: settleInvocation
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/workflow/engine.go:settledInvocation.Err
+    to_name: settledInvocation.Err
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/workflow/engine.go:settledInvocation.Text
+    to_name: settledInvocation.Text
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/engine.go:sourceFor
     to_name: sourceFor
     file: internal/workflow/engine.go
@@ -188828,6 +189007,28 @@ code_references:
   - from: internal/workflow/engine.go:Engine.settleGapFor
     to_id: internal/workflow/authority.go:taskResolutions.settle
     to_name: taskResolutions.settle
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.settledInvocations
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.settledInvocations
+    to_id: internal/workflow/engine.go:Engine.invocations
+    to_name: Engine.invocations
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.settledInvocations
+    to_id: internal/workflow/engine.go:Engine.mu
+    to_name: Engine.mu
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.settledInvocations
+    to_name: Mutex.Lock
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.settledInvocations
+    to_name: Mutex.Unlock
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.settledInvocations
+    to_id: internal/workflow/engine.go:settledInvocation~type
+    to_name: settledInvocation
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.spendClosure
     to_id: internal/workflow/engine.go:Engine~type
@@ -190038,19 +190239,19 @@ code_references:
     to_name: Evidence
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.AuditDetail
-    to_name: Evidence.AuditDetail
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/candidate/disposition.go:Evidence.AuditDetail
     to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
-    to_name: Evidence.AuditVerdict
+    to_id: internal/taskstate/state.go:Evidence.AuditDetail
+    to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
+    to_name: Evidence.AuditVerdict
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:candidateEvidence
+    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -190066,11 +190267,11 @@ code_references:
     to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
+    to_id: internal/taskstate/state.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.DiffBytes
+    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -192372,11 +192573,11 @@ code_references:
     to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/authority/resolution.go:ToolResult.Structured
+    to_id: internal/sensei/mcp.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/sensei/mcp.go:ToolResult.Structured
+    to_id: internal/authority/resolution.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
@@ -192400,6 +192601,185 @@ code_references:
   - from: internal/workflow/engine.go:senseiProposer.CallTool
     to_id: internal/workflow/engine.go:senseiProposer.sc
     to_name: senseiProposer.sc
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:Invocation.ExitCode
+    to_name: Invocation.ExitCode
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:Invocation.Exited
+    to_name: Invocation.Exited
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:Invocation.Lifecycle
+    to_name: Invocation.Lifecycle
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:Invocation.Report
+    to_name: Invocation.Report
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:Invocation.Returned
+    to_name: Invocation.Returned
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:Invocation.Transport
+    to_name: Invocation.Transport
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:Invocation.TransportFailed
+    to_name: Invocation.TransportFailed
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:LifecycleObservation~type
+    to_name: LifecycleObservation
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:LifecycleObservation.Kind
+    to_name: LifecycleObservation.Kind
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:LifecycleObservation.Operation
+    to_name: LifecycleObservation.Operation
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:LifecycleObservation.Seq
+    to_name: LifecycleObservation.Seq
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:LifecycleStarted
+    to_name: LifecycleStarted
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:LifecycleTerminal
+    to_name: LifecycleTerminal
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:LifecycleUpdate
+    to_name: LifecycleUpdate
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:Result~type
+    to_name: Result
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:Result.Invocation
+    to_name: Result.Invocation
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:Result.Text
+    to_name: Result.Text
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/agent/agent.go:Transport.Lifecycle
+    to_name: Transport.Lifecycle
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_name: github.com/globulario/sensei-code/internal/agent
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation~type
+    to_name: settledInvocation
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.Cycle
+    to_name: settledInvocation.Cycle
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.Err
+    to_name: settledInvocation.Err
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.ExitCode
+    to_name: settledInvocation.ExitCode
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.Exited
+    to_name: settledInvocation.Exited
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.Lifecycle
+    to_name: settledInvocation.Lifecycle
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.Observed
+    to_name: settledInvocation.Observed
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.Operations
+    to_name: settledInvocation.Operations
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.Orphans
+    to_name: settledInvocation.Orphans
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.Provider
+    to_name: settledInvocation.Provider
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.Report
+    to_name: settledInvocation.Report
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.Returned
+    to_name: settledInvocation.Returned
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.Text
+    to_name: settledInvocation.Text
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.Transport
+    to_name: settledInvocation.Transport
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledInvocation.TransportFailed
+    to_name: settledInvocation.TransportFailed
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledOperation~type
+    to_name: settledOperation
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledOperation.Generation
+    to_name: settledOperation.Generation
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledOperation.ID
+    to_name: settledOperation.ID
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledOperation.Started
+    to_name: settledOperation.Started
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledOperation.Terminal
+    to_name: settledOperation.Terminal
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledOperation.Terminated
+    to_name: settledOperation.Terminated
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settleInvocation
+    to_id: internal/workflow/engine.go:settledOperation.Updates
+    to_name: settledOperation.Updates
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settledInvocation.Open
+    to_id: internal/workflow/engine.go:settledInvocation~type
+    to_name: settledInvocation
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settledInvocation.Open
+    to_id: internal/workflow/engine.go:settledInvocation.Operations
+    to_name: settledInvocation.Operations
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settledInvocation.Open
+    to_id: internal/workflow/engine.go:settledOperation~type
+    to_name: settledOperation
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:settledInvocation.Open
+    to_id: internal/workflow/engine.go:settledOperation.Terminated
+    to_name: settledOperation.Terminated
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:shortDigest
     to_name: TrimSpace
@@ -199487,6 +199867,383 @@ code_references:
   - from: internal/workflow/external_block_test.go:TestTheDecisionIsAttributedToTheEntryThatAnsweredIt
     to_name: testing
     file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_name: As
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_name: New
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_id: internal/workflow/external_block.go:RoleUnavailable~type
+    to_name: RoleUnavailable
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_name: T
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_name: T.Run
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_id: internal/workflow/reviewresult.go:candidateOutcome~type
+    to_name: candidateOutcome
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_name: common.Fatalf
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_name: errors
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_id: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_name: gateHarness.candidate
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_id: internal/workflow/external_block_test.go:observingResolver~type
+    to_name: observingResolver
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_id: internal/workflow/external_block_test.go:observingResolver.err
+    to_name: observingResolver.err
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_id: internal/workflow/external_block_test.go:observingResolver.inv
+    to_name: observingResolver.inv
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_id: internal/workflow/external_block_test.go:observingResolver.real
+    to_name: observingResolver.real
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_id: internal/workflow/external_block_test.go:openOperation
+    to_name: openOperation
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_id: internal/workflow/external_block_test.go:quota
+    to_name: quota
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_id: internal/workflow/external_block_test.go:settlingHarness
+    to_name: settlingHarness
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW10SettlementDoesNotChangeTheRoute
+    to_name: testing
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/config/config.go:Config.Workflow
+    to_name: Config.Workflow
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/workflow/engine.go:Engine.Config
+    to_name: Engine.Config
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/workflow/engine.go:Engine.settledInvocations
+    to_name: Engine.settledInvocations
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_name: Int32.Load
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_name: T
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/config/config.go:Workflow.ReviewCycles
+    to_name: Workflow.ReviewCycles
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/workflow/reviewresult.go:candidateOutcome.Accepted
+    to_name: candidateOutcome.Accepted
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_name: common.Fatalf
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_name: gateHarness.candidate
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/workflow/external_block_test.go:observingResolver~type
+    to_name: observingResolver
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/workflow/external_block_test.go:observingResolver.inv
+    to_name: observingResolver.inv
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/workflow/external_block_test.go:observingResolver.real
+    to_name: observingResolver.real
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/workflow/external_block_test.go:openOperation
+    to_name: openOperation
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/workflow/engine.go:settledInvocation.Open
+    to_name: settledInvocation.Open
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/workflow/engine.go:settledInvocation.Returned
+    to_name: settledInvocation.Returned
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_id: internal/workflow/external_block_test.go:settlingHarness
+    to_name: settlingHarness
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW12AnOpenOperationIsSettledAndCausesNoSameCycleRetry
+    to_name: testing
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    to_id: internal/workflow/engine.go:Engine.settledInvocations
+    to_name: Engine.settledInvocations
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    to_name: T
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    to_name: common.Fatalf
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    to_id: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_name: gateHarness.candidate
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    to_id: internal/workflow/external_block_test.go:observingResolver~type
+    to_name: observingResolver
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    to_id: internal/workflow/external_block_test.go:observingResolver.real
+    to_name: observingResolver.real
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    to_id: internal/workflow/external_block_test.go:observingResolver.unobserved
+    to_name: observingResolver.unobserved
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    to_id: internal/workflow/engine.go:settledInvocation.Err
+    to_name: settledInvocation.Err
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    to_id: internal/workflow/engine.go:settledInvocation.Observed
+    to_name: settledInvocation.Observed
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    to_id: internal/workflow/engine.go:settledInvocation.Returned
+    to_name: settledInvocation.Returned
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    to_id: internal/workflow/external_block_test.go:settlingHarness
+    to_name: settlingHarness
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW1TheSuccessRouteDoesNotManufactureReturned
+    to_name: testing
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_name: As
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/engine.go:Engine.settledInvocations
+    to_name: Engine.settledInvocations
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_name: Int32.Load
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_name: Is
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_name: New
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/external_block.go:RoleUnavailable~type
+    to_name: RoleUnavailable
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_name: T
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/reviewresult.go:candidateNotConverged
+    to_name: candidateNotConverged
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_name: common.Fatalf
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_name: errors
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/finding_accounting_test.go:faAccounting
+    to_name: faAccounting
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_name: gateHarness.candidate
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/external_block_test.go:observingResolver~type
+    to_name: observingResolver
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/external_block_test.go:observingResolver.err
+    to_name: observingResolver.err
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/external_block_test.go:observingResolver.inv
+    to_name: observingResolver.inv
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/external_block_test.go:openOperation
+    to_name: openOperation
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/engine.go:settledInvocation.Err
+    to_name: settledInvocation.Err
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/engine.go:settledInvocation.Operations
+    to_name: settledInvocation.Operations
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/engine.go:settledInvocation.Report
+    to_name: settledInvocation.Report
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/engine.go:settledInvocation.Returned
+    to_name: settledInvocation.Returned
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_id: internal/workflow/external_block_test.go:settlingHarness
+    to_name: settlingHarness
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW2AnOrdinaryErrorIsSettledAndThenRoutedAsAnError
+    to_name: testing
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_name: As
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/engine.go:Engine.settledInvocations
+    to_name: Engine.settledInvocations
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/provider/unavailable.go:ErrUnavailable
+    to_name: ErrUnavailable
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/roles/roles.go:Implementer
+    to_name: Implementer
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_name: Int32.Load
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_name: Is
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/external_block.go:RoleUnavailable~type
+    to_name: RoleUnavailable
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/external_block.go:RoleUnavailable.Provider
+    to_name: RoleUnavailable.Provider
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/external_block.go:RoleUnavailable.Role
+    to_name: RoleUnavailable.Role
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_name: T
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/agent/agent.go:Transport.Lifecycle
+    to_name: Transport.Lifecycle
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/reviewresult.go:candidateNotConverged
+    to_name: candidateNotConverged
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_name: common.Fatalf
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_name: errors
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_name: gateHarness.candidate
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_name: github.com/globulario/sensei-code/internal/provider
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/external_block_test.go:observingResolver~type
+    to_name: observingResolver
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/external_block_test.go:observingResolver.err
+    to_name: observingResolver.err
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/external_block_test.go:observingResolver.inv
+    to_name: observingResolver.inv
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/external_block_test.go:openOperation
+    to_name: openOperation
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/external_block_test.go:quota
+    to_name: quota
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/engine.go:settledInvocation.Cycle
+    to_name: settledInvocation.Cycle
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/engine.go:settledInvocation.Err
+    to_name: settledInvocation.Err
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/engine.go:settledInvocation.Open
+    to_name: settledInvocation.Open
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/engine.go:settledInvocation.Report
+    to_name: settledInvocation.Report
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/engine.go:settledInvocation.Returned
+    to_name: settledInvocation.Returned
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/engine.go:settledInvocation.Transport
+    to_name: settledInvocation.Transport
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_id: internal/workflow/external_block_test.go:settlingHarness
+    to_name: settlingHarness
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:TestW3ARoleUnavailableInvocationIsSettledBeforeItsRoute
+    to_name: testing
+    file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
     to_id: internal/config/config.go:Agent~type
     to_name: Agent
@@ -199544,11 +200301,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
@@ -199742,6 +200499,48 @@ code_references:
   - from: internal/workflow/external_block_test.go:blockedEngine
     to_name: testing
     file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_name: Background
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_id: internal/workflow/engine.go:Engine.runCandidate
+    to_name: Engine.runCandidate
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_id: internal/workflow/reviewresult.go:candidateOutcome~type
+    to_name: candidateOutcome
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_id: internal/workflow/gate.go:certifiedStart~type
+    to_name: certifiedStart
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_name: context
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_id: internal/workflow/reviewgate_test.go:gateHarness~type
+    to_name: gateHarness
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.sc
+    to_name: gateHarness.sc
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.tc
+    to_name: gateHarness.tc
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.work
+    to_name: gateHarness.work
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:gateHarness.candidate
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.worker
+    to_name: gateHarness.worker
+    file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:implementerResolver.Resolve
     to_id: internal/config/config.go:Agent.Name
     to_name: Agent.Name
@@ -199812,6 +200611,227 @@ code_references:
   - from: internal/workflow/external_block_test.go:implementerResolver.Resolve
     to_id: internal/workflow/external_block_test.go:implementerResolver.session
     to_name: implementerResolver.session
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_name: Context
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_id: internal/event/event.go:Event~type
+    to_name: Event
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_name: Int32.Add
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_id: internal/agent/agent.go:Request~type
+    to_name: Request
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_id: internal/agent/agent.go:Result~type
+    to_name: Result
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_id: internal/agent/agent.go:Result.Invocation
+    to_name: Result.Invocation
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_id: internal/agent/agent.go:Runner.Run
+    to_name: Runner.Run
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_name: context
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_name: github.com/globulario/sensei-code/internal/agent
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_name: github.com/globulario/sensei-code/internal/event
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_id: internal/workflow/external_block_test.go:observingImplementer~type
+    to_name: observingImplementer
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_id: internal/workflow/external_block_test.go:observingImplementer.calls
+    to_name: observingImplementer.calls
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_id: internal/workflow/external_block_test.go:observingImplementer.err
+    to_name: observingImplementer.err
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_id: internal/workflow/external_block_test.go:observingImplementer.inner
+    to_name: observingImplementer.inner
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_id: internal/workflow/external_block_test.go:observingImplementer.inv
+    to_name: observingImplementer.inv
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingImplementer.Run
+    to_id: internal/workflow/external_block_test.go:observingImplementer.unobserved
+    to_name: observingImplementer.unobserved
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/config/config.go:Agent.Name
+    to_name: Agent.Name
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/runners.go:CLIResolved
+    to_name: CLIResolved
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/roles/roles.go:Implementer
+    to_name: Implementer
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/runners.go:Resolved~type
+    to_name: Resolved
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/runners.go:Resolved.Label
+    to_name: Resolved.Label
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/runners.go:Resolved.Name
+    to_name: Resolved.Name
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/runners.go:Resolved.Runner
+    to_name: Resolved.Runner
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/runners.go:RunnerSpec~type
+    to_name: RunnerSpec
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/runners.go:RunnerSpec.Agent
+    to_name: RunnerSpec.Agent
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/runners.go:RunnerSpec.Role
+    to_name: RunnerSpec.Role
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/external_block_test.go:observingImplementer~type
+    to_name: observingImplementer
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/external_block_test.go:observingImplementer.calls
+    to_name: observingImplementer.calls
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/external_block_test.go:observingImplementer.err
+    to_name: observingImplementer.err
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/external_block_test.go:observingImplementer.inner
+    to_name: observingImplementer.inner
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/external_block_test.go:observingImplementer.inv
+    to_name: observingImplementer.inv
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/external_block_test.go:observingImplementer.unobserved
+    to_name: observingImplementer.unobserved
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/external_block_test.go:observingResolver~type
+    to_name: observingResolver
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/external_block_test.go:observingResolver.calls
+    to_name: observingResolver.calls
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/external_block_test.go:observingResolver.err
+    to_name: observingResolver.err
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/external_block_test.go:observingResolver.inv
+    to_name: observingResolver.inv
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/external_block_test.go:observingResolver.real
+    to_name: observingResolver.real
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/external_block_test.go:observingResolver.reviewer
+    to_name: observingResolver.reviewer
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:observingResolver.Resolve
+    to_id: internal/workflow/external_block_test.go:observingResolver.unobserved
+    to_name: observingResolver.unobserved
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:AdapterStreamJSON
+    to_name: AdapterStreamJSON
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:Invocation~type
+    to_name: Invocation
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:Invocation.Exited
+    to_name: Invocation.Exited
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:Invocation.Lifecycle
+    to_name: Invocation.Lifecycle
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:Invocation.Report
+    to_name: Invocation.Report
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:Invocation.Returned
+    to_name: Invocation.Returned
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:Invocation.Transport
+    to_name: Invocation.Transport
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:LifecycleObservation~type
+    to_name: LifecycleObservation
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:LifecycleObservation.Kind
+    to_name: LifecycleObservation.Kind
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:LifecycleObservation.Operation
+    to_name: LifecycleObservation.Operation
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:LifecycleObservation.Seq
+    to_name: LifecycleObservation.Seq
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:LifecycleStarted
+    to_name: LifecycleStarted
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:LifecycleUpdate
+    to_name: LifecycleUpdate
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:Transport~type
+    to_name: Transport
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:Transport.Adapter
+    to_name: Transport.Adapter
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_id: internal/agent/agent.go:Transport.Lifecycle
+    to_name: Transport.Lifecycle
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:openOperation
+    to_name: github.com/globulario/sensei-code/internal/agent
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:quota
     to_id: internal/provider/unavailable.go:Unavailable~type
@@ -199994,6 +201014,76 @@ code_references:
   - from: internal/workflow/external_block_test.go:rosterResolver.asked
     to_id: internal/workflow/architect_retry_test.go:scriptedArchitect.prompts
     to_name: scriptedArchitect.prompts
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_id: internal/workflow/engine.go:Engine.Runners
+    to_name: Engine.Runners
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_name: Int32
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_id: internal/roles/assign.go:Policy~type
+    to_name: Policy
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_id: internal/roles/assign.go:Policy.Reason
+    to_name: Policy.Reason
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_name: T
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_id: internal/roles/roles.go:Unverified
+    to_name: Unverified
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_id: internal/workflow/advisory_test.go:answeringRunner~type
+    to_name: answeringRunner
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_id: internal/workflow/advisory_test.go:answeringRunner.mode
+    to_name: answeringRunner.mode
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_id: internal/workflow/advisory_test.go:answeringRunner.text
+    to_name: answeringRunner.text
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_name: common.Helper
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_id: internal/workflow/reviewgate_test.go:gateHarness~type
+    to_name: gateHarness
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_id: internal/workflow/reviewgate_test.go:newGateHarness
+    to_name: newGateHarness
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_id: internal/workflow/external_block_test.go:observingResolver~type
+    to_name: observingResolver
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_id: internal/workflow/external_block_test.go:observingResolver.calls
+    to_name: observingResolver.calls
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_id: internal/workflow/external_block_test.go:observingResolver.reviewer
+    to_name: observingResolver.reviewer
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_name: sync/atomic
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:settlingHarness
+    to_name: testing
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:unavailableRunner.Run
     to_name: Context
@@ -200317,6 +201407,65 @@ code_references:
     to_name: findingAccount.Settled
     file: internal/workflow/finding_accounting_test.go
   - from: internal/workflow/finding_accounting_test.go:TestFindingAccountingObjectNestedInAnArrayAccountsNothing
+    to_name: testing
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_name: T
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_name: TrimSpace
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_name: common.Fatalf
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_id: internal/workflow/finding_accounting_test.go:faAccount
+    to_name: faAccount
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_id: internal/workflow/finding_accounting_test.go:faAccounting
+    to_name: faAccounting
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_id: internal/workflow/engine.go:findingAccount.Diagnosis
+    to_name: findingAccount.Diagnosis
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_id: internal/workflow/engine.go:findingAccount.Settled
+    to_name: findingAccount.Settled
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_id: internal/workflow/engine.go:findingResponse.AnsweredBy
+    to_name: findingResponse.AnsweredBy
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_id: internal/workflow/engine.go:findingResponse.ID
+    to_name: findingResponse.ID
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_id: internal/workflow/engine.go:settledInvocation.Err
+    to_name: settledInvocation.Err
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_id: internal/workflow/engine.go:settledInvocation.Report
+    to_name: settledInvocation.Report
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_id: internal/workflow/engine.go:settledInvocation.Returned
+    to_name: settledInvocation.Returned
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_id: internal/workflow/engine.go:settledInvocation.Text
+    to_name: settledInvocation.Text
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_id: internal/workflow/runners_test.go:settledStructuredReport
+    to_name: settledStructuredReport
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
+    to_name: strings
+    file: internal/workflow/finding_accounting_test.go
+  - from: internal/workflow/finding_accounting_test.go:TestW11ASettledReportStillComposesWithStructuralAccounting
     to_name: testing
     file: internal/workflow/finding_accounting_test.go
   - from: internal/workflow/finding_accounting_test.go:TestW14ProseMentioningTheKeyBeforeTheAccountingDoesNotHideIt
@@ -211849,10 +212998,10 @@ code_references:
     to_name: Interrupted.PlanAttemptRefusals
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61OnlyARecordedReturnToTheArchitectIsOwed
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61OnlyARecordedReturnToTheArchitectIsOwed
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61OnlyARecordedReturnToTheArchitectIsOwed
@@ -230091,11 +231240,11 @@ code_references:
     to_name: Join
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
@@ -239057,6 +240206,604 @@ code_references:
   - from: internal/workflow/runners_test.go:TestTheDefaultResolverIsTheOnlyPlaceAnAdapterIsConstructed
     to_name: testing
     file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/agent/agent.go:Result~type
+    to_name: Result
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/agent/agent.go:Result.Text
+    to_name: Result.Text
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_name: T
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_name: TrimSpace
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_name: common.Fatalf
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_name: github.com/globulario/sensei-code/internal/agent
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/workflow/runners_test.go:invokeClaude
+    to_name: invokeClaude
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/workflow/runners_test.go:lines
+    to_name: lines
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/workflow/engine.go:settleInvocation
+    to_name: settleInvocation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/workflow/engine.go:settledInvocation.ExitCode
+    to_name: settledInvocation.ExitCode
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/workflow/engine.go:settledInvocation.Exited
+    to_name: settledInvocation.Exited
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/workflow/engine.go:settledInvocation.Observed
+    to_name: settledInvocation.Observed
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/workflow/engine.go:settledInvocation.Report
+    to_name: settledInvocation.Report
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/workflow/engine.go:settledInvocation.Returned
+    to_name: settledInvocation.Returned
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/workflow/engine.go:settledInvocation.Text
+    to_name: settledInvocation.Text
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/workflow/runners_test.go:streamResult
+    to_name: streamResult
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/workflow/runners_test.go:streamStart
+    to_name: streamStart
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_id: internal/workflow/runners_test.go:streamTerminal
+    to_name: streamTerminal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_name: strings
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW1ReturnedIsObservedNotInferred
+    to_name: testing
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/agent/agent.go:AdapterStreamJSON
+    to_name: AdapterStreamJSON
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_name: Join
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_name: T
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/agent/agent.go:Transport.Adapter
+    to_name: Transport.Adapter
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/agent/agent.go:Transport.Lifecycle
+    to_name: Transport.Lifecycle
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_name: common.Fatal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_name: common.Fatalf
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_name: common.TempDir
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_name: github.com/globulario/sensei-code/internal/agent
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/runners_test.go:invokeClaude
+    to_name: invokeClaude
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/runners_test.go:lines
+    to_name: lines
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_name: path/filepath
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/runners_test.go:runClaude
+    to_name: runClaude
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/engine.go:settledInvocation.Err
+    to_name: settledInvocation.Err
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/engine.go:settledInvocation.ExitCode
+    to_name: settledInvocation.ExitCode
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/engine.go:settledInvocation.Exited
+    to_name: settledInvocation.Exited
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/engine.go:settledInvocation.Lifecycle
+    to_name: settledInvocation.Lifecycle
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/engine.go:settledInvocation.Operations
+    to_name: settledInvocation.Operations
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/engine.go:settledInvocation.Report
+    to_name: settledInvocation.Report
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/engine.go:settledInvocation.Returned
+    to_name: settledInvocation.Returned
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/engine.go:settledInvocation.Transport
+    to_name: settledInvocation.Transport
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/engine.go:settledInvocation.TransportFailed
+    to_name: settledInvocation.TransportFailed
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/engine.go:settledOperation.Terminated
+    to_name: settledOperation.Terminated
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/runners_test.go:streamResult
+    to_name: streamResult
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/runners_test.go:streamStart
+    to_name: streamStart
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_id: internal/workflow/runners_test.go:streamTerminal
+    to_name: streamTerminal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW2AnErrorBearingReturnIsStillSettled
+    to_name: testing
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:AdapterPlainText
+    to_name: AdapterPlainText
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:Invocation~type
+    to_name: Invocation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:Invocation.Lifecycle
+    to_name: Invocation.Lifecycle
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:Invocation.Returned
+    to_name: Invocation.Returned
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:Invocation.Transport
+    to_name: Invocation.Transport
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:LifecycleObservation~type
+    to_name: LifecycleObservation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:LifecycleObservation.Kind
+    to_name: LifecycleObservation.Kind
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:LifecycleObservation.Operation
+    to_name: LifecycleObservation.Operation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:LifecycleObservation.Seq
+    to_name: LifecycleObservation.Seq
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:LifecycleStarted
+    to_name: LifecycleStarted
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:Result~type
+    to_name: Result
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:Result.Invocation
+    to_name: Result.Invocation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_name: T
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:Transport~type
+    to_name: Transport
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:Transport.Adapter
+    to_name: Transport.Adapter
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/agent/agent.go:Transport.Lifecycle
+    to_name: Transport.Lifecycle
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_name: TrimSpace
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_name: common.Fatalf
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_name: github.com/globulario/sensei-code/internal/agent
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/workflow/runners_test.go:invokeClaude
+    to_name: invokeClaude
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/workflow/runners_test.go:lines
+    to_name: lines
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/workflow/engine.go:settleInvocation
+    to_name: settleInvocation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/workflow/engine.go:settledInvocation.Lifecycle
+    to_name: settledInvocation.Lifecycle
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/workflow/engine.go:settledInvocation.Operations
+    to_name: settledInvocation.Operations
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/workflow/engine.go:settledInvocation.Orphans
+    to_name: settledInvocation.Orphans
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/workflow/engine.go:settledInvocation.Provider
+    to_name: settledInvocation.Provider
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/workflow/engine.go:settledInvocation.Report
+    to_name: settledInvocation.Report
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/workflow/engine.go:settledInvocation.Transport
+    to_name: settledInvocation.Transport
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/workflow/runners_test.go:streamProgress
+    to_name: streamProgress
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/workflow/runners_test.go:streamResult
+    to_name: streamResult
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/workflow/runners_test.go:streamStart
+    to_name: streamStart
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_id: internal/workflow/runners_test.go:streamTerminal
+    to_name: streamTerminal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_name: strings
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW4LifecycleCapabilityIsTheTransportsNotTheProviders
+    to_name: testing
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW5PlainTextIsNotTelemetry
+    to_name: T
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW5PlainTextIsNotTelemetry
+    to_name: common.Fatalf
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW5PlainTextIsNotTelemetry
+    to_id: internal/workflow/runners_test.go:invokeClaude
+    to_name: invokeClaude
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW5PlainTextIsNotTelemetry
+    to_id: internal/workflow/runners_test.go:lines
+    to_name: lines
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW5PlainTextIsNotTelemetry
+    to_id: internal/workflow/engine.go:settledInvocation.Lifecycle
+    to_name: settledInvocation.Lifecycle
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW5PlainTextIsNotTelemetry
+    to_id: internal/workflow/engine.go:settledInvocation.Operations
+    to_name: settledInvocation.Operations
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW5PlainTextIsNotTelemetry
+    to_id: internal/workflow/engine.go:settledInvocation.Orphans
+    to_name: settledInvocation.Orphans
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW5PlainTextIsNotTelemetry
+    to_id: internal/workflow/engine.go:settledInvocation.Returned
+    to_name: settledInvocation.Returned
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW5PlainTextIsNotTelemetry
+    to_id: internal/workflow/runners_test.go:streamStart
+    to_name: streamStart
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW5PlainTextIsNotTelemetry
+    to_id: internal/workflow/runners_test.go:streamTerminal
+    to_name: streamTerminal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW5PlainTextIsNotTelemetry
+    to_name: testing
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/agent/agent.go:LifecycleObservation~type
+    to_name: LifecycleObservation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/agent/agent.go:LifecycleObservation.Kind
+    to_name: LifecycleObservation.Kind
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/agent/agent.go:LifecycleObservation.Operation
+    to_name: LifecycleObservation.Operation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/agent/agent.go:LifecycleObservation.Seq
+    to_name: LifecycleObservation.Seq
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/agent/agent.go:LifecycleStarted
+    to_name: LifecycleStarted
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/agent/agent.go:LifecycleTerminal
+    to_name: LifecycleTerminal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/agent/agent.go:LifecycleUpdate
+    to_name: LifecycleUpdate
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_name: T
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_name: common.Fatalf
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_name: github.com/globulario/sensei-code/internal/agent
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/runners_test.go:invokeClaude
+    to_name: invokeClaude
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/runners_test.go:lines
+    to_name: lines
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/engine.go:settledInvocation.Lifecycle
+    to_name: settledInvocation.Lifecycle
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/engine.go:settledInvocation.Open
+    to_name: settledInvocation.Open
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/engine.go:settledInvocation.Operations
+    to_name: settledInvocation.Operations
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/engine.go:settledInvocation.Orphans
+    to_name: settledInvocation.Orphans
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/engine.go:settledOperation.ID
+    to_name: settledOperation.ID
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/engine.go:settledOperation.Terminal
+    to_name: settledOperation.Terminal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/engine.go:settledOperation.Terminated
+    to_name: settledOperation.Terminated
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/engine.go:settledOperation.Updates
+    to_name: settledOperation.Updates
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/runners_test.go:streamProgress
+    to_name: streamProgress
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/runners_test.go:streamResult
+    to_name: streamResult
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/runners_test.go:streamStart
+    to_name: streamStart
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_id: internal/workflow/runners_test.go:streamTerminal
+    to_name: streamTerminal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW6StructuredEventOrderAttributesTerminals
+    to_name: testing
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/agent/agent.go:LifecycleObservation.Kind
+    to_name: LifecycleObservation.Kind
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/agent/agent.go:LifecycleObservation.Operation
+    to_name: LifecycleObservation.Operation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/agent/agent.go:LifecycleTerminal
+    to_name: LifecycleTerminal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_name: T
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_name: common.Fatalf
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_name: github.com/globulario/sensei-code/internal/agent
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/workflow/runners_test.go:invokeClaude
+    to_name: invokeClaude
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/workflow/runners_test.go:lines
+    to_name: lines
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/workflow/engine.go:settledInvocation.Operations
+    to_name: settledInvocation.Operations
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/workflow/engine.go:settledInvocation.Orphans
+    to_name: settledInvocation.Orphans
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/workflow/engine.go:settledOperation.Generation
+    to_name: settledOperation.Generation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/workflow/engine.go:settledOperation.Started
+    to_name: settledOperation.Started
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/workflow/engine.go:settledOperation.Terminated
+    to_name: settledOperation.Terminated
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/workflow/runners_test.go:streamProgress
+    to_name: streamProgress
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/workflow/runners_test.go:streamResult
+    to_name: streamResult
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/workflow/runners_test.go:streamStart
+    to_name: streamStart
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_id: internal/workflow/runners_test.go:streamTerminal
+    to_name: streamTerminal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW7AnOrphanTerminalAccountsForNothing
+    to_name: testing
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_name: T
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_name: common.Fatalf
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_id: internal/workflow/runners_test.go:invokeClaude
+    to_name: invokeClaude
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_id: internal/workflow/runners_test.go:lines
+    to_name: lines
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_id: internal/workflow/engine.go:settledInvocation.Open
+    to_name: settledInvocation.Open
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_id: internal/workflow/engine.go:settledInvocation.Operations
+    to_name: settledInvocation.Operations
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_id: internal/workflow/engine.go:settledOperation.Generation
+    to_name: settledOperation.Generation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_id: internal/workflow/engine.go:settledOperation.Started
+    to_name: settledOperation.Started
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_id: internal/workflow/engine.go:settledOperation.Terminal
+    to_name: settledOperation.Terminal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_id: internal/workflow/engine.go:settledOperation.Terminated
+    to_name: settledOperation.Terminated
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_id: internal/workflow/runners_test.go:streamResult
+    to_name: streamResult
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_id: internal/workflow/runners_test.go:streamStart
+    to_name: streamStart
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_id: internal/workflow/runners_test.go:streamTerminal
+    to_name: streamTerminal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW8AReusedIdIsANewGenerationAnEarlierTerminalCannotClose
+    to_name: testing
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW9AnErrorDoesNotEraseTheReport
+    to_name: T
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW9AnErrorDoesNotEraseTheReport
+    to_name: common.Fatal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW9AnErrorDoesNotEraseTheReport
+    to_name: common.Fatalf
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW9AnErrorDoesNotEraseTheReport
+    to_id: internal/workflow/finding_accounting_test.go:faAccounting
+    to_name: faAccounting
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW9AnErrorDoesNotEraseTheReport
+    to_id: internal/workflow/runners_test.go:invokeClaude
+    to_name: invokeClaude
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW9AnErrorDoesNotEraseTheReport
+    to_id: internal/workflow/engine.go:parseFindingResponses
+    to_name: parseFindingResponses
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW9AnErrorDoesNotEraseTheReport
+    to_id: internal/workflow/engine.go:settledInvocation.Err
+    to_name: settledInvocation.Err
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW9AnErrorDoesNotEraseTheReport
+    to_id: internal/workflow/engine.go:settledInvocation.Report
+    to_name: settledInvocation.Report
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW9AnErrorDoesNotEraseTheReport
+    to_id: internal/workflow/engine.go:settledInvocation.Returned
+    to_name: settledInvocation.Returned
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestW9AnErrorDoesNotEraseTheReport
+    to_name: testing
+    file: internal/workflow/runners_test.go
   - from: internal/workflow/runners_test.go:TestWithNoResolverTheAdapterIsStillTheProviderCommandLine
     to_id: internal/config/config.go:Agent~type
     to_name: Agent
@@ -239204,6 +240951,234 @@ code_references:
     to_name: strings
     file: internal/workflow/runners_test.go
   - from: internal/workflow/runners_test.go:TestWithNoResolverTheAdapterIsStillTheProviderCommandLine
+    to_name: testing
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:invokeClaude
+    to_name: Join
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:invokeClaude
+    to_id: internal/agent/agent.go:Result~type
+    to_name: Result
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:invokeClaude
+    to_name: T
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:invokeClaude
+    to_name: WriteFile
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:invokeClaude
+    to_name: common.Fatal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:invokeClaude
+    to_name: common.Helper
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:invokeClaude
+    to_name: common.TempDir
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:invokeClaude
+    to_name: github.com/globulario/sensei-code/internal/agent
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:invokeClaude
+    to_name: os
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:invokeClaude
+    to_name: path/filepath
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:invokeClaude
+    to_id: internal/workflow/runners_test.go:runClaude
+    to_name: runClaude
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:invokeClaude
+    to_id: internal/workflow/engine.go:settledInvocation~type
+    to_name: settledInvocation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:invokeClaude
+    to_name: testing
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:lines
+    to_name: Join
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:lines
+    to_name: strings
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/config/config.go:Agent~type
+    to_name: Agent
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/config/config.go:Agent.Args
+    to_name: Agent.Args
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/config/config.go:Agent.Command
+    to_name: Agent.Command
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/config/config.go:Agent.Graph
+    to_name: Agent.Graph
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/config/config.go:Agent.Name
+    to_name: Agent.Name
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_name: Background
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/workflow/engine.go:Engine.SessionID
+    to_name: Engine.SessionID
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/workflow/runners.go:Engine.resolveRunner
+    to_name: Engine.resolveRunner
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/event/event.go:Event~type
+    to_name: Event
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/roles/roles.go:Implementer
+    to_name: Implementer
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/agent/agent.go:Request~type
+    to_name: Request
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/agent/agent.go:Request.Prompt
+    to_name: Request.Prompt
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/agent/agent.go:Request.Role
+    to_name: Request.Role
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/agent/agent.go:Request.TaskID
+    to_name: Request.TaskID
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/agent/agent.go:Request.Workspace
+    to_name: Request.Workspace
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/workflow/runners.go:Resolved.Name
+    to_name: Resolved.Name
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/workflow/runners.go:Resolved.Runner
+    to_name: Resolved.Runner
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/agent/agent.go:Result~type
+    to_name: Result
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/agent/agent.go:Runner.Run
+    to_name: Runner.Run
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/workflow/runners.go:RunnerSpec~type
+    to_name: RunnerSpec
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/workflow/runners.go:RunnerSpec.Agent
+    to_name: RunnerSpec.Agent
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/workflow/runners.go:RunnerSpec.Role
+    to_name: RunnerSpec.Role
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/workflow/runners.go:RunnerSpec.Source
+    to_name: RunnerSpec.Source
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/workflow/runners.go:RunnerSpec.TaskID
+    to_name: RunnerSpec.TaskID
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/event/event.go:SourceClaude
+    to_name: SourceClaude
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_name: T
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_name: common.Fatalf
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_name: common.Helper
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_name: context
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_name: github.com/globulario/sensei-code/internal/agent
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_name: github.com/globulario/sensei-code/internal/config
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_name: github.com/globulario/sensei-code/internal/event
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/workflow/engine.go:settleInvocation
+    to_name: settleInvocation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_id: internal/workflow/engine.go:settledInvocation~type
+    to_name: settledInvocation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:runClaude
+    to_name: testing
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:settledStructuredReport
+    to_name: ReplaceAll
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:settledStructuredReport
+    to_name: T
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:settledStructuredReport
+    to_name: common.Fatalf
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:settledStructuredReport
+    to_name: common.Helper
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:settledStructuredReport
+    to_id: internal/workflow/runners_test.go:invokeClaude
+    to_name: invokeClaude
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:settledStructuredReport
+    to_id: internal/workflow/runners_test.go:lines
+    to_name: lines
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:settledStructuredReport
+    to_id: internal/workflow/engine.go:settledInvocation~type
+    to_name: settledInvocation
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:settledStructuredReport
+    to_id: internal/workflow/runners_test.go:streamResult
+    to_name: streamResult
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:settledStructuredReport
+    to_id: internal/workflow/runners_test.go:streamStart
+    to_name: streamStart
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:settledStructuredReport
+    to_id: internal/workflow/runners_test.go:streamTerminal
+    to_name: streamTerminal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:settledStructuredReport
+    to_name: strings
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:settledStructuredReport
     to_name: testing
     file: internal/workflow/runners_test.go
   - from: internal/workflow/runners_test.go:specFor
