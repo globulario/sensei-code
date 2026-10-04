@@ -41957,6 +41957,264 @@ code_symbols:
     file: internal/workflow/blindspot_test.go
     symbol: printExpr
     kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4AFailedRenderingOfARefTheTreeProvesKeepsTheRest
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4AFailedRenderingOfARefTheTreeProvesKeepsTheRest
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4AStaleRefIsNotTheCurrentWorktreeCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4AStaleRefIsNotTheCurrentWorktreeCandidate
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4AnEmptyPostFormatCaptureThenAFailedRecaptureIsUnknown
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4AnEmptyPostFormatCaptureThenAFailedRecaptureIsUnknown
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4AnErroredTurnsCandidateIsRecordedBeforeItsHandoff
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4AnErroredTurnsCandidateIsRecordedBeforeItsHandoff
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4TheClaimedCandidateStateNeverWritesTheReceipt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4TheClaimedCandidateStateNeverWritesTheReceipt
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4TheInitialCaptureOutcomeIsRecordedBeforeItsReturn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4TheInitialCaptureOutcomeIsRecordedBeforeItsReturn
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W13UnprovenEquivalenceIsNeverMerged
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W13UnprovenEquivalenceIsNeverMerged
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W14IncompleteCannotReopenFalseAbsence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W14IncompleteCannotReopenFalseAbsence
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W15W17TheTypedStateRidesTheExistingTerminal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W15W17TheTypedStateRidesTheExistingTerminal
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W16CandidateTruthDoesNotChangeTheRetry
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W16CandidateTruthDoesNotChangeTheRetry
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W18AFreshEngineReconstructsNothing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W18AFreshEngineReconstructsNothing
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W1W10TheIncompleteTerminalStatesTheCurrentCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W1W10TheIncompleteTerminalStatesTheCurrentCandidate
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W2OneUnmeasurableFieldIsTheOnlyUnknown
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W2OneUnmeasurableFieldIsTheOnlyUnknown
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W3NoCandidateIsNone
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W3NoCandidateIsNone
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W4AReplacedCandidateLeavesNothingBehind
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W4AReplacedCandidateLeavesNothingBehind
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W5AFailedReplacementNeverMixesCandidates
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W5AFailedReplacementNeverMixesCandidates
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W6W11AnEmptiedCandidateIsNotStatedPresent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W6W11AnEmptiedCandidateIsNotStatedPresent
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W7AFailedRecaptureIsUnknownNotNone
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W7AFailedRecaptureIsUnknownNotNone
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W8W12TheRefEnrichesTheCertifiedCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W8W12TheRefEnrichesTheCertifiedCandidate
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4W9AFailedRefRenderingLeavesTheRestMeasured
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4W9AFailedRefRenderingLeavesTheRestMeasured
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:TestDF41A4WorktreeObservationsNeverBorrowAStaleRef
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: TestDF41A4WorktreeObservationsNeverBorrowAStaleRef
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:absenceLanguage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: absenceLanguage
+    kind: var
+  - id: internal/workflow/candidate_observation_incomplete_test.go:branchHistory
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: branchHistory
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:candidateFields
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: candidateFields
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:captureFilter
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: captureFilter
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:committingValidation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: committingValidation
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:currentCapture
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: currentCapture
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:endIncomplete
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: endIncomplete
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:incompleteTask
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: incompleteTask
+    kind: const
+  - id: internal/workflow/candidate_observation_incomplete_test.go:incompleteTerminal.err
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: incompleteTerminal.err
+    kind: var
+  - id: internal/workflow/candidate_observation_incomplete_test.go:incompleteTerminal.events
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: incompleteTerminal.events
+    kind: var
+  - id: internal/workflow/candidate_observation_incomplete_test.go:incompleteTerminal.payload
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: incompleteTerminal.payload
+    kind: var
+  - id: internal/workflow/candidate_observation_incomplete_test.go:incompleteTerminal.receipt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: incompleteTerminal.receipt
+    kind: var
+  - id: internal/workflow/candidate_observation_incomplete_test.go:incompleteTerminal.terminal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: incompleteTerminal.terminal
+    kind: var
+  - id: internal/workflow/candidate_observation_incomplete_test.go:incompleteTerminal.typed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: incompleteTerminal.typed
+    kind: var
+  - id: internal/workflow/candidate_observation_incomplete_test.go:incompleteTerminal~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: incompleteTerminal
+    kind: type
+  - id: internal/workflow/candidate_observation_incomplete_test.go:mentions
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: mentions
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:noAbsence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: noAbsence
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:receiptAndDisagreement
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: receiptAndDisagreement
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:staleRefRig
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: staleRefRig
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:terminate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: terminate
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:typedOutcomeOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: typedOutcomeOf
+    kind: function
+  - id: internal/workflow/candidate_observation_incomplete_test.go:whenPrinting
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/candidate_observation_incomplete_test.go
+    symbol: whenPrinting
+    kind: function
   - id: internal/workflow/closure_episode_test.go:TestAClaimReferenceStillSelectsItsReceipt
     namespace: structural.scip
     language: go
@@ -51851,6 +52109,12 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: Engine.emitRunTerminal
     kind: method
+  - id: internal/workflow/receipt.go:Engine.noteCandidateCaptureFailed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: Engine.noteCandidateCaptureFailed
+    kind: method
   - id: internal/workflow/receipt.go:Engine.noteCandidateCommit
     namespace: structural.scip
     language: go
@@ -51887,6 +52151,12 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: Engine.noteCandidateWorkUnmeasured
     kind: method
+  - id: internal/workflow/receipt.go:Engine.noteCaptureRefused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: Engine.noteCaptureRefused
+    kind: method
   - id: internal/workflow/receipt.go:Engine.noteCapturedTree
     namespace: structural.scip
     language: go
@@ -51898,6 +52168,12 @@ code_symbols:
     language: go
     file: internal/workflow/receipt.go
     symbol: Engine.noteCertifiedCandidate
+    kind: method
+  - id: internal/workflow/receipt.go:Engine.noteCurrentCapture
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: Engine.noteCurrentCapture
     kind: method
   - id: internal/workflow/receipt.go:Engine.noteDeferredQuestion
     namespace: structural.scip
@@ -51989,6 +52265,12 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: Engine.noteWorld
     kind: method
+  - id: internal/workflow/receipt.go:Engine.observeCurrentCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: Engine.observeCurrentCandidate
+    kind: method
   - id: internal/workflow/receipt.go:Engine.refuseRestoration
     namespace: structural.scip
     language: go
@@ -52043,47 +52325,83 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: candidateDigestSource
     kind: const
-  - id: internal/workflow/receipt.go:candidateObservation.commit
+  - id: internal/workflow/receipt.go:candidateObservation.candBase
     namespace: structural.scip
     language: go
     file: internal/workflow/receipt.go
-    symbol: candidateObservation.commit
+    symbol: candidateObservation.candBase
     kind: var
-  - id: internal/workflow/receipt.go:candidateObservation.diff
+  - id: internal/workflow/receipt.go:candidateObservation.candCommit
     namespace: structural.scip
     language: go
     file: internal/workflow/receipt.go
-    symbol: candidateObservation.diff
+    symbol: candidateObservation.candCommit
     kind: var
-  - id: internal/workflow/receipt.go:candidateObservation.parent
+  - id: internal/workflow/receipt.go:candidateObservation.candDiff
     namespace: structural.scip
     language: go
     file: internal/workflow/receipt.go
-    symbol: candidateObservation.parent
+    symbol: candidateObservation.candDiff
     kind: var
-  - id: internal/workflow/receipt.go:candidateObservation.relation
+  - id: internal/workflow/receipt.go:candidateObservation.candParent
     namespace: structural.scip
     language: go
     file: internal/workflow/receipt.go
-    symbol: candidateObservation.relation
+    symbol: candidateObservation.candParent
     kind: var
-  - id: internal/workflow/receipt.go:candidateObservation.rendering
+  - id: internal/workflow/receipt.go:candidateObservation.candRendering
     namespace: structural.scip
     language: go
     file: internal/workflow/receipt.go
-    symbol: candidateObservation.rendering
+    symbol: candidateObservation.candRendering
     kind: var
-  - id: internal/workflow/receipt.go:candidateObservation.state
+  - id: internal/workflow/receipt.go:candidateObservation.candTree
     namespace: structural.scip
     language: go
     file: internal/workflow/receipt.go
-    symbol: candidateObservation.state
+    symbol: candidateObservation.candTree
     kind: var
-  - id: internal/workflow/receipt.go:candidateObservation.tree
+  - id: internal/workflow/receipt.go:candidateObservation.candidateState
     namespace: structural.scip
     language: go
     file: internal/workflow/receipt.go
-    symbol: candidateObservation.tree
+    symbol: candidateObservation.candidateState
+    kind: var
+  - id: internal/workflow/receipt.go:candidateObservation.capturedTree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.capturedTree
+    kind: var
+  - id: internal/workflow/receipt.go:candidateObservation.certified
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.certified
+    kind: var
+  - id: internal/workflow/receipt.go:candidateObservation.contentChanged
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.contentChanged
+    kind: method
+  - id: internal/workflow/receipt.go:candidateObservation.digestRelation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.digestRelation
+    kind: var
+  - id: internal/workflow/receipt.go:candidateObservation.established
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.established
+    kind: method
+  - id: internal/workflow/receipt.go:candidateObservation.unmeasured
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.unmeasured
     kind: var
   - id: internal/workflow/receipt.go:candidateObservation~type
     namespace: structural.scip
@@ -52157,18 +52475,42 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: candidateRef
     kind: type
+  - id: internal/workflow/receipt.go:candidateWith
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateWith
+    kind: function
+  - id: internal/workflow/receipt.go:certifiedCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: certifiedCandidate
+    kind: function
   - id: internal/workflow/receipt.go:ctx
     namespace: structural.scip
     language: go
     file: internal/workflow/receipt.go
     symbol: ctx
     kind: var
+  - id: internal/workflow/receipt.go:emptyCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: emptyCandidate
+    kind: function
   - id: internal/workflow/receipt.go:error
     namespace: structural.scip
     language: go
     file: internal/workflow/receipt.go
     symbol: error
     kind: var
+  - id: internal/workflow/receipt.go:erroredWorkerCapture
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: erroredWorkerCapture
+    kind: const
   - id: internal/workflow/receipt.go:fileDigest
     namespace: structural.scip
     language: go
@@ -52199,12 +52541,36 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: identityFromRef
     kind: function
+  - id: internal/workflow/receipt.go:openingCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: openingCandidate
+    kind: function
   - id: internal/workflow/receipt.go:osExecutable
     namespace: structural.scip
     language: go
     file: internal/workflow/receipt.go
     symbol: osExecutable
     kind: var
+  - id: internal/workflow/receipt.go:postFormatCapture
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: postFormatCapture
+    kind: const
+  - id: internal/workflow/receipt.go:postValidationCapture
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: postValidationCapture
+    kind: const
+  - id: internal/workflow/receipt.go:postWorkerCapture
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: postWorkerCapture
+    kind: const
   - id: internal/workflow/receipt.go:readCandidateRef
     namespace: structural.scip
     language: go
@@ -52223,59 +52589,11 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: receiptFacts.base
     kind: var
-  - id: internal/workflow/receipt.go:receiptFacts.candBase
+  - id: internal/workflow/receipt.go:receiptFacts.candidateObservation
     namespace: structural.scip
     language: go
     file: internal/workflow/receipt.go
-    symbol: receiptFacts.candBase
-    kind: var
-  - id: internal/workflow/receipt.go:receiptFacts.candCommit
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/receipt.go
-    symbol: receiptFacts.candCommit
-    kind: var
-  - id: internal/workflow/receipt.go:receiptFacts.candDiff
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/receipt.go
-    symbol: receiptFacts.candDiff
-    kind: var
-  - id: internal/workflow/receipt.go:receiptFacts.candParent
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/receipt.go
-    symbol: receiptFacts.candParent
-    kind: var
-  - id: internal/workflow/receipt.go:receiptFacts.candRendering
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/receipt.go
-    symbol: receiptFacts.candRendering
-    kind: var
-  - id: internal/workflow/receipt.go:receiptFacts.candTree
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/receipt.go
-    symbol: receiptFacts.candTree
-    kind: var
-  - id: internal/workflow/receipt.go:receiptFacts.candidateState
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/receipt.go
-    symbol: receiptFacts.candidateState
-    kind: var
-  - id: internal/workflow/receipt.go:receiptFacts.capturedTree
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/receipt.go
-    symbol: receiptFacts.capturedTree
-    kind: var
-  - id: internal/workflow/receipt.go:receiptFacts.certified
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/receipt.go
-    symbol: receiptFacts.certified
+    symbol: receiptFacts.candidateObservation
     kind: var
   - id: internal/workflow/receipt.go:receiptFacts.deferredQuestion
     namespace: structural.scip
@@ -52288,12 +52606,6 @@ code_symbols:
     language: go
     file: internal/workflow/receipt.go
     symbol: receiptFacts.digest
-    kind: var
-  - id: internal/workflow/receipt.go:receiptFacts.digestRelation
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/receipt.go
-    symbol: receiptFacts.digestRelation
     kind: var
   - id: internal/workflow/receipt.go:receiptFacts.executable
     namespace: structural.scip
@@ -52355,6 +52667,12 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: receiptFacts.provider
     kind: var
+  - id: internal/workflow/receipt.go:receiptFacts.replaceCurrentCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: receiptFacts.replaceCurrentCandidate
+    kind: method
   - id: internal/workflow/receipt.go:receiptFacts.restorationRefusal
     namespace: structural.scip
     language: go
