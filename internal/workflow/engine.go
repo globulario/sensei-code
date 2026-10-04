@@ -124,6 +124,10 @@ type Engine struct {
 	// invocations holds each implementer invocation of a task, settled before
 	// any routing read it. In memory only: persistence is not this record's job.
 	invocations map[string][]settledInvocation
+	// completions holds each task's live review-cycle completion obligation
+	// (implementer_incomplete.go). In memory only: crossing process death is
+	// not this record's job.
+	completions map[string]*cycleCompletion
 	// closures counts gap-closure rounds already spent on one condition within
 	// one task, so a gap that does not actually close cannot loop forever.
 	//
@@ -853,8 +857,15 @@ func (e *Engine) terminateAuthorityOutcome(ctx context.Context, taskID, task str
 			runreceipt.OutcomeStopped, e.candidateStateFor(taskID), humanStopNote, nil)
 		e.reportOutcome(context.WithoutCancel(ctx), behaviourStopped, task, humanStopNote)
 	default:
+		// A typed operational state rides the failed terminal's payload; it
+		// is not a terminal kind of its own.
+		var payload any
+		var incomplete *ImplementerIncomplete
+		if errors.As(err, &incomplete) {
+			payload = incomplete
+		}
 		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
-			runreceipt.OutcomeFailed, e.candidateStateFor(taskID), err.Error(), nil)
+			runreceipt.OutcomeFailed, e.candidateStateFor(taskID), err.Error(), payload)
 		e.reportOutcome(ctx, behaviourFailure, task, err.Error())
 	}
 }
@@ -3018,6 +3029,62 @@ func (e *Engine) settledInvocations(taskID string) []settledInvocation {
 	return append([]settledInvocation(nil), e.invocations[taskID]...)
 }
 
+// retainReturnedResponses reconciles an invocation that RETURNED and also
+// carried an error into its cycle's completion obligation, before the error's
+// route is taken. Its report is the one 70A2 settled, judged by the canonical
+// validator against the candidate as the invocation left it; no validation ran
+// on that candidate, so no evidence finding is discharged here, and a retained
+// response nothing contradicts is not judged again. It retains facts only: the
+// route the error takes -- and whether that route counts the invocation -- is
+// selected afterwards, by the route owner.
+func (e *Engine) retainReturnedResponses(ctx context.Context, taskID string, cycle int, tc *taskContext, workspace string, settled settledInvocation) {
+	open, ok := e.openReview(taskID)
+	if !ok || len(outstandingFindings(open)) == 0 {
+		return
+	}
+	fresh, _ := parseFindingResponses(strings.TrimSpace(settled.Report))
+	obligation := e.establishCycleCompletion(taskID, cycle, open)
+	responses, _, conflicted := obligation.responsesFor(fresh)
+	candidate := gitx.Repo{Root: workspace}
+	var moved map[string]bool
+	if capture, err := candidate.CandidateCapture(ctx, tc.Identity.BaseSHA, tc.Files); err == nil {
+		moved, _ = movedPathsSince(ctx, candidate, tc.Identity.BaseSHA, open.CandidateTree, capture.Diff)
+	}
+	judging := obligation.judging(conflicted)
+	account := accountForFindings(judging, responses, moved, validation.Bundle{}, nil)
+	obligation.absorb(judging, account, responses, settled)
+	e.saveCycleCompletion(obligation)
+}
+
+// reportIncompleteAttempt emits the machine-readable record of one counted
+// incomplete attempt.
+func (e *Engine) reportIncompleteAttempt(taskID string, c *cycleCompletion, extra map[string]any) {
+	payload := map[string]any{
+		"review_cycle": c.Cycle, "review_attempt": c.ReviewAttempt,
+		"plan_attempt_id": c.PlanAttemptID, "attempts": c.Attempts,
+		"owed_findings": c.Owed(), "retained_findings": c.RetainedIDs(),
+		"open_operations": append([]string{}, c.OpenOperations...),
+	}
+	for k, v := range extra {
+		payload[k] = v
+	}
+	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		fmt.Sprintf("review cycle %d is incomplete after implementer attempt %d of %d; still owed: %s",
+			c.Cycle, c.Attempts, maxIncompleteImplementerAttempts, orNone(strings.Join(c.Owed(), ", "), "none")),
+		map[string]any{"implementer_incomplete": payload}))
+}
+
+// implementerRemains reports whether any of rest is eligible to implement the
+// continuing candidate: whether a handoff has someone to serve the cycle.
+func (e *Engine) implementerRemains(taskID string, rest []config.Agent, continuing string) bool {
+	for _, w := range rest {
+		if _, excluded := e.implementerExcluded(taskID, w.Name, continuing); !excluded {
+			return true
+		}
+	}
+	return false
+}
+
 // tc is a pointer because the change report is produced here and read by the
 // caller when it offers publication. Taking it by value silently dropped the
 // report, and the pull request body went out with the evidence missing.
@@ -3063,7 +3130,22 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			"declared but not mechanically enforced: "+strings.Join(names, ", "), nil))
 	}
 
-	for cycle := 1; cycle <= e.Config.Workflow.ReviewCycles; cycle++ {
+	// A rebound or handed-over invocation -- another runner or provider this
+	// live process selected while a cycle's obligation is outstanding -- continues the cycle's completion obligation rather than
+	// the handover's full finding list: it is asked only for what is still owed,
+	// and it serves the obligation's OWN cycle. Restarting at cycle 1 would
+	// stamp the rebound invocation, its candidate and its review with another
+	// cycle's number and mint review slots the cycle never had.
+	firstCycle := 1
+	if c, ok := e.liveCycleCompletion(taskID); ok && c.Continuing {
+		firstCycle = c.Cycle
+		feedback = c.retryFeedback("An earlier implementer invocation of this review cycle did not complete it; this invocation continues the same cycle.", c.OpenOperations)
+	}
+	// sameCycle is set by an incomplete implementer attempt that retries ITS
+	// cycle: the next iteration serves the same logical review cycle and spends
+	// nothing of the review-cycle budget.
+	sameCycle := false
+	for cycle := firstCycle; cycle <= e.Config.Workflow.ReviewCycles; cycle = nextReviewCycle(cycle, &sameCycle) {
 		guidance := e.takeNotes(taskID)
 		if len(guidance) != 0 {
 			e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.GuidanceDelivered,
@@ -3073,6 +3155,9 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// workerRan says whether this cycle produced a response at all. A
 		// resumed review with no worker turn has nothing to account for.
 		workerRan := false
+		// settled is this cycle's implementer invocation as 70A2 settled it:
+		// the only provider fact the completion obligation reads.
+		var settled settledInvocation
 		// A resumed awaiting-review task reviews the candidate it already has
 		// before anything touches it. Only the first cycle: if that review asks
 		// for a revision, the ordinary loop resumes and cycle two calls a worker
@@ -3087,11 +3172,19 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				"resuming at the review boundary: the candidate stands and owes an independent review, "+
 					"so it is reviewed before any worker is called", nil))
 		} else {
+			// THE CYCLE'S OBLIGATION IS ESTABLISHED BEFORE ANY RUNNER IS
+			// RESOLVED: whatever ends this invocation -- a resolution failure,
+			// an unavailable provider, a returned error -- has an obligation
+			// for its route to keep live for the next implementer.
+			e.serveCycleCompletion(taskID, cycle)
 			prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance, joinGrants(renderProspectiveGrants(e.prospectiveGrants(taskID)), renderTestEditGrants(e.testEditGrants(taskID))))
 			impl, err := e.resolveRunner(RunnerSpec{
 				Role: roles.Implementer, Agent: worker, Source: sourceFor(worker.Name), TaskID: taskID, Env: guardEnv,
 			})
 			if err != nil {
+				// No invocation occurred: the cycle stays live for the next
+				// provider, and nothing is counted.
+				e.routeCycle(taskID, cycle, routeProviderRebound)
 				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 			}
 			// The worker's own text is the artifact of a read-only plan.
@@ -3100,15 +3193,29 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			result, err := impl.Runner.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt, Graph: e.graphFor(taskID)}, e.emit)
 			// Settled BEFORE any route reads the invocation, so neither an
 			// error nor a role unavailability can discard what it returned.
-			settled := settleInvocation(impl.Name, cycle, result, err)
+			settled = settleInvocation(impl.Name, cycle, result, err)
 			e.recordInvocation(taskID, settled)
 			if settled.Err != nil {
 				// Attributed HERE, where the implementer turn was asked, so
 				// nothing downstream has to guess which role a provider
 				// refusal belongs to.
-				if blocked := roleUnavailable(roles.Implementer, impl.Name, settled.Err); blocked != nil {
+				blocked := roleUnavailable(roles.Implementer, impl.Name, settled.Err)
+				// An error does not unsay what the invocation returned: its
+				// validated responses are kept for the cycle before the route
+				// is taken.
+				if settled.Returned {
+					e.retainReturnedResponses(ctx, taskID, cycle, tc, workspace, settled)
+				}
+				// The cycle stays live for the next implementer either way,
+				// even when nothing is still owed. An unavailable provider is
+				// never counted; an ordinary error is counted by the outer
+				// handoff (handOffCycle) if it passes an incomplete
+				// obligation to another implementer.
+				if blocked != nil {
+					e.routeCycle(taskID, cycle, routeProviderRebound)
 					return candidateNotConverged, plan, lastReview, lastAudit, blocked
 				}
+				e.routeCycle(taskID, cycle, routeOrdinaryError)
 				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, settled.Err)
 			}
 			report = strings.TrimSpace(settled.Text)
@@ -3477,7 +3584,29 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		accounted := false
 		if open, ok := e.openReview(taskID); ok && workerRan {
 			if outstanding := outstandingFindings(open); len(outstanding) != 0 {
-				responses, perr := parseFindingResponses(report)
+				// THE CYCLE'S OBLIGATION, not this invocation's: established
+				// for the open review under the operative PlanAttempt, or the
+				// one an earlier invocation of the same cycle left. Retained
+				// responses are judged again beside this invocation's own
+				// responses for what is still owed.
+				//
+				// Only an invocation 70A2 settled as RETURNED is reconciled into
+				// it, from the report that settlement carries. Reaching this
+				// branch is not a return: an invocation without that fact keeps
+				// the pre-existing one-shot accounting, retains nothing and is
+				// never counted as an attempt.
+				var obligation *cycleCompletion
+				source := report
+				if settled.Returned {
+					source = strings.TrimSpace(settled.Report)
+					obligation = e.establishCycleCompletion(taskID, cycle, open)
+				}
+				fresh, perr := parseFindingResponses(source)
+				responses := fresh
+				var restated, conflicted []string
+				if obligation != nil {
+					responses, restated, conflicted = obligation.responsesFor(fresh)
+				}
 				// Which files moved since the findings were raised, file by
 				// file: a change is bound to a finding through the files it
 				// touched, never through the digest of the whole candidate.
@@ -3487,7 +3616,49 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				// and only the record read back from task state answers it.
 				readBack, rerr := e.retainFindingEvidence(taskID, cycle, retainedCandidate(tc.Identity.BaseSHA, evidence), outstanding, responses, evidence)
 				account := accountForFindings(outstanding, responses, moved, evidence, readBack)
+				var lapsed []string
+				if obligation != nil {
+					lapsed = obligation.absorb(outstanding, account, responses, settled)
+					e.saveCycleCompletion(obligation)
+				}
+				// The settled invocation's open structured operations, read
+				// from the 70A2 fact and never from the report.
+				unterminated := openOperations(settled)
+				// incomplete counts one settled, returned implementer
+				// invocation that left this cycle owed, and says whether the
+				// cycle is tried again. The third ends it typed: no fourth
+				// invocation. An invocation with no obligation is not counted
+				// and is not retried.
+				incomplete := func() (bool, *ImplementerIncomplete) {
+					if obligation == nil {
+						return false, nil
+					}
+					obligation.transition(routeIncompleteRetry)
+					e.saveCycleCompletion(obligation)
+					e.reportIncompleteAttempt(taskID, obligation, map[string]any{
+						"route": string(obligation.Route), "restated_findings": restated, "conflicted_findings": conflicted,
+						"lapsed_findings": lapsed, "provider": settled.Provider,
+					})
+					if obligation.Exhausted() {
+						return false, obligation.incomplete(unterminated, account.Diagnosis())
+					}
+					return true, nil
+				}
+				// leave selects a route that ends this cycle's continuation:
+				// nothing live is left for the outer handoff to resume.
+				leave := func(route cycleRoute) {
+					if obligation != nil {
+						obligation.transition(route)
+						e.saveCycleCompletion(obligation)
+					}
+				}
 				if len(account.Disputes) != 0 {
+					// A dispute leaves its finding owed, but no implementer may
+					// serve the cycle again until the architect has decided it:
+					// the obligation keeps its facts, is not live and counts
+					// nothing while that decision is unresolved.
+					leave(routeDisputeEscalation)
+					disputedAttempt := e.operativePlanAttempt(taskID).ID
 					// A classification disagreement is a ROUTE, not a licence:
 					// it goes to the architect by the same escalation a
 					// reviewer's boundary takes, and it discharges nothing. The
@@ -3532,8 +3703,36 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					}
 					applyPlanScope(tc, revised)
 					plan = revised.Plan
-					feedback = "The architect resolved the classification dispute. The reviewer's class stands and every finding below is still owed a response of that class: " +
-						account.Diagnosis() + "\n\nReconcile the current candidate with the revised plan."
+					// The continuation stays inside this cycle, and the
+					// obligation crosses the new PlanAttempt only through the
+					// explicit continuation check: same open review, same
+					// findings by full identity, bound to the attempt the
+					// dispute was raised under.
+					if obligation == nil {
+						feedback = "The architect resolved the classification dispute. The reviewer's class stands and every finding below is still owed a response of that class: " +
+							account.Diagnosis() + "\n\nReconcile the current candidate with the revised plan."
+						continue
+					}
+					if !e.continueCycleCompletion(taskID, disputedAttempt) {
+						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
+							"review cycle %d's completion obligation could not be continued under the revised plan attempt", cycle)
+					}
+					c, ok := e.liveCycleCompletion(taskID)
+					if !ok {
+						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
+							"review cycle %d's completion obligation could not be continued under the revised plan attempt", cycle)
+					}
+					// Only now -- the architect decided and the obligation is
+					// explicitly bound to the adopted attempt -- does the
+					// workflow retry the cycle, and only now is the invocation
+					// counted.
+					obligation = c
+					if _, exhausted := incomplete(); exhausted != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, exhausted
+					}
+					feedback = obligation.retryFeedback("The architect resolved the classification dispute. The reviewer's class stands, and a disputed finding is owed a response of that class.", unterminated) +
+						"\n\nReconcile the current candidate with the revised plan."
+					sameCycle = true
 					continue
 				}
 				if !account.Settled() {
@@ -3551,17 +3750,46 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					unchanged := strings.TrimSpace(verdict.InputDiffDigest) != "" && verdict.InputDiffDigest == previousDiffDigest
 					switch {
 					case unchanged && len(account.Evidenced) == 0 && !account.OwesChange():
+						leave(routeDiagnosis)
 						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
 							"the candidate did not change between review cycles: %s produced an identical diff after being asked to revise. "+
 								"The last review asked for: %s. Nothing durable answers it: %s", config.DisplayName(worker.Name), oneLine(lastReview), diagnosis)
 					case len(account.Evidenced) != 0 && account.OnlyChangesOpen():
+						leave(routeDiagnosis)
 						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
 							"the candidate did not converge: %s produced evidence, not code. Its retained evidence answers %s, and evidence never discharges a finding that requires a change: %s",
 							config.DisplayName(worker.Name), strings.Join(account.Evidenced, ", "), diagnosis)
 					}
-					return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
-						"the candidate did not converge: %s", diagnosis)
+					// Every other open finding leaves the invocation incomplete:
+					// the same cycle is tried again for exactly what is owed.
+					retry, exhausted := incomplete()
+					if exhausted != nil {
+						exhausted.Diagnosis = diagnosis
+						return candidateNotConverged, plan, lastReview, lastAudit, exhausted
+					}
+					if !retry {
+						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
+							"the candidate did not converge: %s", diagnosis)
+					}
+					feedback = obligation.retryFeedback("", unterminated)
+					sameCycle = true
+					continue
 				}
+				if len(unterminated) != 0 {
+					// Every finding is answered and the settled invocation still
+					// holds a structured operation it never terminated: it did
+					// not complete its turn.
+					retry, exhausted := incomplete()
+					if exhausted != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, exhausted
+					}
+					if retry {
+						feedback = obligation.retryFeedback("", unterminated)
+						sameCycle = true
+						continue
+					}
+				}
+				leave(routeProgress)
 				accounted = true
 			}
 		}
@@ -8059,7 +8287,11 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	// an earlier, unrelated candidate does not. Empty on a fresh start: there is
 	// no candidate yet to be excluded from.
 	continuing := e.continuingCandidate(taskID)
+	// position is how many configured implementors this loop has reached, so
+	// a handoff can tell whether another one remains to serve the cycle.
+	position := 0
 	for _, worker := range e.Config.Implementors {
+		position++
 		// A PARTICIPANT THAT COULD NOT JUDGE THIS CANDIDATE MAY NOT WRITE IT.
 		//
 		// The handoff ladder selects the next implementor by position, which on
@@ -8291,6 +8523,17 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				map[string]any{"handoff": false, "provider_unavailable": true}))
 			continue
 		}
+		var incomplete *ImplementerIncomplete
+		if errors.As(err, &incomplete) {
+			// IMPLEMENTER_INCOMPLETE. The cycle's incomplete-invocation
+			// allowance is spent, so no further implementer is invoked for it:
+			// not this worker, and not the next one by handoff. The candidate
+			// is kept and the run ends with the typed state.
+			state.OpenFindings(openFindings(review, audit, err))
+			_ = state.Save(e.Repo.Root)
+			fail(err)
+			return
+		}
 		if err != nil && errors.Is(err, errStructural) {
 			// The candidate is kept -- it holds real work -- and the run ends
 			// with the structural reason. Another executor would receive the
@@ -8315,6 +8558,16 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			failures = append(failures, worker.Name+": "+err.Error())
 			if errors.Is(err, errReviewCyclesExhausted) {
 				exhausted = append(exhausted, worker.Name)
+			}
+			// THE HANDOFF IS A ROUTE OF THE LIVE CYCLE. An ordinary error that
+			// left its cycle incomplete is an incomplete attempt once another
+			// implementer will serve that cycle, and the attempt that spends
+			// the allowance ends the run typed: no further implementer.
+			if incomplete := e.handOffCycle(taskID, e.implementerRemains(taskID, e.Config.Implementors[position:], continuing)); incomplete != nil {
+				state.OpenFindings(openFindings(review, audit, incomplete))
+				_ = state.Save(e.Repo.Root)
+				fail(incomplete)
+				return
 			}
 			// The candidate stays: it holds real work, and the reviewer's
 			// unresolved findings travel with it to whoever picks it up next.
