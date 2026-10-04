@@ -464,3 +464,272 @@ func TestARefusalBeforeItsAttemptStartedSeedsNoRepetitionState(t *testing.T) {
 		t.Fatalf("a refusal after its start was not admitted: %+v", got)
 	}
 }
+
+// 70B1 (RULING-153): THE CHECKPOINT'S FRAMING AND TRANSACTION RECORDS.
+
+const (
+	ckptA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	ckptB = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+)
+
+func liveCheckpoint() Checkpoint {
+	return Checkpoint{Version: CheckpointVersion, CheckpointID: ckptA, TaskID: "t1", PlanAttemptID: "pa-1",
+		Status: CheckpointLive, Inputs: []byte(`{"review_cycle":2}`)}
+}
+
+// W5 UNKNOWN STATUS. The durable status set is exactly live, blocked,
+// exhausted and retired; serving, closed and anything else are refused before
+// they are encoded and when they are read. A retirement is a closed reason and
+// only a retired checkpoint states one.
+func TestB1W5AFifthCheckpointStatusIsRefused(t *testing.T) {
+	for _, s := range []CheckpointStatus{CheckpointLive, CheckpointBlocked, CheckpointExhausted} {
+		c := liveCheckpoint()
+		c.Status = s
+		if _, err := EncodeCheckpoint(c); err != nil {
+			t.Fatalf("the durable status %s was refused: %v", s, err)
+		}
+	}
+	for _, s := range []CheckpointStatus{"serving", "closed", "LIVE", ""} {
+		c := liveCheckpoint()
+		c.Status = s
+		if _, err := EncodeCheckpoint(c); err == nil {
+			t.Fatalf("status %q was encoded as a durable checkpoint status", s)
+		}
+	}
+	valid, err := EncodeCheckpoint(liveCheckpoint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{`"serving"`, `"closed"`} {
+		raw := []byte(replaceOnce(string(valid), `"live"`, s))
+		if _, err := DecodeCheckpoint(raw); err == nil {
+			t.Fatalf("a checkpoint read back with status %s was accepted", s)
+		}
+	}
+	retired := liveCheckpoint()
+	retired.Status = CheckpointRetired
+	for _, r := range []RetirementReason{"", "done, more or less", "closed"} {
+		retired.Retirement = r
+		if _, err := EncodeCheckpoint(retired); err == nil {
+			t.Fatalf("a retired checkpoint with retirement reason %q was encoded", r)
+		}
+	}
+	for _, r := range []RetirementReason{RetiredCompleted, RetiredSupersededPlanAttempt, RetiredReplacedCheckpoint} {
+		retired.Retirement = r
+		if _, err := EncodeCheckpoint(retired); err != nil {
+			t.Fatalf("the typed retirement %s was refused: %v", r, err)
+		}
+	}
+	live := liveCheckpoint()
+	live.Retirement = RetiredCompleted
+	if _, err := EncodeCheckpoint(live); err == nil {
+		t.Fatal("a live checkpoint stating a retirement reason was encoded")
+	}
+}
+
+func replaceOnce(s, old, new string) string {
+	for i := 0; i+len(old) <= len(s); i++ {
+		if s[i:i+len(old)] == old {
+			return s[:i] + new + s[i+len(old):]
+		}
+	}
+	return s
+}
+
+// W6 STRICT EOF. Exactly one complete canonical checkpoint and then the end:
+// a trailing bracket, brace, second value or arbitrary bytes is malformed;
+// trailing whitespace is not.
+func TestB1W6TheCheckpointDecoderRequiresEOFAfterOneValue(t *testing.T) {
+	valid, err := EncodeCheckpoint(liveCheckpoint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, err := DecodeCheckpoint(append(append([]byte(nil), valid...), " \n\t"...)); err != nil || c.CheckpointID != ckptA {
+		t.Fatalf("one canonical checkpoint followed by whitespace was refused: %v", err)
+	}
+	for name, trailer := range map[string]string{
+		"bracket": "]", "brace": "}", "object": `{"checkpoint_id":"x"}`, "value": "1", "text": "trailing prose",
+		"spaced brace": "\n}", "null": "null",
+	} {
+		raw := append(append([]byte(nil), valid...), trailer...)
+		if _, err := DecodeCheckpoint(raw); err == nil {
+			t.Fatalf("a checkpoint followed by a trailing %s was accepted", name)
+		}
+	}
+	// The same law for every strictly framed value, before any canonical
+	// comparison could notice: one value, then only whitespace.
+	var b CheckpointBinding
+	if err := DecodeExactlyOne([]byte(`{"checkpoint_id":"x"}`+" \n"), &b); err != nil || b.CheckpointID != "x" {
+		t.Fatalf("one value followed by whitespace was refused: %v", err)
+	}
+	for _, trailer := range []string{"]", "}", `{"checkpoint_id":"y"}`, "1", "text"} {
+		if err := DecodeExactlyOne([]byte(`{"checkpoint_id":"x"}`+trailer), &b); err == nil {
+			t.Fatalf("a value followed by %q was decoded as exactly one", trailer)
+		}
+	}
+	if _, err := DecodeCheckpoint([]byte(replaceOnce(string(valid), `{`, `{"unknown":1,`))); err == nil {
+		t.Fatal("a checkpoint carrying an unknown field was accepted")
+	}
+	if _, err := DecodeCheckpoint([]byte(replaceOnce(string(valid), `,`, ` ,`))); err == nil {
+		t.Fatal("a checkpoint that is not its canonical encoding was accepted")
+	}
+}
+
+func checkpointEvent(kind event.Kind, source event.Source, session, task string, b CheckpointBinding) event.Event {
+	return event.New(session, task, source, kind, "checkpoint", b)
+}
+
+func boundCheckpoint(id string) CheckpointBinding {
+	return CheckpointBinding{CheckpointID: id, TaskID: "t1", PlanAttemptID: "pa-1", Status: CheckpointLive,
+		PayloadDigest: "payload-" + id[:4], ReplayDigest: "replay-" + id[:4]}
+}
+
+// W14 THE PROJECTION KEEPS OWNERSHIP. Source and SessionID of every prepared
+// and committed record survive the projection a commit is proven from.
+func TestB1W14TheCheckpointProjectionPreservesSourceAndSession(t *testing.T) {
+	b := boundCheckpoint(ckptA)
+	got := CheckpointRecords([]event.Event{
+		checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s1", "t1", b),
+		checkpointEvent(event.CheckpointCommitted, event.SourceClaude, "s2", "t1", b),
+		checkpointEvent(event.CheckpointCommitted, event.SourceSystem, "s1", "t2", b),
+	}, "t1")
+	if len(got) != 2 {
+		t.Fatalf("the projection holds %d records of t1, want 2: %+v", len(got), got)
+	}
+	if got[0].Kind != event.CheckpointPrepared || got[0].Source != event.SourceSystem || got[0].SessionID != "s1" || got[0].Binding != b {
+		t.Fatalf("the prepared record lost its ownership: %+v", got[0])
+	}
+	if got[1].Kind != event.CheckpointCommitted || got[1].Source != event.SourceClaude || got[1].SessionID != "s2" {
+		t.Fatalf("the committed record lost its ownership: %+v", got[1])
+	}
+}
+
+// W13 PREPARED/COMMITTED OWNERSHIP. A commit is authoritative only beside an
+// EARLIER engine-sourced prepare of the same session and task binding exactly
+// the same checkpoint, plan attempt, payload digest and ReplayDigest. Any one
+// difference -- or a commit with no prepare, or one prepared after it -- leaves
+// the older proven checkpoint the committed one.
+func TestB1W13APreparedCommittedPairMustProveItsOwnership(t *testing.T) {
+	older, newer := boundCheckpoint(ckptA), boundCheckpoint(ckptB)
+	base := []event.Event{
+		checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s1", "t1", older),
+		checkpointEvent(event.CheckpointCommitted, event.SourceSystem, "s1", "t1", older),
+	}
+	if got, ok := CommittedCheckpoint(base, "t1", "s1"); !ok || got != older {
+		t.Fatalf("premise: the owned pair is not the committed checkpoint: %+v %v", got, ok)
+	}
+	pair := func(prepare, commit event.Event) []event.Event {
+		return append(append([]event.Event(nil), base...), prepare, commit)
+	}
+	prepared := checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s1", "t1", newer)
+	if got, ok := CommittedCheckpoint(pair(prepared, checkpointEvent(event.CheckpointCommitted, event.SourceSystem, "s1", "t1", newer)), "t1", "s1"); !ok || got != newer {
+		t.Fatalf("premise: an owned newer pair did not become the committed checkpoint: %+v", got)
+	}
+	differ := map[string]func(b *CheckpointBinding){
+		"plan attempt":   func(b *CheckpointBinding) { b.PlanAttemptID = "pa-2" },
+		"payload digest": func(b *CheckpointBinding) { b.PayloadDigest = "other" },
+		"replay digest":  func(b *CheckpointBinding) { b.ReplayDigest = "other" },
+		"task":           func(b *CheckpointBinding) { b.TaskID = "t2" },
+		"status":         func(b *CheckpointBinding) { b.Status = CheckpointExhausted },
+	}
+	for name, mutate := range differ {
+		c := newer
+		mutate(&c)
+		if got, _ := CommittedCheckpoint(pair(prepared, checkpointEvent(event.CheckpointCommitted, event.SourceSystem, "s1", "t1", c)), "t1", "s1"); got != older {
+			t.Fatalf("a commit with a different %s was authoritative: %+v", name, got)
+		}
+	}
+	commit := checkpointEvent(event.CheckpointCommitted, event.SourceSystem, "s1", "t1", newer)
+	for name, history := range map[string][]event.Event{
+		"non-engine prepare":    pair(checkpointEvent(event.CheckpointPrepared, event.SourceClaude, "s1", "t1", newer), commit),
+		"non-engine commit":     pair(prepared, checkpointEvent(event.CheckpointCommitted, event.SourceReviewer, "s1", "t1", newer)),
+		"other-session prepare": pair(checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s2", "t1", newer), commit),
+		"other-session commit":  pair(prepared, checkpointEvent(event.CheckpointCommitted, event.SourceSystem, "s2", "t1", newer)),
+		"other-task records":    pair(checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s1", "t2", newer), checkpointEvent(event.CheckpointCommitted, event.SourceSystem, "s1", "t2", newer)),
+		"commit before prepare": pair(commit, prepared),
+	} {
+		if got, _ := CommittedCheckpoint(history, "t1", "s1"); got != older {
+			t.Fatalf("a %s was authoritative: %+v", name, got)
+		}
+	}
+	if _, ok := CommittedCheckpoint([]event.Event{prepared}, "t1", "s1"); ok {
+		t.Fatal("a prepared checkpoint with no commit was committed")
+	}
+}
+
+// A written payload reads back byte for byte, a malformed identity cannot name
+// a file, and a payload is never overwritten.
+func TestACheckpointPayloadIsWrittenOnceAndReadBackExactly(t *testing.T) {
+	s, err := New(t.TempDir(), "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := EncodeCheckpoint(liveCheckpoint())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.WriteCheckpoint(ckptA, payload); err != nil {
+		t.Fatal(err)
+	}
+	back, err := s.ReadCheckpoint(ckptA)
+	if err != nil || string(back) != string(payload) {
+		t.Fatalf("the payload did not read back exactly: %v", err)
+	}
+	if err := s.WriteCheckpoint(ckptA, []byte("{}")); err == nil {
+		t.Fatal("a committed payload was overwritten")
+	}
+	if err := s.WriteCheckpoint("../escape", payload); err == nil {
+		t.Fatal("a path was accepted as a checkpoint identity")
+	}
+	if _, found, err := s.CommittedCheckpoint("t1", "s1"); err != nil || found {
+		t.Fatalf("a session with no record is not an established absence: found %v err %v", found, err)
+	}
+}
+
+// W13 THE PREPARED BOUNDARY. A checkpoint's replay boundary is its own owned
+// PREPARED record: not a record another source, session or binding wrote,
+// and not a COMMITTED record. What follows the boundary is outside it.
+func TestB1W13ACheckpointIsBoundedAtItsOwnPreparedRecord(t *testing.T) {
+	b := boundCheckpoint(ckptA)
+	other := b
+	other.ReplayDigest = "replay-other"
+	history := []event.Event{
+		event.New("s1", "t1", event.SourceSystem, event.PlanProposed, "plan", nil),
+		checkpointEvent(event.CheckpointPrepared, event.SourceClaude, "s1", "t1", b),
+		checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s2", "t1", b),
+		checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s1", "t1", other),
+		checkpointEvent(event.CheckpointCommitted, event.SourceSystem, "s1", "t1", b),
+		checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s1", "t1", b),
+		event.New("s1", "t1", event.SourceSystem, event.PlanProposed, "a later transition", nil),
+	}
+	if at, ok := PreparedAt(history, b, "s1"); !ok || at != 5 {
+		t.Fatalf("the boundary is not the owned PREPARED record: %d %v", at, ok)
+	}
+	if _, ok := PreparedAt(history[:5], b, "s1"); ok {
+		t.Fatal("a checkpoint with no owned PREPARED record has a boundary")
+	}
+}
+
+// F3 DURABLE RECORDS. A checkpoint record is appended through the synced path
+// and reads back from the session record; an append that cannot be written is
+// returned, never reported as success.
+func TestB1W15ACheckpointRecordIsAppendedDurably(t *testing.T) {
+	s, err := New(t.TempDir(), "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := boundCheckpoint(ckptA)
+	if err := s.AppendDurable(checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s1", "t1", b)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AppendDurable(checkpointEvent(event.CheckpointCommitted, event.SourceSystem, "s1", "t1", b)); err != nil {
+		t.Fatal(err)
+	}
+	if got, found, err := s.CommittedCheckpoint("t1", "s1"); err != nil || !found || got != b {
+		t.Fatalf("the durably appended pair is not the committed checkpoint: %+v %v %v", got, found, err)
+	}
+	s.path = s.path + "/not-a-file"
+	if err := s.AppendDurable(checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s1", "t1", b)); err == nil {
+		t.Fatal("an append that could not be written was reported durable")
+	}
+}

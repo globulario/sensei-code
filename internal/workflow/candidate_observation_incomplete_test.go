@@ -97,6 +97,7 @@ func endIncomplete(t *testing.T, r *completionRig) incompleteTerminal {
 	if !errors.As(err, &typed) {
 		t.Fatalf("premise: the run did not end IMPLEMENTER_INCOMPLETE: %v", err)
 	}
+	requireExhaustedCheckpointCommitted(t, r.h.engine, "task-1", typed.PlanAttemptID)
 	return terminate(t, r, err)
 }
 
@@ -173,6 +174,7 @@ func TestDF41A4W1W10TheIncompleteTerminalStatesTheCurrentCandidate(t *testing.T)
 	r.h.engine.Config.Validation = committingValidation()
 	x := endIncomplete(t, r)
 	typedOutcomeOf(t, r, x)
+	requireExhaustedCheckpointCommitted(t, r.h.engine, "task-1", x.typed.PlanAttemptID)
 
 	rc := x.receipt
 	if rc.CandidateState != runreceipt.CandidatePresent {

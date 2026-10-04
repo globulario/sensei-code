@@ -966,3 +966,388 @@ func loadRecord(repo, sessionID string) ([]event.Event, error) {
 func recordPath(repo, sessionID string) string {
 	return filepath.Join(repo, ".sensei-code", "sessions", sessionID, "events.jsonl")
 }
+
+// THE DURABLE INCOMPLETE-OBLIGATION CHECKPOINT (70B1, RULING-153).
+//
+// This package owns a checkpoint's FRAMING and its TRANSACTION RECORDS, and
+// nothing about what it means. A checkpoint's inputs are opaque here: they are
+// the canonical inputs the workflow's landed owners consume, and only replaying
+// them through those owners says whether they describe an obligation at all.
+// What is decided here is closed and mechanical: exactly one canonical value,
+// a status and retirement reason read by membership, and which prepared and
+// committed records prove they belong together.
+
+// CheckpointStatus is the closed durable status of a checkpoint. Exactly four
+// values exist. serving is transient and is never durable; closed is not a
+// durable state. Read by membership: anything else is refused.
+type CheckpointStatus string
+
+const (
+	CheckpointLive      CheckpointStatus = "live"
+	CheckpointBlocked   CheckpointStatus = "blocked"
+	CheckpointExhausted CheckpointStatus = "exhausted"
+	CheckpointRetired   CheckpointStatus = "retired"
+)
+
+// Valid reports membership in the closed status vocabulary.
+func (s CheckpointStatus) Valid() bool {
+	switch s {
+	case CheckpointLive, CheckpointBlocked, CheckpointExhausted, CheckpointRetired:
+		return true
+	}
+	return false
+}
+
+// RetirementReason is the closed reason a retired checkpoint states. It is
+// never prose.
+type RetirementReason string
+
+const (
+	RetiredCompleted             RetirementReason = "completed"
+	RetiredSupersededPlanAttempt RetirementReason = "superseded_plan_attempt"
+	RetiredReplacedCheckpoint    RetirementReason = "replaced_checkpoint"
+)
+
+// Valid reports membership in the closed retirement vocabulary.
+func (r RetirementReason) Valid() bool {
+	switch r {
+	case RetiredCompleted, RetiredSupersededPlanAttempt, RetiredReplacedCheckpoint:
+		return true
+	}
+	return false
+}
+
+// CheckpointVersion is the framing version this package reads and writes.
+const CheckpointVersion = 1
+
+// Checkpoint is one durable checkpoint payload: its identity, its ownership,
+// its typed status, and the opaque canonical inputs its owners replay.
+type Checkpoint struct {
+	Version              int              `json:"version"`
+	CheckpointID         string           `json:"checkpoint_id"`
+	PreviousCheckpointID string           `json:"previous_checkpoint_id,omitempty"`
+	TaskID               string           `json:"task_id"`
+	PlanAttemptID        string           `json:"plan_attempt_id"`
+	Status               CheckpointStatus `json:"status"`
+	// Retirement is set exactly when Status is retired.
+	Retirement RetirementReason `json:"retirement,omitempty"`
+	// Inputs are the canonical replay inputs, owned by the workflow package.
+	Inputs json.RawMessage `json:"inputs"`
+}
+
+// checkFraming refuses a checkpoint whose framing is not closed and typed.
+func (c Checkpoint) checkFraming() error {
+	switch {
+	case c.Version != CheckpointVersion:
+		return fmt.Errorf("checkpoint framing version %d is not %d", c.Version, CheckpointVersion)
+	case !validCheckpointID(c.CheckpointID):
+		return fmt.Errorf("checkpoint id %q is not a checkpoint identity", c.CheckpointID)
+	case c.PreviousCheckpointID != "" && !validCheckpointID(c.PreviousCheckpointID):
+		return fmt.Errorf("previous checkpoint id %q is not a checkpoint identity", c.PreviousCheckpointID)
+	case strings.TrimSpace(c.TaskID) == "" || strings.TrimSpace(c.PlanAttemptID) == "":
+		return errors.New("a checkpoint names no task or no plan attempt")
+	case !c.Status.Valid():
+		return fmt.Errorf("checkpoint status %q is not a durable status", c.Status)
+	case c.Status == CheckpointRetired && !c.Retirement.Valid():
+		return fmt.Errorf("a retired checkpoint states retirement reason %q, which is not a retirement reason", c.Retirement)
+	case c.Status != CheckpointRetired && c.Retirement != "":
+		return fmt.Errorf("a %s checkpoint states a retirement reason", c.Status)
+	case len(c.Inputs) == 0:
+		return errors.New("a checkpoint carries no replay inputs")
+	}
+	return nil
+}
+
+// validCheckpointID is the shape of a checkpoint identity: 64 lowercase hex
+// digits. It is also what makes it safe as a file name.
+func validCheckpointID(id string) bool {
+	if len(id) != 64 {
+		return false
+	}
+	for _, r := range id {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// EncodeCheckpoint is the one canonical encoding of a checkpoint. A checkpoint
+// whose framing is not closed and typed is refused before it is encoded.
+func EncodeCheckpoint(c Checkpoint) ([]byte, error) {
+	if err := c.checkFraming(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(c)
+}
+
+// DecodeCheckpoint reads exactly one complete canonical checkpoint and then
+// the end of the payload. A trailing bracket, brace, second value or any other
+// non-whitespace byte is malformed, and so is a payload that is not the
+// canonical encoding of what it decodes to.
+func DecodeCheckpoint(raw []byte) (Checkpoint, error) {
+	var c Checkpoint
+	if err := DecodeExactlyOne(raw, &c); err != nil {
+		return Checkpoint{}, fmt.Errorf("the checkpoint payload is malformed: %w", err)
+	}
+	if err := c.checkFraming(); err != nil {
+		return Checkpoint{}, err
+	}
+	canonical, err := json.Marshal(c)
+	if err != nil {
+		return Checkpoint{}, err
+	}
+	if !bytes.Equal(canonical, bytes.TrimSpace(raw)) {
+		return Checkpoint{}, errors.New("the checkpoint payload is not the canonical encoding of the checkpoint it decodes to")
+	}
+	return c, nil
+}
+
+// DecodeExactlyOne decodes one JSON value into v, refusing an unknown field,
+// and then requires the end of raw: only whitespace may follow the value. The
+// end is established from the decoder's own offset into raw, never by asking
+// the decoder whether more values follow.
+func DecodeExactlyOne(raw []byte, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	if rest := bytes.TrimSpace(raw[dec.InputOffset():]); len(rest) != 0 {
+		return fmt.Errorf("%d byte(s) follow the value", len(rest))
+	}
+	return nil
+}
+
+// CheckpointBinding is what a CHECKPOINT_PREPARED and a CHECKPOINT_COMMITTED
+// record each carry. A commit is authoritative only for the prepare that binds
+// exactly the same values.
+type CheckpointBinding struct {
+	CheckpointID         string           `json:"checkpoint_id"`
+	PreviousCheckpointID string           `json:"previous_checkpoint_id,omitempty"`
+	TaskID               string           `json:"task_id"`
+	PlanAttemptID        string           `json:"plan_attempt_id"`
+	Status               CheckpointStatus `json:"status"`
+	Retirement           RetirementReason `json:"retirement,omitempty"`
+	PayloadDigest        string           `json:"payload_digest"`
+	ReplayDigest         string           `json:"replay_digest"`
+}
+
+// CheckpointRecord is one prepared or committed record as the session holds
+// it. Source and SessionID are the event's own, kept because ownership is
+// proven from them.
+type CheckpointRecord struct {
+	Kind      event.Kind
+	Source    event.Source
+	SessionID string
+	TaskID    string
+	Binding   CheckpointBinding
+	// Malformed says why the record's binding could not be read; such a
+	// record binds nothing.
+	Malformed string
+}
+
+// CheckpointRecords projects every prepared and committed record of taskID,
+// in record order, with the Source and SessionID each was written under.
+func CheckpointRecords(events []event.Event, taskID string) []CheckpointRecord {
+	var out []CheckpointRecord
+	for _, e := range events {
+		if e.TaskID != taskID || (e.Kind != event.CheckpointPrepared && e.Kind != event.CheckpointCommitted) {
+			continue
+		}
+		r := CheckpointRecord{Kind: e.Kind, Source: e.Source, SessionID: e.SessionID, TaskID: e.TaskID}
+		if err := DecodeExactlyOne(e.Payload, &r.Binding); err != nil {
+			r.Malformed = err.Error()
+		} else if !r.Binding.Status.Valid() || (r.Binding.Status == CheckpointRetired) != (r.Binding.Retirement != "") ||
+			(r.Binding.Retirement != "" && !r.Binding.Retirement.Valid()) {
+			r.Malformed = fmt.Sprintf("status %q with retirement %q is not a durable checkpoint state", r.Binding.Status, r.Binding.Retirement)
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// owns reports whether r is an engine-sourced record of taskID written under
+// sessionID that names taskID itself.
+func (r CheckpointRecord) owns(taskID, sessionID string) bool {
+	return r.Malformed == "" && r.Source == event.SourceSystem && r.SessionID == sessionID &&
+		r.TaskID == taskID && r.Binding.TaskID == taskID && validCheckpointID(r.Binding.CheckpointID) &&
+		r.Binding.PayloadDigest != "" && r.Binding.ReplayDigest != ""
+}
+
+// CommittedCheckpoint is the newest committed checkpoint of taskID in this
+// session whose ownership is proven: an engine-sourced COMMITTED record and an
+// EARLIER engine-sourced PREPARED record, both written under sessionID for
+// taskID, binding exactly the same checkpoint, plan attempt, status, payload
+// digest and ReplayDigest. A commit that cannot prove this is not a committed
+// checkpoint, and an older proven one stays the newest.
+func CommittedCheckpoint(events []event.Event, taskID, sessionID string) (CheckpointBinding, bool) {
+	var prepared []CheckpointBinding
+	var found CheckpointBinding
+	ok := false
+	for _, r := range CheckpointRecords(events, taskID) {
+		if !r.owns(taskID, sessionID) {
+			continue
+		}
+		switch r.Kind {
+		case event.CheckpointPrepared:
+			prepared = append(prepared, r.Binding)
+		case event.CheckpointCommitted:
+			for _, p := range prepared {
+				if p == r.Binding {
+					found, ok = r.Binding, true
+					break
+				}
+			}
+		}
+	}
+	return found, ok
+}
+
+// PreparedAt is the record boundary a checkpoint was prepared at: the index in
+// events of the first engine-sourced PREPARED record, written under sessionID,
+// that binds exactly b. The record before that index is the durable state the
+// checkpoint was constructed from, and the only state its replay may read:
+// nothing recorded afterwards can establish it retroactively.
+func PreparedAt(events []event.Event, b CheckpointBinding, sessionID string) (int, bool) {
+	for i, e := range events {
+		if e.Kind != event.CheckpointPrepared || e.TaskID != b.TaskID {
+			continue
+		}
+		r := CheckpointRecords(events[i:i+1], b.TaskID)
+		if len(r) == 1 && r[0].owns(b.TaskID, sessionID) && r[0].Binding == b {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// CommittedCheckpoint reads this session's record and returns the newest
+// committed checkpoint of taskID owned by sessionID. found=false with a nil error is ABSENCE,
+// established by a successful read; an error means the record could not be
+// read and whether an earlier checkpoint exists is UNKNOWN.
+func (s *Store) CommittedCheckpoint(taskID, sessionID string) (CheckpointBinding, bool, error) {
+	history, err := s.ReadRecord()
+	if err != nil {
+		return CheckpointBinding{}, false, err
+	}
+	b, ok := CommittedCheckpoint(history, taskID, sessionID)
+	return b, ok, nil
+}
+
+// ReadRecord is an authoritative read of this session's record. No record
+// file is a session that has written nothing: a successful read of an empty
+// history. Any other failure is an error, and what the record holds -- an
+// earlier checkpoint included -- is then unknown.
+func (s *Store) ReadRecord() ([]event.Event, error) {
+	history, err := s.Load()
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("the session record could not be read, so whether an earlier "+
+			"checkpoint exists is unknown: %w", err)
+	}
+	return history, nil
+}
+
+// WriteCheckpoint durably writes one checkpoint payload under its id. It is
+// written to a temporary file, synced and renamed into place, so a payload
+// that exists is a complete one; an existing payload is never overwritten.
+func (s *Store) WriteCheckpoint(id string, payload []byte) error {
+	if !validCheckpointID(id) {
+		return fmt.Errorf("checkpoint id %q is not a checkpoint identity", id)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	dir := s.checkpointDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	final := filepath.Join(dir, id+".json")
+	if _, err := os.Stat(final); err == nil {
+		return fmt.Errorf("checkpoint %s is already written; a checkpoint payload is never overwritten", id)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, id+".*.tmp")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(payload); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp.Name(), final); err != nil {
+		return err
+	}
+	// The rename is durable only once the directory that names it is.
+	return syncDir(dir)
+}
+
+// AppendDurable appends one event and does not return until it is on stable
+// storage: written, synced and closed, every error returned, and the record's
+// directory synced so a record file it created is named durably too. A
+// checkpoint's PREPARED and COMMITTED records are written through it, because
+// what they publish is authority, and an Append that a crash can lose is not.
+func (s *Store) AppendDurable(e event.Event) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(e); err != nil {
+		return err
+	}
+	if token := buf.Len() - 1; token > maxSessionEvent {
+		return fmt.Errorf("session event for task %q is %d bytes, over the %d-byte maximum a single "+
+			"event may occupy; it is refused before it is written", e.TaskID, token, maxSessionEvent)
+	}
+	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(buf.Bytes()); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return syncDir(filepath.Dir(s.path))
+}
+
+// syncDir makes the entries of dir durable.
+func syncDir(dir string) error {
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	if err := d.Sync(); err != nil {
+		d.Close()
+		return err
+	}
+	return d.Close()
+}
+
+// ReadCheckpoint reads one checkpoint payload back, byte for byte.
+func (s *Store) ReadCheckpoint(id string) ([]byte, error) {
+	if !validCheckpointID(id) {
+		return nil, fmt.Errorf("checkpoint id %q is not a checkpoint identity", id)
+	}
+	return os.ReadFile(filepath.Join(s.checkpointDir(), id+".json"))
+}
+
+func (s *Store) checkpointDir() string {
+	return filepath.Join(filepath.Dir(s.path), "checkpoints")
+}

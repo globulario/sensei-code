@@ -806,6 +806,7 @@ func TestDF41A3W14TheThirdIncompleteAttemptEndsTypedWithNoFourth(t *testing.T) {
 		incomplete.TaskID != "task-1" || incomplete.PlanAttemptID != r.h.engine.operativePlanAttempt("task-1").ID || incomplete.PlanAttemptID == "" {
 		t.Fatalf("the typed outcome is not cycle 2, 3 attempts, f2 owed, bound to the task and attempt: %+v", incomplete)
 	}
+	requireExhaustedCheckpointCommitted(t, r.h.engine, "task-1", incomplete.PlanAttemptID)
 	if !equalInts(r.cycles(), 1, 2, 2, 2) || r.reviews != 1 {
 		t.Fatalf("a fourth invocation ran or the cycle advanced: cycles %v reviews %d", r.cycles(), r.reviews)
 	}
@@ -818,6 +819,7 @@ func TestDF41A3W14TheThirdIncompleteAttemptEndsTypedWithNoFourth(t *testing.T) {
 	if !errors.As(failed, &incomplete) {
 		t.Fatalf("implement() did not end on IMPLEMENTER_INCOMPLETE: %v", failed)
 	}
+	requireExhaustedCheckpointCommitted(t, r.h.engine, "task-1", incomplete.PlanAttemptID)
 	if n := len(r.h.engine.settledInvocations("task-1")); n != 4 {
 		t.Fatalf("the exhausted cycle was handed to another worker: %d invocations", n)
 	}
@@ -837,6 +839,7 @@ func TestDF41A3W14TheThirdIncompleteAttemptEndsTypedWithNoFourth(t *testing.T) {
 		!equalStrings(payload.Owed, "f2") || payload.TaskID != "task-1" || payload.PlanAttemptID == "" {
 		t.Fatalf("the failed terminal's payload is not the typed IMPLEMENTER_INCOMPLETE state: %+v", payload)
 	}
+	requireExhaustedCheckpointCommitted(t, r.h.engine, "task-1", payload.PlanAttemptID)
 }
 
 // W15 THE BOUND IS NOT USER CONFIGURATION. A ten-cycle review budget leaves it
