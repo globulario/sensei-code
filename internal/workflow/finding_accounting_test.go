@@ -265,3 +265,28 @@ func TestW5FindingAccountingDuplicateOrConflictingResponsesStayOwed(t *testing.T
 		}
 	}
 }
+
+// W11 70A1 COMPOSITION (DF-41A2). A successful structured invocation whose
+// report carries the canonical accounting is settled, and the text the success
+// route reads from the settled fact is accounted by this same parser exactly
+// as the raw report is. Settlement adds no parser of its own.
+func TestW11ASettledReportStillComposesWithStructuralAccounting(t *testing.T) {
+	report := "Changed engine.go.\n" + faAccounting
+	s := settledStructuredReport(t, report)
+	if !s.Returned || s.Err != nil || s.Report != report {
+		t.Fatalf("premise: the settled invocation returned the report: %+v", s)
+	}
+	if strings.TrimSpace(s.Text) != report {
+		t.Fatalf("the success route would read %q, not the returned report", s.Text)
+	}
+	settled, err, a := faAccount(t, strings.TrimSpace(s.Text))
+	raw, rawErr, rawAccount := faAccount(t, report)
+	if err != nil || rawErr != nil || len(settled) != 2 || len(raw) != 2 || !a.Settled() || !rawAccount.Settled() {
+		t.Fatalf("the settled report did not account as the raw one: %v %v %s / %s", err, rawErr, a.Diagnosis(), rawAccount.Diagnosis())
+	}
+	for i := range raw {
+		if settled[i].ID != raw[i].ID || settled[i].AnsweredBy != raw[i].AnsweredBy {
+			t.Fatalf("settlement changed response %d: %+v, want %+v", i, settled[i], raw[i])
+		}
+	}
+}

@@ -137,6 +137,71 @@ type Result struct {
 	// say -- can be checked against the review it claims to be about instead of
 	// against its own say-so. Empty means the turn asserted nothing.
 	ReviewDigest string
+	// Invocation is what the concrete adapter observed about this provider
+	// invocation. It is returned on error-bearing returns too, because an
+	// error does not unsay what the process already wrote. Nil means the
+	// adapter observed nothing, never that the invocation returned. A pointer
+	// keeps Result comparable.
+	Invocation *Invocation
+}
+
+// Invocation is one provider invocation as the concrete adapter observed it.
+// It holds observations only: whether completion was reached is decided by
+// whoever settles it, and never from the assistant's prose.
+type Invocation struct {
+	// Transport is the adapter actually used, with the capabilities that
+	// adapter has. It is a property of the invocation, not of the provider.
+	Transport Transport
+	// TransportFailed means the invocation failed before it produced any
+	// result: the process never started, or the adapter refused to run it.
+	TransportFailed bool
+	// Exited and ExitCode are the direct process outcome, when there was a
+	// process and it was seen to exit.
+	Exited   bool
+	ExitCode int
+	// Returned is true only when an invocation result was actually observed:
+	// the return envelope of a structured transport, or the completed output
+	// of a plain-text one. A structured process that exited without its
+	// envelope did not return one.
+	Returned bool
+	// Report is the report text the invocation actually returned.
+	Report string
+	// Lifecycle is the structured operation observations, in the order the
+	// transport emitted them. Empty for a transport without that capability.
+	Lifecycle []LifecycleObservation
+}
+
+// Transport names the concrete adapter of one invocation.
+type Transport struct {
+	Adapter string
+	// Lifecycle says the adapter emits structured lifecycle events. Only an
+	// invocation whose transport has it may yield lifecycle observations.
+	Lifecycle bool
+}
+
+// The concrete adapters this package can observe.
+const (
+	AdapterStreamJSON     = "cli-stream-json"
+	AdapterPlainText      = "cli-plain-text"
+	AdapterCodexAppServer = "codex-app-server"
+)
+
+// LifecycleKind is the kind of one structured operation observation.
+type LifecycleKind string
+
+const (
+	LifecycleStarted  LifecycleKind = "started"
+	LifecycleUpdate   LifecycleKind = "update"
+	LifecycleTerminal LifecycleKind = "terminal"
+)
+
+// LifecycleObservation is one structured operation event. Seq is its position
+// in the invocation's stream; Operation is the id the transport gave it, which
+// is not assumed unique.
+type LifecycleObservation struct {
+	Seq       int
+	Kind      LifecycleKind
+	Operation string
 }
 
 type Runner interface {
@@ -182,16 +247,18 @@ func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Resu
 	// way, so a JSON contract never lands in the human's conversation; what
 	// differs by role is whether the turn inherits that conversation at all.
 	if strings.EqualFold(strings.TrimSpace(c.Name), string(provider.ChatGPT)) {
+		// Refused before any turn was asked: no result exists to observe.
+		refused := Result{Invocation: &Invocation{Transport: Transport{Adapter: AdapterCodexAppServer}, TransportFailed: true}}
 		if req.Role.Mutates() {
-			return Result{}, fmt.Errorf("ChatGPT provider is read-only architectural authority, not an implementation worker")
+			return refused, fmt.Errorf("ChatGPT provider is read-only architectural authority, not an implementation worker")
 		}
 		if !req.Role.Valid() {
-			return Result{}, fmt.Errorf("unknown role %q", req.Role)
+			return refused, fmt.Errorf("unknown role %q", req.Role)
 		}
 		session := provider.ChatGPTForWorkspace(req.Workspace)
 		if req.Graph != nil {
 			if err := session.BindGraph(req.Graph.CodexOverrides()); err != nil {
-				return Result{}, err
+				return refused, err
 			}
 		}
 		var text string
@@ -204,43 +271,55 @@ func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Resu
 			text, err = session.AskFork(ctx, req.Prompt)
 		}
 		if err != nil {
-			return Result{}, err
+			// The session reports the error without saying whether a turn
+			// result existed, so neither a return nor a pre-result failure is
+			// claimed.
+			return Result{Invocation: &Invocation{Transport: Transport{Adapter: AdapterCodexAppServer}}}, err
 		}
+		returned := &Invocation{Transport: Transport{Adapter: AdapterCodexAppServer}, Returned: true, Report: text}
 		if req.Graph != nil {
 			if why := req.Graph.DivergenceIn(text); why != "" {
-				return Result{}, fmt.Errorf("graph binding violated: %s", why)
+				return Result{Invocation: returned}, fmt.Errorf("graph binding violated: %s", why)
 			}
 		}
 		for _, line := range strings.Split(text, "\n") {
 			emit(event.New(c.SessionID, req.TaskID, c.Source, event.Output, line, map[string]string{"stream": "assistant"}))
 		}
 		emit(event.New(c.SessionID, req.TaskID, c.Source, event.AgentFinished, c.label()+" finished", nil))
-		return Result{Text: text, Session: req.session()}, nil
+		return Result{Text: text, Session: req.session(), Invocation: returned}, nil
 	}
 
 	args := append([]string(nil), c.Args...)
 	if req.Graph != nil {
 		bound, err := c.bindGraphArgs(req, args)
 		if err != nil {
-			return Result{}, err
+			return Result{Invocation: &Invocation{Transport: cliTransport(args), TransportFailed: true}}, err
 		}
 		args = bound
 	}
+	inv := &Invocation{Transport: cliTransport(args)}
 	var out strings.Builder
-	_, err := processx.RunWithEnv(ctx, req.Workspace, c.Command, args, c.Env, c.UnsetEnv, bytes.NewBufferString(req.Prompt), func(line processx.Line) {
+	proc, err := processx.RunWithEnv(ctx, req.Workspace, c.Command, args, c.Env, c.UnsetEnv, bytes.NewBufferString(req.Prompt), func(line processx.Line) {
 		if line.Stream == "stdout" {
 			out.WriteString(line.Text)
 			out.WriteByte('\n')
 		}
 		emit(event.New(c.SessionID, req.TaskID, c.Source, event.Output, line.Text, map[string]string{"stream": line.Stream}))
 	})
-	if err != nil {
-		return Result{}, err
+	if err != nil && proc.ExitCode == 0 {
+		// processx reports an exit only with its code; an error without one
+		// is a process that never started or was never waited for.
+		inv.TransportFailed = true
+		return Result{Invocation: inv}, err
 	}
-	text, sid := normalizeOutput(c.Name, out.String())
+	inv.Exited, inv.ExitCode = true, proc.ExitCode
+	text, sid := readOutput(c.Name, inv, out.String())
+	if err != nil {
+		return Result{Invocation: inv}, err
+	}
 	if req.Graph != nil {
 		if why := req.Graph.DivergenceIn(out.String()); why != "" {
-			return Result{}, fmt.Errorf("graph binding violated: %s", why)
+			return Result{Invocation: inv}, fmt.Errorf("graph binding violated: %s", why)
 		}
 	}
 	emit(event.New(c.SessionID, req.TaskID, c.Source, event.AgentFinished, c.label()+" finished", nil))
@@ -248,7 +327,20 @@ func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Resu
 	// and no resume handle is passed to it. That is reported as Fresh rather
 	// than as whatever was requested, because what the caller wanted and what
 	// the transport did are different facts and only the second one is evidence.
-	return Result{Text: text, SessionID: sid, Session: roles.Fresh}, nil
+	return Result{Text: text, SessionID: sid, Session: roles.Fresh, Invocation: inv}, nil
+}
+
+// cliTransport derives the transport from the arguments the process is
+// actually launched with. The provider's name plays no part: a "claude" run
+// without --output-format stream-json speaks plain text, and its output is
+// read as plain text.
+func cliTransport(args []string) Transport {
+	for i, a := range args {
+		if a == "--output-format=stream-json" || a == "--output-format" && i+1 < len(args) && args[i+1] == "stream-json" {
+			return Transport{Adapter: AdapterStreamJSON, Lifecycle: true}
+		}
+	}
+	return Transport{Adapter: AdapterPlainText}
 }
 
 // Activity renders one line of an agent's output as something a human can
@@ -352,32 +444,84 @@ func truncate(s string, limit int) string {
 	return s[:limit-1] + "…"
 }
 
-func normalizeOutput(name, raw string) (string, string) {
-	if name != "claude" {
-		return strings.TrimSpace(raw), ""
+// readOutput records what the process wrote into inv and returns the text
+// callers have always received: the return envelope's result for a structured
+// transport, falling back to the raw output, and the trimmed output otherwise.
+func readOutput(name string, inv *Invocation, raw string) (string, string) {
+	if !inv.Transport.Lifecycle {
+		inv.Returned = true
+		inv.Report = strings.TrimSpace(raw)
+		return inv.Report, ""
 	}
-	var result, sid string
+	var sid string
 	for _, line := range strings.Split(raw, "\n") {
-		var v map[string]any
-		if json.Unmarshal([]byte(line), &v) != nil {
+		var envelope struct {
+			Type      string  `json:"type"`
+			SessionID string  `json:"session_id"`
+			Result    *string `json:"result"`
+			ToolUseID string  `json:"tool_use_id"`
+			// ParentToolUseID links a progress record to the operation it
+			// reports on; the record's own tool_use_id is a heartbeat id.
+			ParentToolUseID string `json:"parent_tool_use_id"`
+			Message         struct {
+				Content json.RawMessage `json:"content"`
+			} `json:"message"`
+		}
+		if json.Unmarshal([]byte(line), &envelope) != nil {
 			continue
 		}
-		if s, _ := v["session_id"].(string); s != "" {
-			sid = s
+		if envelope.SessionID != "" {
+			sid = envelope.SessionID
 		}
-		if v["type"] == "result" {
-			if s, _ := v["result"].(string); s != "" {
-				result = s
+		switch envelope.Type {
+		case "result":
+			inv.Returned = true
+			inv.Report = ""
+			if envelope.Result != nil {
+				inv.Report = *envelope.Result
+			}
+		case "tool_progress":
+			operation := envelope.ParentToolUseID
+			if operation == "" {
+				operation = envelope.ToolUseID
+			}
+			inv.observe(LifecycleUpdate, operation)
+		case "assistant", "user":
+			// content is a string for a plain user turn, and carries no
+			// operations then.
+			var parts []struct {
+				Type      string `json:"type"`
+				ID        string `json:"id"`
+				ToolUseID string `json:"tool_use_id"`
+			}
+			if json.Unmarshal(envelope.Message.Content, &parts) != nil {
+				continue
+			}
+			for _, part := range parts {
+				switch {
+				case envelope.Type == "assistant" && part.Type == "tool_use":
+					inv.observe(LifecycleStarted, part.ID)
+				case envelope.Type == "user" && part.Type == "tool_result":
+					inv.observe(LifecycleTerminal, part.ToolUseID)
+				}
 			}
 		}
 	}
-	if result == "" {
-		result = strings.TrimSpace(raw)
+	text := inv.Report
+	if text == "" {
+		text = strings.TrimSpace(raw)
 	}
-	if result == "" {
-		result = fmt.Sprintf("%s completed without text output", name)
+	if text == "" {
+		text = fmt.Sprintf("%s completed without text output", name)
 	}
-	return result, sid
+	return text, sid
+}
+
+func (inv *Invocation) observe(kind LifecycleKind, operation string) {
+	if strings.TrimSpace(operation) == "" {
+		return
+	}
+	inv.Lifecycle = append(inv.Lifecycle, LifecycleObservation{Seq: len(inv.Lifecycle), Kind: kind, Operation: operation})
 }
 
 // bindGraphArgs launches a CLI provider so it can reach the bound graph and no
