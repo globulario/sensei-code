@@ -40,20 +40,20 @@ import (
 // every field, so a receipt emitted from a run that ended early says WHY each
 // fact is missing rather than carrying a blank.
 type receiptFacts struct {
-	base, graph, plan                          runreceipt.Value
-	candCommit, candTree, candParent, candDiff runreceipt.Value
-	// capturedTree and reviewedTree are DIFFERENT FACTS and were one field.
+	base, graph, plan runreceipt.Value
+	// candidateObservation is the ONE canonical account of the current
+	// candidate: its existence, identity, rendering and provenance. Every
+	// candidate field of a receipt is read from it, and it is only ever
+	// replaced or enriched as a whole (DF-41A4).
+	candidateObservation
+	// reviewedTree and the observation's capturedTree are DIFFERENT FACTS and
+	// were one field.
 	//
 	// The capture freezes a tree before anything judges it; a reviewed tree
 	// exists only once a bounded verdict comes back bound to one. Writing the
 	// capture into a field named "reviewed" made the mint use a remembered
 	// PRE-review measurement while claiming it used the reviewed one.
-	capturedTree runreceipt.Value
 	reviewedTree runreceipt.Value
-	// candRendering is the canonical rendering of the MINTED object, and
-	// digestRelation is how it compares with the rendering the review saw.
-	candRendering  runreceipt.Value
-	digestRelation runreceipt.DigestRelation
 	// deferredQuestion is the authority question a run left standing, and
 	// executionBudget the deadline a timed-out invocation exhausted.
 	deferredQuestion runreceipt.Value
@@ -73,21 +73,9 @@ type receiptFacts struct {
 	provider, executable, verdict, digest runreceipt.Value
 	serving                               runreceipt.Value
 	attempts                              []runreceipt.Attempt
-	// candidateState and planState are STATES, not booleans.
-	//
-	// An earlier draft used `candidateExists bool`, which reintroduced exactly
-	// the ambiguity just removed from Attempt.Delivered: false conflated
-	// "measured: no candidate" with "nobody recorded anything". A run's record
-	// opens at NONE -- a positive claim that nothing has been created yet --
-	// and a task with no open record reads UNKNOWN.
-	candidateState runreceipt.CandidateState
-	planState      runreceipt.PlanState
-	// certified records that a validated candidate was certified against its
-	// frozen capture in this run, and candBase the base it was cut from. Once
-	// set it is never cleared: a later failure cannot un-establish a candidate
-	// the run has already validated (DF-35).
-	certified bool
-	candBase  string
+	// planState is a STATE, not a boolean, for the reason the observation's
+	// candidateState is.
+	planState runreceipt.PlanState
 }
 
 // beginReceipt opens the record for a task before anything is established.
@@ -115,19 +103,16 @@ func freshFacts() *receiptFacts {
 		return runreceipt.UnknownValue("not measured: " + what)
 	}
 	return &receiptFacts{
-		base:             notYet("the run did not reach the start gate"),
-		graph:            notYet("the run did not reach the start gate"),
-		plan:             notYet("no plan was established for this run"),
-		candCommit:       notYet("no candidate was created"),
-		candTree:         notYet("no candidate was created"),
-		candParent:       notYet("no candidate was created"),
-		candDiff:         notYet("no candidate was created"),
-		capturedTree:     notYet("no candidate was captured"),
-		candRendering:    notYet("no candidate identity was minted"),
-		deferredQuestion: notYet("no authority question was deferred"),
-		executionBudget:  notYet("no execution budget expired"),
-		externalBlock:    notYet("no role turn was blocked externally"),
-		notConverged:     notYet("the run did not end unconverged"),
+		base:  notYet("the run did not reach the start gate"),
+		graph: notYet("the run did not reach the start gate"),
+		plan:  notYet("no plan was established for this run"),
+		// Opening state. Nothing has been CREATED yet, so the candidate axis
+		// opens at NONE as a positive claim, with its absence recorded.
+		candidateObservation: openingCandidate(),
+		deferredQuestion:     notYet("no authority question was deferred"),
+		executionBudget:      notYet("no execution budget expired"),
+		externalBlock:        notYet("no role turn was blocked externally"),
+		notConverged:         notYet("the run did not end unconverged"),
 		// A run that never resumed anything refused no restoration, and says
 		// so rather than carrying a blank.
 		restorationRefusal: notYet("the run refused no restoration"),
@@ -139,23 +124,18 @@ func freshFacts() *receiptFacts {
 		// an UNKNOWN formatter fact, and UNKNOWN is a value rather than a gap.
 		formatterMutation: runreceipt.MeasuredValue(string(runreceipt.FormatterUnsaid),
 			"validation had not run when this record was opened"),
-		// The relation is UNKNOWN until something measures it, and UNKNOWN is
-		// never sufficient for a complete record of a candidate that exists.
-		digestRelation: runreceipt.RelationUnknown,
-		reviewedTree:   notYet("no bounded review was delivered"),
-		provider:       notYet("no reviewer was assigned"),
-		executable:     notYet("the engine does not measure the reviewer executable"),
-		verdict:        notYet("no bounded verdict was returned"),
-		digest:         notYet("no bounded verdict was returned"),
-		serving:        notYet("the awareness process had not been launched"),
-		// Opening states. Nothing has been CREATED yet, so the candidate axis
-		// opens at NONE as a positive claim. The plan axis does NOT: a supplied
-		// plan may already exist before the first step succeeds, and a resumed
-		// task with no restored record certainly cannot claim there is no plan.
-		// Opening at NONE would have let an early failure deny a plan that
-		// exists. It opens UNKNOWN and is asserted by whoever establishes it.
-		candidateState: runreceipt.CandidateNone,
-		planState:      runreceipt.PlanUnknown,
+		reviewedTree: notYet("no bounded review was delivered"),
+		provider:     notYet("no reviewer was assigned"),
+		executable:   notYet("the engine does not measure the reviewer executable"),
+		verdict:      notYet("no bounded verdict was returned"),
+		digest:       notYet("no bounded verdict was returned"),
+		serving:      notYet("the awareness process had not been launched"),
+		// The plan axis does NOT open at NONE: a supplied plan may already
+		// exist before the first step succeeds, and a resumed task with no
+		// restored record certainly cannot claim there is no plan. Opening at
+		// NONE would have let an early failure deny a plan that exists. It
+		// opens UNKNOWN and is asserted by whoever establishes it.
+		planState: runreceipt.PlanUnknown,
 	}
 }
 
@@ -249,14 +229,24 @@ func (e *Engine) notePlanUnidentified(taskID string) {
 	})
 }
 
-// noteCandidateDigest records the identity of the candidate's content.
+// noteCandidateDigest enriches the current candidate observation with the
+// identity of its content.
 //
 // The source names where the digest is measured: the certified capture, which
 // noteCertifiedCandidate records before any inspection can end the run. It must
 // not name the review binding, which a run refused before review never builds.
+//
+// A digest that differs from one already measured describes different content:
+// the observation keeps its existence and drops every identity measured of the
+// earlier content, so the two are never merged (DF-41A4).
 func (e *Engine) noteCandidateDigest(taskID, digest string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
-		f.candDiff = runreceipt.MeasuredValue(digest, candidateDigestSource)
+		o := f.candidateObservation
+		if o.candDiff.State == runreceipt.Known && o.candDiff.Text != digest {
+			o = o.contentChanged("the candidate's content changed to diff sha256 " + digest + " after its earlier identity was measured")
+		}
+		o.candDiff = runreceipt.MeasuredValue(digest, candidateDigestSource)
+		f.replaceCurrentCandidate(o)
 	})
 }
 
@@ -272,26 +262,121 @@ const candidateDigestSource = "sha256 of the canonical diff of the certified pos
 // inspection had passed, so a run that failed at prospective inspection after
 // committing and validating a candidate emitted a receipt saying no candidate
 // was created.
+//
+// It REPLACES the current observation whole (DF-41A4). A certified capture is
+// the current candidate, so nothing measured of an earlier one -- its digest,
+// its tree, its certification -- survives beside it. A capture whose tree is
+// the base tree holds no change: there is no current candidate, and a candidate
+// certified earlier is not kept PRESENT merely because it once existed.
 func (e *Engine) noteCertifiedCandidate(taskID, base, digest, tree, baseTree string) {
-	e.noteCandidateDigest(taskID, digest)
-	e.noteCapturedTree(taskID, tree)
-	e.noteCandidateWork(taskID, tree, baseTree)
 	e.withReceipt(taskID, func(f *receiptFacts) {
-		if f.candidateState == runreceipt.CandidatePresent {
-			f.certified = true
-			f.candBase = strings.TrimSpace(base)
+		if tree != "" && tree == baseTree {
+			f.replaceCurrentCandidate(emptyCandidate(tree))
+			return
 		}
+		f.replaceCurrentCandidate(certifiedCandidate(base, digest, tree))
 	})
 }
 
-// noteCapturedTree records the content identity the capture froze.
+// noteCaptureRefused records the current candidate when its post-validation
+// capture was measured and then refused certification: a capture holding no
+// change is no current candidate, and one holding work is UNATTEMPTED.
+func (e *Engine) noteCaptureRefused(taskID, tree, baseTree string) {
+	if tree != "" && tree == baseTree {
+		e.withReceipt(taskID, func(f *receiptFacts) { f.replaceCurrentCandidate(emptyCandidate(tree)) })
+		return
+	}
+	e.noteCandidateUnattempted(taskID, tree)
+}
+
+// noteCurrentCapture records, immediately, what a capture of the current
+// candidate -- what names which one -- measured, before any refusal,
+// validation, later capture or terminal can follow it (DF-41A4).
+//
+// A capture holding no change is no current candidate, whatever an earlier
+// cycle established. A capture holding work is the current candidate: PRESENT,
+// established by the mutable worktree's frozen tree and by nothing else, with
+// no identity until certification or the mint measures one. An observation
+// already holding exactly that content is the same candidate measured more
+// strongly, and it stands; any other is replaced whole.
+func (e *Engine) noteCurrentCapture(taskID, what, base, tree, diff string) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		if strings.TrimSpace(diff) == "" {
+			f.replaceCurrentCandidate(candidateWith(runreceipt.CandidateNone,
+				"no current candidate: "+what+" (tree "+tree+") holds no candidate change from the base"))
+			return
+		}
+		o := f.candidateObservation
+		if o.candidateState == runreceipt.CandidatePresent && o.unmeasured == "" &&
+			o.capturedTree.State == runreceipt.Known && o.capturedTree.Text == tree {
+			return
+		}
+		next := candidateWith(runreceipt.CandidatePresent, "the current candidate (tree "+tree+
+			") was measured by "+what+" and has not been certified")
+		next.capturedTree = runreceipt.MeasuredValue(tree, "the canonical tree the capture froze")
+		next.candBase = strings.TrimSpace(base)
+		f.replaceCurrentCandidate(next)
+	})
+}
+
+// observeCurrentCandidate captures the worktree and records what it measured
+// -- work, no change, or the capture's own failure -- as the current
+// candidate. It returns nothing: the caller's outcome is its own, and this
+// only keeps the observation current before that outcome is routed.
+func (e *Engine) observeCurrentCandidate(ctx context.Context, taskID string, tc *taskContext, workspace, what string) {
+	capture, err := gitx.Repo{Root: workspace}.CandidateCapture(ctx, tc.Identity.BaseSHA, tc.Files)
+	if err != nil {
+		e.noteCandidateCaptureFailed(taskID, what, err)
+		return
+	}
+	e.noteCurrentCapture(taskID, what, tc.Identity.BaseSHA, capture.Tree, capture.Diff)
+}
+
+// noteCandidateCaptureFailed records that a capture of the current candidate
+// -- what names which one -- could not be measured. It is the one owner of the
+// candidate truth a failed capture leaves behind.
+//
+// A capture failure is not absence, and it is not presence either: an
+// attempted capture establishes nothing. The worktree it could not read may
+// still hold the prior candidate, a replacement, or nothing. The prior
+// observation could stand whole only if something mechanically showed it is
+// still the current candidate, and a failed capture measures nothing that
+// could; so the current observation is replaced, whole, by one UNKNOWN
+// observation whose every candidate field carries the exact failure. It is
+// never NONE, never PRESENT, and keeps no identity of the prior candidate, nor
+// is any ref read at the terminal merged into it.
+func (e *Engine) noteCandidateCaptureFailed(taskID, what string, err error) {
+	why := what + " failed: " + err.Error()
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		next := candidateWith(runreceipt.CandidateUnknown, why)
+		next.candBase, next.unmeasured = f.candBase, why
+		f.replaceCurrentCandidate(next)
+	})
+}
+
+// Which capture failed, named in the reason every identity field carries.
+const (
+	postWorkerCapture     = "the capture of the current candidate after the implementer's turn"
+	postValidationCapture = "the post-validation recapture of the current candidate"
+	postFormatCapture     = "the recapture of the current candidate after validation's formatters"
+	erroredWorkerCapture  = "the capture of the current candidate after the implementer's turn returned an error"
+)
+
+// noteCapturedTree enriches the current candidate observation with the content
+// identity the capture froze.
 //
 // This is NOT the reviewed tree. Nothing has judged it yet, and a field that
 // conflated the two let the mint use a pre-review measurement while reporting
-// it as the reviewed one.
+// it as the reviewed one. A tree that differs from one already captured is
+// different content, and nothing measured of the earlier content is kept.
 func (e *Engine) noteCapturedTree(taskID, tree string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
-		f.capturedTree = runreceipt.MeasuredValue(tree, "the canonical tree the capture froze")
+		o := f.candidateObservation
+		if o.capturedTree.State == runreceipt.Known && o.capturedTree.Text != tree {
+			o = o.contentChanged("the candidate's content changed to tree " + tree + " after its earlier identity was measured")
+		}
+		o.capturedTree = runreceipt.MeasuredValue(tree, "the canonical tree the capture froze")
+		f.replaceCurrentCandidate(o)
 	})
 }
 
@@ -301,11 +386,25 @@ func (e *Engine) noteCapturedTree(taskID, tree string) {
 // F1: the loop left its candidate uncommitted, so a PRESENT candidate could
 // never state its commit, tree or first parent and the main success path could
 // not produce a complete account of itself. mintCandidateIdentity calls it now.
+//
+// A minted identity establishes the candidate. It enriches the current
+// observation only when the minted tree is the captured tree; otherwise the two
+// are not shown to be one candidate, and the minted object, the stronger
+// observation, replaces the captured one whole (DF-41A4).
 func (e *Engine) noteCandidateCommit(taskID, commit, tree, firstParent string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
-		f.candCommit = runreceipt.MeasuredValue(commit, "git rev-parse on the candidate ref")
-		f.candTree = runreceipt.MeasuredValue(tree, "git rev-parse <candidate>^{tree}")
-		f.candParent = runreceipt.MeasuredValue(firstParent, "git rev-parse <candidate>^1")
+		o := f.candidateObservation
+		if o.capturedTree.State == runreceipt.Known && o.capturedTree.Text != tree {
+			rendering, relation := o.candRendering, o.digestRelation
+			o = candidateWith(runreceipt.CandidatePresent, "the minted identity holds tree "+tree+
+				", not the captured tree "+o.capturedTree.Text+", so no measurement of the captured content describes it")
+			o.candRendering, o.digestRelation = rendering, relation
+		}
+		o.candidateState = runreceipt.CandidatePresent
+		o.candCommit = runreceipt.MeasuredValue(commit, "git rev-parse on the candidate ref")
+		o.candTree = runreceipt.MeasuredValue(tree, "git rev-parse <candidate>^{tree}")
+		o.candParent = runreceipt.MeasuredValue(firstParent, "git rev-parse <candidate>^1")
+		f.replaceCurrentCandidate(o)
 	})
 }
 
@@ -364,21 +463,34 @@ func (e *Engine) noteReviewDelivered(taskID, provider, decision, candidateDigest
 // Outcome and CandidateState are parameters rather than derived state, so a new
 // terminal path must decide both. Deriving them here would be the convenience
 // that lets the next author skip the question, and the question is the point.
+// The CandidateState a call site passes is a consistency check, never a source:
+// every candidate field is projected from the current candidate observation
+// alone, and a call site that claims another state is reported beside the
+// receipt as a disagreement, not written into it (see terminalCandidate).
 func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runreceipt.Outcome, candState runreceipt.CandidateState) runreceipt.Receipt {
 	e.mu.Lock()
 	f := e.receipts[taskID]
-	if f == nil {
+	unrecorded := f == nil
+	if unrecorded {
 		// A terminal reached without an open record still emits one, and it
 		// says so field by field rather than carrying invalid blanks.
 		f = freshFacts()
 	}
 	facts := *f
+	if unrecorded {
+		// Nobody observed this task's candidate, so the observation says
+		// that, as candidateStateFor does: UNKNOWN, not the opening NONE and
+		// not whatever the call site claims.
+		facts.candidateObservation = candidateWith(runreceipt.CandidateUnknown,
+			"no receipt record was open for this task, so nothing about its candidate was observed")
+	}
 	e.mu.Unlock()
 
-	// Every candidate field below is read from this ONE observation, so the
+	// Every candidate field below is read from this ONE observation -- the
+	// current one, as it stands at the moment the terminal is emitted -- so the
 	// state and the identity fields cannot disagree about whether a candidate
-	// exists.
-	cand := e.terminalCandidate(taskID, facts, candState)
+	// exists, or about which candidate it is.
+	cand, disagreement := e.terminalCandidate(taskID, facts, candState)
 	governor, binary := governorIdentityFn()
 
 	r := runreceipt.Receipt{
@@ -397,13 +509,13 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 		RestorationRefusal:        facts.restorationRefusal,
 		PlanAdmissionRefusal:      &facts.planAdmissionRefusal,
 		FormatterMutationState:    facts.formatterMutation,
-		CandidateCommitDiffDigest: cand.rendering,
-		CandidateDigestRelation:   cand.relation,
-		CandidateState:            cand.state,
-		CandidateCommit:           cand.commit,
-		CandidateTree:             cand.tree,
-		CandidateFirstParent:      cand.parent,
-		CandidateDigest:           cand.diff,
+		CandidateCommitDiffDigest: cand.candRendering,
+		CandidateDigestRelation:   cand.digestRelation,
+		CandidateState:            cand.candidateState,
+		CandidateCommit:           cand.candCommit,
+		CandidateTree:             cand.candTree,
+		CandidateFirstParent:      cand.candParent,
+		CandidateDigest:           cand.candDiff,
 		ServingProducer:           facts.serving,
 		ReviewerProvider:          facts.provider,
 		ReviewerExecutable:        facts.executable,
@@ -417,9 +529,12 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 		Outcome:  outcome,
 	}
 	state, missing := r.Completeness()
+	payload := map[string]any{"receipt": r, "completeness": string(state), "missing": missing}
+	if disagreement != "" {
+		payload["candidate_state_disagreement"] = disagreement
+	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.RunReceipt,
-		"governed run receipt: "+string(state)+" / "+string(outcome),
-		map[string]any{"receipt": r, "completeness": string(state), "missing": missing}))
+		"governed run receipt: "+string(state)+" / "+string(outcome), payload))
 	return r
 }
 
@@ -429,35 +544,58 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 // the directory was created made a run that produced nothing owe a commit, and
 // minting an empty one to satisfy that would be a fabricated specimen in Git
 // clothing. PRESENT and NONE are both read from the frozen tree.
+//
+// Work establishes existence and the content tree, and no identity. A PRESENT
+// observation of the same content stands as it is; anything else is replaced
+// whole, so no stale absence reason or earlier identity survives beside it.
 func (e *Engine) noteCandidateWork(taskID, tree, baseTree string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
 		if tree != "" && tree == baseTree {
-			f.candidateState = runreceipt.CandidateNone
+			f.replaceCurrentCandidate(emptyCandidate(tree))
 			return
 		}
-		f.candidateState = runreceipt.CandidatePresent
+		o := f.candidateObservation
+		// Only a measured tree shows the content is the same: PRESENT work
+		// whose tree nobody froze is not this work, and is replaced.
+		if o.candidateState == runreceipt.CandidatePresent && o.unmeasured == "" &&
+			o.capturedTree.State == runreceipt.Known && o.capturedTree.Text == tree {
+			return
+		}
+		next := candidateWith(runreceipt.CandidatePresent,
+			"the candidate holds work (tree "+tree+") and no identity of it has been measured")
+		next.capturedTree = runreceipt.MeasuredValue(tree, "the canonical tree the capture froze")
+		f.replaceCurrentCandidate(next)
 	})
 }
 
 // noteCandidateWorkUnmeasured says the content is moving and unmeasured.
 //
-// A worker is editing, and a stale NONE here would deny work that exists.
+// A worker is editing, and a stale NONE here would deny work that exists. UNKNOWN
+// is not absence, so no field says nothing was created.
 func (e *Engine) noteCandidateWorkUnmeasured(taskID string) {
-	e.withReceipt(taskID, func(f *receiptFacts) { f.candidateState = runreceipt.CandidateUnknown })
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.replaceCurrentCandidate(candidateWith(runreceipt.CandidateUnknown,
+			"the candidate worktree exists and its content has not been captured"))
+	})
 }
 
 // noteInheritedCandidate records what a resumed invocation found on disk
 // before it did anything: work is PRESENT, a clean worktree is NONE, and a
-// worktree that could not be read is UNKNOWN rather than either claim.
+// worktree that could not be read is UNKNOWN rather than either claim. Nothing
+// here measures the inherited content's tree, so no ref is ever stated as its
+// identity: a ref is not shown to hold work nobody froze.
 func (e *Engine) noteInheritedCandidate(taskID string, seen observation) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
 		switch {
 		case seen.Err != nil:
-			f.candidateState = runreceipt.CandidateUnknown
+			f.replaceCurrentCandidate(candidateWith(runreceipt.CandidateUnknown,
+				"the inherited candidate worktree could not be read: "+seen.Err.Error()))
 		case seen.DiffBytes > 0 || len(seen.ChangedPaths) > 0:
-			f.candidateState = runreceipt.CandidatePresent
+			f.replaceCurrentCandidate(candidateWith(runreceipt.CandidatePresent,
+				"the inherited candidate holds work and this invocation has measured no identity of it"))
 		default:
-			f.candidateState = runreceipt.CandidateNone
+			f.replaceCurrentCandidate(candidateWith(runreceipt.CandidateNone,
+				"no current candidate: the inherited worktree holds no change from its base"))
 		}
 	})
 }
@@ -473,26 +611,40 @@ func (e *Engine) noteInheritedCandidate(taskID string, seen observation) {
 // exists to enforce the first.
 //
 // It is a MEASUREMENT, not a default: callers reach it only on a path that has
-// already decided to refuse.
-func (e *Engine) noteCandidateUnattempted(taskID string) {
+// already decided to refuse. The refused work is the current candidate, so it
+// replaces the observation whole: an earlier certified candidate's digest and
+// certification are not kept beside it.
+//
+// The tree the refused capture froze is kept as what was measured of it, so a
+// ref is read against the refused content and never in place of it.
+func (e *Engine) noteCandidateUnattempted(taskID, tree string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
-		f.candidateState = runreceipt.CandidateUnattempted
+		next := candidateWith(runreceipt.CandidateUnattempted,
+			"the current candidate was refused certification, so no canonical identity is created for it")
+		if strings.TrimSpace(tree) != "" {
+			next.capturedTree = runreceipt.MeasuredValue(tree, "the canonical tree the refused capture froze")
+		}
+		next.candBase = f.candBase
+		f.replaceCurrentCandidate(next)
 	})
 }
 
-// noteCandidateRendering records the canonical rendering of the MINTED object
-// and how it compares with the rendering the review was given.
+// noteCandidateRendering enriches the current observation with the canonical
+// rendering of the MINTED object and how it compares with the rendering the
+// review was given. mintCandidateIdentity records it with the minted identity.
 func (e *Engine) noteCandidateRendering(taskID, digest string, reviewed string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
-		f.candRendering = runreceipt.MeasuredValue(digest, "sha256 of the canonical rendering of the minted object")
+		o := f.candidateObservation
+		o.candRendering = runreceipt.MeasuredValue(digest, "sha256 of the canonical rendering of the minted object")
 		switch {
 		case digest == "" || reviewed == "":
-			f.digestRelation = runreceipt.RelationUnknown
+			o.digestRelation = runreceipt.RelationUnknown
 		case digest == reviewed:
-			f.digestRelation = runreceipt.RelationMatch
+			o.digestRelation = runreceipt.RelationMatch
 		default:
-			f.digestRelation = runreceipt.RelationDiffer
+			o.digestRelation = runreceipt.RelationDiffer
 		}
+		f.replaceCurrentCandidate(o)
 	})
 }
 
@@ -805,17 +957,108 @@ func (e *Engine) reviewedDigestFor(taskID string) string {
 	return f.digest.Text
 }
 
-// candidateObservation is the ONE account of the candidate a receipt states.
+// candidateObservation is the ONE canonical account of the current candidate.
 //
 // DF-35: candidate_state was set from the measured tree while commit, tree and
 // first parent were set only by the mint, so every non-accepted terminal after
 // a candidate existed said PRESENT beside "no candidate was created". Two
-// predicates disagreed about whether a candidate existed. Every candidate field
-// of a receipt is now read from this, and this decides existence once.
+// predicates disagreed about whether a candidate existed.
+//
+// DF-41A4: the fields were still written one at a time, so a replacement could
+// leave candidate B's existence beside candidate A's digest, an empty
+// post-validation capture left a stale certified PRESENT, and a failed
+// recapture kept a digest the worktree no longer held. Every transition now
+// builds a complete observation and replaces the current one whole
+// (replaceCurrentCandidate), or enriches it only with a fact mechanically shown
+// to describe the same content. The state and every identity field of a
+// receipt are read from one value of this type.
 type candidateObservation struct {
-	state                                 runreceipt.CandidateState
-	commit, tree, parent, diff, rendering runreceipt.Value
-	relation                              runreceipt.DigestRelation
+	// candidateState is a STATE, not a boolean. An earlier draft used
+	// `candidateExists bool`, which reintroduced exactly the ambiguity removed
+	// from Attempt.Delivered: false conflated "measured: no candidate" with
+	// "nobody recorded anything". A run's record opens at NONE -- a positive
+	// claim that nothing has been created yet -- and a task with no open
+	// record reads UNKNOWN.
+	candidateState                             runreceipt.CandidateState
+	candCommit, candTree, candParent, candDiff runreceipt.Value
+	// capturedTree is the content identity the certified capture froze.
+	capturedTree runreceipt.Value
+	// candRendering is the canonical rendering of the MINTED object, and
+	// digestRelation is how it compares with the rendering the review saw.
+	candRendering  runreceipt.Value
+	digestRelation runreceipt.DigestRelation
+	// certified records that THIS candidate was certified against its frozen
+	// capture in this run, and candBase the base it was cut from. No later
+	// failure or terminal reason un-establishes it (DF-35); only another
+	// observation of the current candidate replaces it.
+	certified bool
+	candBase  string
+	// unmeasured, when set, is why the current candidate's content could not
+	// be measured. No ref read at the terminal can then be shown to describe
+	// that content, so none is merged into it.
+	unmeasured string
+}
+
+// candidateWith is an observation in state whose every identity field is
+// unmeasured for the one reason why.
+func candidateWith(state runreceipt.CandidateState, why string) candidateObservation {
+	v := runreceipt.UnknownValue("not measured: " + why)
+	return candidateObservation{
+		candidateState: state, candCommit: v, candTree: v, candParent: v, candDiff: v,
+		capturedTree: v, candRendering: v,
+		// UNKNOWN until something measures it, and UNKNOWN is never
+		// sufficient for a complete record of a candidate that exists.
+		digestRelation: runreceipt.RelationUnknown,
+	}
+}
+
+// openingCandidate is the observation before anything is measured: NONE, with
+// the canonical true-absence representation in every field.
+func openingCandidate() candidateObservation {
+	o := candidateWith(runreceipt.CandidateNone, "no candidate was created")
+	o.capturedTree = runreceipt.UnknownValue("not measured: no candidate was captured")
+	o.candRendering = runreceipt.UnknownValue("not measured: no candidate identity was minted")
+	return o
+}
+
+// emptyCandidate is a capture that measured no change from the base: there is
+// no current candidate, whatever existed before it.
+func emptyCandidate(tree string) candidateObservation {
+	return candidateWith(runreceipt.CandidateNone,
+		"no current candidate: the capture froze tree "+tree+", the base tree, so it holds no change")
+}
+
+// certifiedCandidate is the complete observation one certified capture
+// establishes. It has no minted identity; the terminal reads that from the
+// candidate ref, if the ref is shown to hold this content.
+func certifiedCandidate(base, digest, tree string) candidateObservation {
+	o := candidateWith(runreceipt.CandidatePresent, "the certified candidate (tree "+tree+") has no minted identity in this run")
+	o.candDiff = runreceipt.MeasuredValue(digest, candidateDigestSource)
+	o.capturedTree = runreceipt.MeasuredValue(tree, "the canonical tree the capture froze")
+	o.certified, o.candBase = true, strings.TrimSpace(base)
+	return o
+}
+
+// contentChanged is the observation once a measurement shows its content is
+// not what it described: existence stands, and every identity measured of the
+// earlier content goes with it.
+func (o candidateObservation) contentChanged(why string) candidateObservation {
+	next := candidateWith(o.candidateState, why)
+	next.candBase = o.candBase
+	return next
+}
+
+// established reports whether this observation holds a candidate no terminal
+// may deny: one certified against its capture, or one minted.
+func (o candidateObservation) established() bool {
+	return o.certified || o.candCommit.State == runreceipt.Known
+}
+
+// replaceCurrentCandidate makes next the current candidate observation, whole.
+// It is the one assignment every candidate transition ends in, so no field of
+// the previous observation can outlive it.
+func (f *receiptFacts) replaceCurrentCandidate(next candidateObservation) {
+	f.candidateObservation = next
 }
 
 // candidateRef is what the terminal read from the candidate branch ref, each
@@ -869,73 +1112,96 @@ var readCandidateRef = func(ctx context.Context, repo gitx.Repo, branch, base st
 	return r
 }
 
-// terminalCandidate reconciles what the run recorded with the candidate ref,
-// once, at the terminal.
+// terminalCandidate projects the current candidate observation, once, at the
+// terminal, and reports where the call site's claimed state disagrees with it.
 //
+//   - Existence is the observation's, and only the observation's. An
+//     observation that established a candidate -- certified or minted -- is
+//     stated PRESENT whatever the terminal; a terminal reason may explain why
+//     execution ended and may not change what candidate existed. The state a
+//     call site passes is compared and never written: a disagreement is
+//     returned as a diagnostic and the projection is unchanged by it.
 //   - A minted identity (the accepted path) is stated exactly as the mint
 //     measured it. Nothing here re-measures or rewrites it.
-//   - A run that never established a candidate keeps its opening NONE (or the
-//     caller's UNKNOWN) and the opening absence reasons, which are then true.
-//   - A run that DID establish one -- a certified capture (always PRESENT),
-//     or a PRESENT or UNATTEMPTED state -- states it: the ref supplies commit, tree and first
-//     parent when it holds the validated candidate, and every measurement that
-//     fails is UNKNOWN with its exact failure, never an absence claim.
+//   - A PRESENT or UNATTEMPTED candidate whose content was measured is
+//     enriched from the candidate ref only when the ref is mechanically shown
+//     to hold that content, and every ref measurement that fails is UNKNOWN
+//     with its exact failure, never an absence claim. A candidate whose
+//     content could not be measured is stated with that failure and nothing
+//     from the ref.
 //
 // CandidateCommitDiffDigest stays the rendering of a MINTED object only.
-func (e *Engine) terminalCandidate(taskID string, f receiptFacts, state runreceipt.CandidateState) candidateObservation {
-	o := candidateObservation{
-		state: state, commit: f.candCommit, tree: f.candTree, parent: f.candParent,
-		diff: f.candDiff, rendering: f.candRendering, relation: f.digestRelation,
+func (e *Engine) terminalCandidate(taskID string, f receiptFacts, claimed runreceipt.CandidateState) (candidateObservation, string) {
+	o := f.candidateObservation
+	if o.established() {
+		o.candidateState = runreceipt.CandidatePresent
 	}
-	if f.candCommit.State == runreceipt.Known {
-		return o
+	var disagreement string
+	if claimed != o.candidateState {
+		disagreement = "the terminal call site claimed candidate_state " + string(claimed) +
+			"; the current candidate observation is " + string(o.candidateState) + ", and only the observation is projected"
 	}
-	// A validated candidate cannot be denied, left unknown, or demoted to
-	// "never created" by a caller's state taken while it was moving. Certified
-	// dominates every never-minted UNATTEMPTED downgrade (non-convergence,
-	// restoration or plan-admission refusal); UNATTEMPTED stays only for work
-	// refused before capture certification.
-	if f.certified && state != runreceipt.CandidatePresent {
-		o.state = runreceipt.CandidatePresent
+	if o.candCommit.State == runreceipt.Known {
+		return o, disagreement
 	}
-	if o.state != runreceipt.CandidatePresent && o.state != runreceipt.CandidateUnattempted {
-		return o
+	if o.candidateState != runreceipt.CandidatePresent && o.candidateState != runreceipt.CandidateUnattempted {
+		return o, disagreement
+	}
+	if o.unmeasured != "" {
+		return o, disagreement
 	}
 
-	base := f.candBase
+	base := o.candBase
 	if base == "" && f.base.State == runreceipt.Known {
 		base = f.base.Text
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	ref := readCandidateRef(ctx, e.Repo, e.Repo.WorktreeBranch(taskID), base)
-	o.commit, o.tree, o.parent, o.diff = identityFromRef(ref, base, f.candDiff)
+	o.candCommit, o.candTree, o.candParent, o.candDiff = identityFromRef(ref, base, o.candDiff, o.capturedTree)
 
-	if o.rendering.State != runreceipt.Known {
-		o.rendering = runreceipt.UnknownValue("not measured: the candidate exists and this run minted no canonical " +
-			"identity for it; this digest is taken only of the rendering of a minted object")
+	if o.candRendering.State != runreceipt.Known {
+		why := "not measured: the candidate exists and this run minted no canonical " +
+			"identity for it; this digest is taken only of the rendering of a minted object"
+		// The ref is named as the candidate's source only when it was shown
+		// to hold the candidate; a ref holding something else is not this
+		// candidate's provenance.
+		if o.candCommit.State == runreceipt.Known {
+			why += "; the candidate ref " + ref.ref + " names commit " + ref.commit + ", which this run did not mint"
+			if ref.renderErr != nil {
+				why += ", and whose diff from the base could not be rendered: " + ref.renderErr.Error()
+			}
+		}
+		o.candRendering = runreceipt.UnknownValue(why)
 	}
-	if o.state == runreceipt.CandidateUnattempted {
+	if o.candidateState == runreceipt.CandidateUnattempted {
 		// UNATTEMPTED states that no canonical identity was created, so what
 		// the ref holds is reported as observed, not stated as that identity.
-		for _, v := range []*runreceipt.Value{&o.commit, &o.tree, &o.parent} {
+		for _, v := range []*runreceipt.Value{&o.candCommit, &o.candTree, &o.candParent} {
 			if v.State == runreceipt.Known {
 				*v = runreceipt.UnknownValue("not stated as identity: candidate_state UNATTEMPTED records that the run " +
 					"refused before creating a canonical identity; the candidate ref holds " + v.Text + " (" + v.Source + ")")
 			}
 		}
 	}
-	return o
+	return o, disagreement
 }
 
 // identityFromRef turns a ref reading into commit, tree, first parent and diff
 // digest for a candidate that exists.
 //
-// The ref is the candidate's identity only when it holds the validated
-// candidate: base..ref must render to the validated digest. With no validated
-// digest recorded in this run, the ref is the only governed source and its
-// rendering is the digest.
-func identityFromRef(r candidateRef, base string, validated runreceipt.Value) (commit, tree, parent, diff runreceipt.Value) {
+// The ref is the candidate's identity only when it is mechanically shown to
+// hold the current candidate's measured content: base..ref must render to the
+// validated digest, and the ref's tree must be the captured tree when both are
+// measured; a rendering that fails refuses the ref only when its tree is not
+// shown to be the captured tree, since tree equality alone establishes the
+// content and the certified digest stands. With no validated digest, the ref's tree must equal the captured
+// tree; its rendering is then the digest, and a rendering that fails leaves
+// only the digest UNKNOWN. A current candidate with no measured content -- an
+// inherited or unfrozen worktree -- is shown equal to no ref, so a ref naming
+// an older candidate is never stated as its identity. Two observations not
+// shown to be one candidate are never merged.
+func identityFromRef(r candidateRef, base string, validated, captured runreceipt.Value) (commit, tree, parent, diff runreceipt.Value) {
 	unknown := func(why string) runreceipt.Value { return runreceipt.UnknownValue(why) }
 	diff = validated
 	if r.readErr != nil {
@@ -946,26 +1212,57 @@ func identityFromRef(r candidateRef, base string, validated runreceipt.Value) (c
 		return unknown(why), unknown(why), unknown(why), diff
 	}
 	if base != "" && r.commit == base {
-		why := "candidate ref " + r.ref + " still names the base " + base + ": no commit on it holds the candidate"
+		why := "candidate ref " + r.ref + " still names the base " + base +
+			": the candidate is not committed on it, so the ref measures no commit, tree or first parent of it"
 		if validated.State != runreceipt.Known {
 			diff = unknown(why)
 		}
 		return unknown(why), unknown(why), unknown(why), diff
 	}
-	if r.renderErr != nil {
-		why := "candidate ref " + r.ref + " names commit " + r.commit + ", whose diff from the base could not be rendered: " + r.renderErr.Error()
-		if validated.State != runreceipt.Known {
-			diff = unknown(why)
+	if validated.State != runreceipt.Known {
+		why := ""
+		switch {
+		// The reasons name the current candidate and never the ref's own
+		// objects: what the ref holds is not shown to be this candidate, so
+		// none of it is written into this candidate's record.
+		case captured.State != runreceipt.Known:
+			why = "candidate ref " + r.ref + " is not shown to hold the current candidate: its content was not measured, " +
+				"so no ref commit can be shown equal to it"
+		case r.treeErr != nil:
+			why = "candidate ref " + r.ref + " is not shown to hold the captured candidate tree " + captured.Text +
+				": the ref commit's tree could not be read: " + r.treeErr.Error()
+		case r.tree != captured.Text:
+			why = "candidate ref " + r.ref + " names a commit whose tree is not the captured candidate tree " + captured.Text
 		}
-		return unknown(why), unknown(why), unknown(why), diff
+		if why != "" {
+			// The digest keeps the observation's own reason: nothing of the
+			// ref, its rendering included, is shown to describe this candidate.
+			return unknown(why), unknown(why), unknown(why), validated
+		}
 	}
-	if validated.State == runreceipt.Known {
-		if r.rendering != validated.Text {
-			why := "candidate ref " + r.ref + " names commit " + r.commit + ", whose diff from the base (sha256 " + r.rendering +
-				") is not the validated candidate diff (sha256 " + validated.Text + ")"
-			return unknown(why), unknown(why), unknown(why), diff
-		}
-	} else {
+	// The ref's tree being the captured tree establishes, by itself, that the
+	// ref holds the current candidate's content; no rendering is needed for it.
+	sameTree := captured.State == runreceipt.Known && r.treeErr == nil && r.tree == captured.Text
+	switch {
+	case r.renderErr != nil && validated.State == runreceipt.Known && !sameTree:
+		why := "candidate ref " + r.ref + " names commit " + r.commit + ", whose diff from the base could not be rendered, " +
+			"so it is not shown to hold the validated candidate: " + r.renderErr.Error()
+		return unknown(why), unknown(why), unknown(why), diff
+	case r.renderErr != nil && validated.State == runreceipt.Known:
+		// Shown equal by its tree: commit, tree and first parent stand, and
+		// the validated digest is the certified capture's own measurement. The
+		// rendering failure belongs only to the rendering the terminal reports.
+	case r.renderErr != nil:
+		diff = unknown("candidate ref " + r.ref + " names commit " + r.commit + ", whose diff from the base could not be rendered: " + r.renderErr.Error())
+	case validated.State == runreceipt.Known && r.rendering != validated.Text:
+		why := "candidate ref " + r.ref + " names commit " + r.commit + ", whose diff from the base (sha256 " + r.rendering +
+			") is not the validated candidate diff (sha256 " + validated.Text + ")"
+		return unknown(why), unknown(why), unknown(why), diff
+	case validated.State == runreceipt.Known && captured.State == runreceipt.Known && r.treeErr == nil && r.tree != captured.Text:
+		why := "candidate ref " + r.ref + " names commit " + r.commit + ", whose tree " + r.tree +
+			" is not the captured candidate tree " + captured.Text
+		return unknown(why), unknown(why), unknown(why), diff
+	case validated.State != runreceipt.Known:
 		diff = runreceipt.MeasuredValue(r.rendering, "sha256 of git diff <base> <candidate ref>, read at the terminal")
 	}
 	commit = runreceipt.MeasuredValue(r.commit, "git rev-list -n 1 "+r.ref+", read at the terminal")
