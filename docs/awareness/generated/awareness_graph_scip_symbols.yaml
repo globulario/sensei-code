@@ -44267,6 +44267,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: candidateEvidence
     kind: function
+  - id: internal/workflow/engine.go:canonicalAccountingPosition
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: canonicalAccountingPosition
+    kind: function
   - id: internal/workflow/engine.go:certifiedAgainstCapture
     namespace: structural.scip
     language: go
@@ -44393,6 +44399,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: declined
     kind: const
+  - id: internal/workflow/engine.go:decodeAccounting
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: decodeAccounting
+    kind: function
   - id: internal/workflow/engine.go:decodeExactly
     namespace: structural.scip
     language: go
@@ -44591,11 +44603,11 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: findingResponse.Reason
     kind: var
-  - id: internal/workflow/engine.go:findingResponsesKey
+  - id: internal/workflow/engine.go:findingResponsesMember
     namespace: structural.scip
     language: go
     file: internal/workflow/engine.go
-    symbol: findingResponsesKey
+    symbol: findingResponsesMember
     kind: const
   - id: internal/workflow/engine.go:findingResponse~type
     namespace: structural.scip
@@ -44620,6 +44632,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: governingInvariants
+    kind: function
+  - id: internal/workflow/engine.go:hasAccountingMember
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: hasAccountingMember
     kind: function
   - id: internal/workflow/engine.go:humanResolutionPrompt
     namespace: structural.scip
@@ -44705,6 +44723,30 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: numberFindings
     kind: function
+  - id: internal/workflow/engine.go:objectMember.key
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: objectMember.key
+    kind: var
+  - id: internal/workflow/engine.go:objectMember.value
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: objectMember.value
+    kind: var
+  - id: internal/workflow/engine.go:objectMembers
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: objectMembers
+    kind: function
+  - id: internal/workflow/engine.go:objectMember~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: objectMember
+    kind: type
   - id: internal/workflow/engine.go:objectiveAbsent.Error
     namespace: structural.scip
     language: go
@@ -46733,6 +46775,126 @@ code_symbols:
     file: internal/workflow/f1_test.go
     symbol: TestAnAcceptedRunProducesACompleteReceipt
     kind: function
+  - id: internal/workflow/finding_accounting_test.go:TestFindingAccountingCanonicalFormsAreLocated
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: TestFindingAccountingCanonicalFormsAreLocated
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:TestFindingAccountingMalformedOrRepeatedMembersAreRefused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: TestFindingAccountingMalformedOrRepeatedMembersAreRefused
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:TestFindingAccountingObjectNestedInAnArrayAccountsNothing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: TestFindingAccountingObjectNestedInAnArrayAccountsNothing
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:TestW14ProseMentioningTheKeyBeforeTheAccountingDoesNotHideIt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: TestW14ProseMentioningTheKeyBeforeTheAccountingDoesNotHideIt
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:TestW15ProseMentioningTheKeyAfterTheAccountingDoesNotDuplicateIt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: TestW15ProseMentioningTheKeyAfterTheAccountingDoesNotDuplicateIt
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:TestW16TwoAccountingObjectsAreRefusedAsAmbiguous
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: TestW16TwoAccountingObjectsAreRefusedAsAmbiguous
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:TestW17ProseWithoutACanonicalObjectAccountsNothing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: TestW17ProseWithoutACanonicalObjectAccountsNothing
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:TestW18Run2ProseBeforeTheFinalObjectAccountsBothFindings
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: TestW18Run2ProseBeforeTheFinalObjectAccountsBothFindings
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:TestW3FindingAccountingCodeResponseWithoutPathsStaysOwed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: TestW3FindingAccountingCodeResponseWithoutPathsStaysOwed
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:TestW4FindingAccountingEvidenceResponseWithoutCitationStaysOwed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: TestW4FindingAccountingEvidenceResponseWithoutCitationStaysOwed
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:TestW5FindingAccountingDuplicateOrConflictingResponsesStayOwed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: TestW5FindingAccountingDuplicateOrConflictingResponsesStayOwed
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:faAccount
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: faAccount
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:faAccounting
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: faAccounting
+    kind: var
+  - id: internal/workflow/finding_accounting_test.go:faBoth
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: faBoth
+    kind: var
+  - id: internal/workflow/finding_accounting_test.go:faBundle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: faBundle
+    kind: var
+  - id: internal/workflow/finding_accounting_test.go:faCode
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: faCode
+    kind: var
+  - id: internal/workflow/finding_accounting_test.go:faEvidence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: faEvidence
+    kind: var
+  - id: internal/workflow/finding_accounting_test.go:faMoved
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: faMoved
+    kind: var
+  - id: internal/workflow/finding_accounting_test.go:faOpen
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: faOpen
+    kind: function
+  - id: internal/workflow/finding_accounting_test.go:faReadBack
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/finding_accounting_test.go
+    symbol: faReadBack
+    kind: var
   - id: internal/workflow/gate.go:acceptance.Accepted
     namespace: structural.scip
     language: go
