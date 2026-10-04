@@ -1946,3 +1946,1105 @@ func TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting(t *testing.T) {
 		t.Fatal("candidate inspection does not read both the canonical rule and the candidate-content checks")
 	}
 }
+
+// 70B1 (RULING-153): THE DURABLE INCOMPLETE-OBLIGATION CHECKPOINT IS A REPLAY
+// CAPSULE. These witnesses drive the production transaction (commitCheckpoint)
+// over a real session store, and the production candidate loop through the
+// completion rig, whose harness holds a real store (RULING-154).
+
+// committedFixture is a task's committed checkpoint, verified, with a way to
+// replay its exact payload under one changed input.
+type committedFixture struct {
+	id, replayDigest, status, retirement string
+	rep                                  replayed
+	// replay replays the committed checkpoint with status (when not "") and
+	// the inputs mutate leaves.
+	replay func(status string, mutate func(*replayInputs)) (replayed, error)
+}
+
+func committedOf(t *testing.T, e *Engine, taskID string) committedFixture {
+	t.Helper()
+	b, cp, rep, found, err := e.committedCheckpoint(taskID)
+	if err != nil || !found {
+		t.Fatalf("no verified committed checkpoint for %s: found %v err %v", taskID, found, err)
+	}
+	return committedFixture{id: b.CheckpointID, replayDigest: b.ReplayDigest, status: string(b.Status), retirement: string(b.Retirement), rep: rep,
+		replay: func(status string, mutate func(*replayInputs)) (replayed, error) {
+			c := cp
+			if status != "" {
+				if err := json.Unmarshal([]byte(`"`+status+`"`), &c.Status); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var in replayInputs
+			if err := json.Unmarshal(c.Inputs, &in); err != nil {
+				t.Fatal(err)
+			}
+			if mutate != nil {
+				mutate(&in)
+			}
+			raw, err := json.Marshal(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.Inputs = raw
+			durable, err := e.replaySourcesOf(e.Store)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if durable, err = durable.atPrepared(b, e.SessionID); err != nil {
+				t.Fatal(err)
+			}
+			return Replay(c, durable)
+		}}
+}
+
+// committedRecords counts the task's prepared and committed records.
+func committedRecords(t *testing.T, e *Engine) (prepared, committed int) {
+	t.Helper()
+	history, err := e.Store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ev := range history {
+		switch ev.Kind {
+		case event.CheckpointPrepared:
+			prepared++
+		case event.CheckpointCommitted:
+			committed++
+		}
+	}
+	return prepared, committed
+}
+
+// failCheckpointIO makes the named durable checkpoint operation fail when fail
+// says so, for the rest of the test.
+func failCheckpointIO(t *testing.T, fail func(op string, call int) bool) *[]string {
+	t.Helper()
+	original := checkpointIO
+	calls := map[string]int{}
+	var seen []string
+	checkpointIO = func(op string, do func() error) error {
+		calls[op]++
+		seen = append(seen, op)
+		if fail(op, calls[op]) {
+			return fmt.Errorf("injected %s failure %d", op, calls[op])
+		}
+		return do()
+	}
+	t.Cleanup(func() { checkpointIO = original })
+	return &seen
+}
+
+// fixtureEngine is an engine over a real session store and task-state root.
+func fixtureEngine(t *testing.T) *Engine {
+	t.Helper()
+	e, _, _ := blockedEngine(t, t.TempDir(), "session-1")
+	return e
+}
+
+// canonicalAttempt is a plan attempt made operative for taskID through the
+// production transition: durably started, then adopted, in e's session record.
+func canonicalAttempt(t *testing.T, e *Engine, taskID, plan string) planAttempt {
+	t.Helper()
+	adoptFixturePlanAttempt(t, e, taskID, "the objective", "world-1", plan, nil, nil)
+	return e.operativePlanAttempt(taskID)
+}
+
+// mintedAttempt is a plan attempt whose identity its own record derives, and
+// which no record shows was ever started or made operative.
+func mintedAttempt(t *testing.T, taskID, plan string) planAttempt {
+	t.Helper()
+	a := planAttempt{TaskID: taskID, World: "world-1", PlanSource: PlanByArchitect,
+		Plan: architectureDecision{Decision: "proceed", Summary: plan, Plan: plan}, objective: "the objective"}
+	id, err := planAttemptID(taskID, a.objective, a.World, a.PlanSource, "", a.Plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.ID = id
+	return a
+}
+
+func evidenceOn(id string) roles.Finding {
+	return roles.Finding{ID: id, Severity: roles.Major, Class: roles.EvidenceFinding, Claim: "claim " + id,
+		Reference: "main.go", Reason: "reason " + id, ProofGap: "go test ./..."}
+}
+
+func codeObligationFinding(id string) roles.Finding {
+	return roles.Finding{ID: id, Severity: roles.Major, Class: roles.CodeFinding, Claim: "claim " + id, Reference: "main.go", Reason: "reason " + id}
+}
+
+// fixtureObligation is cycle 2's obligation for findings under a canonical attempt.
+func fixtureObligation(t *testing.T, e *Engine, findings ...roles.Finding) *cycleCompletion {
+	t.Helper()
+	return obligationUnder(canonicalAttempt(t, e, "task-c", "the plan"), findings...)
+}
+
+// obligationUnder is cycle 2's obligation for findings under attempt a.
+func obligationUnder(a planAttempt, findings ...roles.Finding) *cycleCompletion {
+	c := newCycleCompletion("task-c", a.ID, 2, openReview{Attempt: 1, CandidateDigest: "sha256:raised", CandidateTree: "tree-raised", Findings: findings})
+	c.Origin = a.binding()
+	return c
+}
+
+// reconcile absorbs one returned report into c as the candidate loop does: the
+// canonical validator judges every finding beside what is retained, against
+// the measured moved files and, with evidence, the executed validation and the
+// evidence retained and read back from durable task state.
+func reconcile(t *testing.T, e *Engine, c *cycleCompletion, report string, moved map[string]bool, evidence bool) {
+	t.Helper()
+	bundle := n2bBundle("ok")
+	for i := range bundle.Checks {
+		bundle.Checks[i].ExecutedBy = "broker"
+	}
+	if !evidence {
+		bundle.DiffDigest, bundle.Checks = "", nil
+	}
+	settled := settledInvocation{Provider: "claude", Cycle: c.Cycle, Observed: true, Returned: true, Report: report,
+		Transport: plainReturn("").Transport}
+	fresh, err := parseFindingResponses(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	responses, _, _ := c.responsesFor(fresh)
+	cand := retainedCandidate("base-1", bundle)
+	readBack := map[string]string{}
+	if evidence {
+		if readBack, err = e.retainFindingEvidence(c.TaskID, c.Cycle, cand, c.Findings, responses, bundle); err != nil {
+			t.Fatal(err)
+		}
+	}
+	account := accountForFindings(c.Findings, responses, moved, bundle, readBack)
+	if err := c.recordAccount(judgeAll, settled, moved, bundle, cand, readBack); err != nil {
+		t.Fatalf("premise: the account was refused: %v", err)
+	}
+	c.absorb(c.Findings, account, responses, settled)
+}
+
+var fixtureCandidate = candidateInput{What: "the fixture's capture", Base: "base-1", Tree: "tree-now"}
+
+// escalateAndContinue takes c through the one owner-defined continuation: a
+// validated invocation's account, its dispute escalation, the continuation
+// onto to, and the retry it was continued for.
+func escalateAndContinue(t *testing.T, e *Engine, c *cycleCompletion, to planAttempt) {
+	t.Helper()
+	reconcile(t, e, c, accounting(), nil, false)
+	if _, err := c.transition(routeDisputeEscalation); err != nil {
+		t.Fatalf("premise: the escalation was refused: %v", err)
+	}
+	if err := c.continueTo(to.binding()); err != nil {
+		t.Fatalf("premise: the continuation was refused: %v", err)
+	}
+	if _, err := c.transition(routeIncompleteRetry); err != nil {
+		t.Fatalf("premise: the continued retry was refused: %v", err)
+	}
+}
+
+// retry counts one incomplete attempt as the candidate loop does: an
+// invocation that answered nothing is accounted, and the cycle is retried.
+func retry(t *testing.T, e *Engine, c *cycleCompletion) {
+	t.Helper()
+	reconcile(t, e, c, accounting(), nil, false)
+	if _, err := c.transition(routeIncompleteRetry); err != nil {
+		t.Fatalf("premise: the retry was refused: %v", err)
+	}
+}
+
+// commitLive counts c's incomplete attempt -- unless it was just counted, or
+// continued for one -- and commits its live checkpoint.
+func commitLive(t *testing.T, e *Engine, c *cycleCompletion) string {
+	t.Helper()
+	var last replayStepKind
+	if n := len(c.Steps); n != 0 {
+		last = c.Steps[n-1].Kind
+	}
+	if last == stepContinue || last == stepAccount {
+		if _, err := c.transition(routeIncompleteRetry); err != nil {
+			t.Fatalf("premise: the retry was refused: %v", err)
+		}
+	} else {
+		retry(t, e, c)
+	}
+	status, ok := c.durableStatus()
+	if !ok || status != "live" {
+		t.Fatalf("premise: the fixture obligation is %q, not live", status)
+	}
+	id, err := e.commitCheckpoint(c, status, "", fixtureCandidate)
+	if err != nil {
+		t.Fatalf("the live checkpoint was not committed: %v", err)
+	}
+	return id
+}
+
+func retainedIn(r replayed, id string) bool {
+	if r.Completion == nil {
+		return false
+	}
+	_, ok := r.Completion.Retained[id]
+	return ok
+}
+
+// W1 LIVE REPLAY. A cycle-2 invocation answers f1 and leaves f2 owed: the live
+// checkpoint committed before the cycle is served again replays through the
+// landed owners to exactly the live obligation -- cycle 2, one attempt, f1
+// retained, f2 owed -- and to its committed ReplayDigest.
+func TestB1W1ALiveCheckpointReplaysToTheLiveObligation(t *testing.T) {
+	r := newCompletionRig(t, []string{codeOn("f1"), codeOn("f2")},
+		incompleteTurn{value: 2, report: accounting(answerCode("f1"))},
+		incompleteTurn{value: 3, unobserved: true, err: errors.New("the worker crashed")},
+	)
+	if _, err := r.run(); err == nil {
+		t.Fatal("premise: the crashed invocation did not end the run")
+	}
+	got := committedOf(t, r.h.engine, "task-1")
+	c := r.live(t)
+	if got.status != "live" || got.rep.Digest != got.replayDigest || got.rep.Completion == nil {
+		t.Fatalf("the committed checkpoint is not a live one that replays to its digest: %+v", got)
+	}
+	rc := got.rep.Completion
+	if rc.Cycle != 2 || rc.Attempts != 1 || !equalStrings(rc.RetainedIDs(), "f1") || !equalStrings(rc.Owed(), "f2") ||
+		rc.PlanAttemptID != c.PlanAttemptID || rc.PlanAttemptID != r.h.engine.operativePlanAttempt("task-1").ID {
+		t.Fatalf("the replayed obligation is not the live one: %+v", rc)
+	}
+	// The checkpoint is the obligation as the retry left it; the crash that
+	// followed routed the live one on, and was not checkpointed.
+	if rc.Route != routeIncompleteRetry || !rc.Continuing || c.Route != routeOrdinaryError {
+		t.Fatalf("the replayed obligation is not the one the retry committed: replayed %s, live %s", rc.Route, c.Route)
+	}
+}
+
+// W2 BLOCKED REPLAY. After f1 is retained the next provider proves it cannot
+// serve: the obligation is committed blocked before the block is returned, and
+// replays to the same obligation with the provider-rebound route.
+func TestB1W2ABlockedCheckpointReplaysToTheObligationAndItsBlock(t *testing.T) {
+	r := newCompletionRig(t, []string{codeOn("f1"), codeOn("f2")},
+		incompleteTurn{value: 2, report: accounting(answerCode("f1"))},
+		incompleteTurn{err: quota()},
+	)
+	_, err := r.run()
+	var blocked *RoleUnavailable
+	if !errors.As(err, &blocked) {
+		t.Fatalf("premise: the run did not end on the provider block: %v", err)
+	}
+	got := committedOf(t, r.h.engine, "task-1")
+	rc := got.rep.Completion
+	if got.status != "blocked" || rc == nil || rc.Route != routeProviderRebound || !rc.Continuing || rc.Attempts != 1 ||
+		!equalStrings(rc.RetainedIDs(), "f1") || !equalStrings(rc.Owed(), "f2") {
+		t.Fatalf("the committed checkpoint is not the blocked obligation: %s %+v", got.status, rc)
+	}
+}
+
+// W3 EXHAUSTED REPLAY and W20 THE CHOKE POINT. The third incomplete attempt is
+// committed exhausted before IMPLEMENTER_INCOMPLETE is returned; it replays to
+// attempts == max with the typed state's owed findings.
+func TestB1W3W20TheExhaustedCheckpointIsCommittedBeforeTheTypedState(t *testing.T) {
+	r := exhaustingRig(t, 2)
+	_, err := r.run()
+	var incomplete *ImplementerIncomplete
+	if !errors.As(err, &incomplete) {
+		t.Fatalf("premise: the run did not end IMPLEMENTER_INCOMPLETE: %v", err)
+	}
+	got := committedOf(t, r.h.engine, "task-1")
+	rc := got.rep.Completion
+	if got.status != "exhausted" || rc == nil || !rc.Exhausted() || rc.Attempts != maxIncompleteImplementerAttempts ||
+		!equalStrings(rc.Owed(), incomplete.Owed...) || rc.Cycle != incomplete.Cycle || rc.PlanAttemptID != incomplete.PlanAttemptID {
+		t.Fatalf("the committed checkpoint is not the exhausted obligation the typed state reports: %s %+v / %+v", got.status, rc, incomplete)
+	}
+	if _, committed := committedRecords(t, r.h.engine); committed != 3 {
+		t.Fatalf("expected the two live retries and the exhaustion committed, got %d commits", committed)
+	}
+
+	// The exhausted commit fails every attempt: no typed exhaustion is
+	// returned, and the terminal carries the persistence failure instead.
+	r = exhaustingRig(t, 2)
+	failCheckpointIO(t, func(op string, call int) bool { return op == checkpointCommit && call > 2 })
+	_, err = r.run()
+	if errors.As(err, &incomplete) {
+		t.Fatalf("IMPLEMENTER_INCOMPLETE was returned without a committed exhausted checkpoint: %v", err)
+	}
+	var unrecorded *ObligationPersistenceFailed
+	if !errors.As(err, &unrecorded) || unrecorded.Status != "exhausted" || unrecorded.Attempts != maxCheckpointAttempts ||
+		unrecorded.Prior != PriorCheckpointKnown || unrecorded.State != IncompleteObligationPersistenceFailedState {
+		t.Fatalf("the failed exhaustion is not the typed persistence failure over a known prior checkpoint: %v", err)
+	}
+	if got := committedOf(t, r.h.engine, "task-1"); got.status != "live" || got.id != unrecorded.PriorCheckpointID {
+		t.Fatalf("the prior live checkpoint did not stand: %+v / %+v", got, unrecorded)
+	}
+	terminateWith(t, r.h, err)
+	for _, ev := range drainEvents(r.events) {
+		if ev.Kind == event.WorkflowFailed && strings.Contains(string(ev.Payload), ImplementerIncompleteState) {
+			t.Fatalf("the terminal reported IMPLEMENTER_INCOMPLETE without its checkpoint: %s", ev.Payload)
+		}
+		if ev.Kind == event.WorkflowFailed && !strings.Contains(string(ev.Payload), IncompleteObligationPersistenceFailedState) {
+			t.Fatalf("the terminal does not carry the typed persistence failure: %s", ev.Payload)
+		}
+	}
+}
+
+// W4 RETIRED REPLAY. The cycle that completes retires the checkpoint it had
+// committed with a typed reason; the tombstone replays non-live and produces
+// no obligation.
+func TestB1W4ARetiredCheckpointReplaysAsATombstone(t *testing.T) {
+	r := newCompletionRig(t, []string{codeOn("f1"), codeOn("f2")},
+		incompleteTurn{value: 2, report: accounting(answerCode("f1"))},
+		incompleteTurn{value: 3, report: accounting(answerCode("f2"))},
+	)
+	if outcome, err := r.run(); err != nil || !outcome.Accepted() {
+		t.Fatalf("premise: the cycle did not complete: %q %v", outcome, err)
+	}
+	got := committedOf(t, r.h.engine, "task-1")
+	if got.status != "retired" || got.retirement != "completed" || got.rep.Completion != nil || got.rep.Obligation.Completion != nil {
+		t.Fatalf("the completed cycle's checkpoint is not a typed tombstone: %+v", got)
+	}
+	if rep, err := got.replay("live", nil); err == nil {
+		t.Fatalf("a completed obligation replayed as live: %+v", rep.Completion)
+	}
+}
+
+// W5 UNKNOWN STATUS. A fifth status is refused before anything is prepared,
+// and a committed payload replayed under one is refused.
+func TestB1W5AFifthStatusIsRefusedBeforeCommitment(t *testing.T) {
+	e := fixtureEngine(t)
+	c := fixtureObligation(t, e, codeObligationFinding("c1"))
+	commitLive(t, e, c)
+	for _, status := range []string{"serving", "closed"} {
+		before, _ := committedRecords(t, e)
+		_, err := e.commitCheckpoint(c, "serving", "", fixtureCandidate)
+		var unrecorded *ObligationPersistenceFailed
+		if !errors.As(err, &unrecorded) || unrecorded.Attempts != 0 {
+			t.Fatalf("status %s was not refused before commitment: %v", status, err)
+		}
+		if after, _ := committedRecords(t, e); after != before {
+			t.Fatalf("status %s was prepared", status)
+		}
+		if _, err := committedOf(t, e, "task-c").replay(status, nil); err == nil {
+			t.Fatalf("a checkpoint replayed under status %s", status)
+		}
+	}
+}
+
+// W7 OWNER-CONSTRUCTIBILITY. Each input below is syntactically valid on its
+// own; each describes a state a landed owner refuses to construct, and replay
+// refuses it.
+func TestB1W7AnInputTheOwnerCannotConstructDoesNotReplay(t *testing.T) {
+	e := fixtureEngine(t)
+	c := fixtureObligation(t, e, codeObligationFinding("c1"), codeObligationFinding("c2"))
+	reconcile(t, e, c, accounting(answerCode("c1")), map[string]bool{"main.go": true}, false)
+	commitLive(t, e, c)
+	got := committedOf(t, e, "task-c")
+	for name, mutate := range map[string]func(*replayInputs){
+		"an invocation 70A2 settled as a transport failure": func(in *replayInputs) {
+			in.Steps[0].Settled.Invocation.TransportFailed = true
+		},
+		"an invocation settled in another cycle":    func(in *replayInputs) { in.Steps[0].Settled.Cycle = 3 },
+		"a route outside the closed vocabulary":     func(in *replayInputs) { in.Steps[1].Route = "retry_later" },
+		"a step kind outside the closed vocabulary": func(in *replayInputs) { in.Steps[1].Kind = "note" },
+		"a review owing only minor findings": func(in *replayInputs) {
+			for i := range in.Review.Findings {
+				in.Review.Findings[i].Severity = roles.Minor
+			}
+		},
+		"a judging set outside the closed vocabulary": func(in *replayInputs) { in.Steps[0].Judging = "some" },
+	} {
+		if rep, err := got.replay("", mutate); err == nil {
+			t.Fatalf("%s replayed: %+v", name, rep.Completion)
+		}
+	}
+	// A live obligation its own recorded inputs do not reproduce records
+	// nothing: it is refused before anything is prepared.
+	before, _ := committedRecords(t, e)
+	retry(t, e, c)
+	c.Why["c2"] = "a reason no owner gave"
+	_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+	var unrecorded *ObligationPersistenceFailed
+	if !errors.As(err, &unrecorded) || unrecorded.Attempts != 0 {
+		t.Fatalf("an obligation its inputs do not reproduce was not refused before commitment: %v", err)
+	}
+	if after, _ := committedRecords(t, e); after != before {
+		t.Fatal("an obligation its inputs do not reproduce was prepared")
+	}
+}
+
+// W8 CANDIDATE OWNER. A candidate measurement whose every field is well formed
+// but which no capture could have produced -- a failure that also froze a tree
+// -- is refused by the 70A4 owner, so the checkpoint does not replay.
+func TestB1W8ACandidateThe70A4OwnerCannotConstructDoesNotReplay(t *testing.T) {
+	e := fixtureEngine(t)
+	c := fixtureObligation(t, e, codeObligationFinding("c1"))
+	commitLive(t, e, c)
+	got := committedOf(t, e, "task-c")
+	for name, mutate := range map[string]func(*replayInputs){
+		"a failed capture that froze a tree": func(in *replayInputs) { in.Candidate.Failure = "worktree unreadable" },
+		"a capture that froze no tree":       func(in *replayInputs) { in.Candidate.Tree = "" },
+		"a measurement naming no capture":    func(in *replayInputs) { in.Candidate.What = "" },
+	} {
+		if _, err := got.replay("", mutate); err == nil {
+			t.Fatalf("%s replayed", name)
+		}
+	}
+	if _, err := e.commitCheckpoint(c, "live", "", candidateInput{What: "x", Tree: "t", Failure: "unreadable"}); err == nil {
+		t.Fatal("a checkpoint whose candidate the owner refuses was committed")
+	}
+}
+
+// W9 EVIDENCE OWNER. An evidence response is satisfied only by the record
+// replay loads again from durable task state under its canonical identity. An
+// identity that is absent, stale or bound to another candidate leaves the
+// finding owed, and the replay no longer matches the committed ReplayDigest.
+func TestB1W9EvidenceReplaysOnlyFromItsDurableRecord(t *testing.T) {
+	e := fixtureEngine(t)
+	c := fixtureObligation(t, e, evidenceOn("e1"), codeObligationFinding("c1"))
+	reconcile(t, e, c, accounting(`{"id":"e1","answered_by":"evidence","evidence":"go test ./..."}`), nil, true)
+	if !equalStrings(c.RetainedIDs(), "e1") {
+		t.Fatalf("premise: the evidence finding was not discharged by its read-back record: %+v", c)
+	}
+	commitLive(t, e, c)
+	got := committedOf(t, e, "task-c")
+	if !retainedIn(got.rep, "e1") {
+		t.Fatal("premise: the committed checkpoint does not replay the evidence response as satisfied")
+	}
+	for name, mutate := range map[string]func(*replayInputs){
+		"a stale record identity": func(in *replayInputs) { in.Steps[0].ReadBack["e1"] = strings.Repeat("0", 64) },
+		"another candidate":       func(in *replayInputs) { in.Steps[0].EvidenceCandidate.DiffDigest = "sha256:other" },
+		"no record identity":      func(in *replayInputs) { in.Steps[0].ReadBack = nil },
+		// The record's key is unchanged by each of these, and the durable
+		// record disagrees with the copied execution: the record decides.
+		"a copied execution another party produced": func(in *replayInputs) {
+			for i := range in.Steps[0].Evidence.Checks {
+				in.Steps[0].Evidence.Checks[i].ExecutedBy = "the worker"
+			}
+		},
+		"a copied execution with another exit status": func(in *replayInputs) {
+			for i := range in.Steps[0].Evidence.Checks {
+				in.Steps[0].Evidence.Checks[i].ExitStatus = 7
+			}
+		},
+		"a copied execution with another attribution": func(in *replayInputs) {
+			for i := range in.Steps[0].Evidence.Checks {
+				in.Steps[0].Evidence.Checks[i].Attribution = "pre-existing"
+			}
+		},
+	} {
+		rep, err := got.replay("", mutate)
+		if err == nil && (retainedIn(rep, "e1") || rep.Digest == got.replayDigest) {
+			t.Fatalf("evidence with %s replayed as satisfied", name)
+		}
+	}
+	// Absent: the same payload against a task state that holds no record.
+	other := fixtureEngine(t)
+	b, cp, _, _, _ := e.committedCheckpoint("task-c")
+	durable, err := e.replaySourcesOf(e.Store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	durable.Evidence = other.retainedEvidence
+	rep, err := Replay(cp, durable)
+	if err == nil && (retainedIn(rep, "e1") || rep.Digest == b.ReplayDigest) {
+		t.Fatal("evidence absent from durable task state replayed as satisfied")
+	}
+	// The committed checkpoint itself, its payload byte for byte, stops being
+	// valid once the durable record its evidence stands on is gone.
+	e.Repo.Root = t.TempDir()
+	if _, _, _, found, err := e.committedCheckpoint("task-c"); !found || err == nil {
+		t.Fatalf("a checkpoint whose evidence record is gone still verified: found %v", found)
+	}
+}
+
+// W10 MOVED-FILE TRUTH. A code response naming main.go is satisfied only by
+// the measured change facts. Without them the response's own paths prove
+// nothing, and replacing the measurement with "not measured" changes the
+// reconstructed obligation.
+func TestB1W10AResponseCannotProveItsOwnChange(t *testing.T) {
+	e := fixtureEngine(t)
+	unmeasured := fixtureObligation(t, e, codeObligationFinding("c1"), codeObligationFinding("c2"))
+	reconcile(t, e, unmeasured, accounting(answerCode("c1")), nil, false)
+	if !equalStrings(unmeasured.Owed(), "c1", "c2") {
+		t.Fatalf("a response's own paths satisfied a code finding without measured change facts: %+v", unmeasured)
+	}
+	c := obligationUnder(e.operativePlanAttempt("task-c"), codeObligationFinding("c1"), codeObligationFinding("c2"))
+	reconcile(t, e, c, accounting(answerCode("c1")), map[string]bool{"main.go": true}, false)
+	commitLive(t, e, c)
+	got := committedOf(t, e, "task-c")
+	if !retainedIn(got.rep, "c1") {
+		t.Fatal("premise: the measured change did not satisfy c1 on replay")
+	}
+	for name, mutate := range map[string]func(*replayInputs){
+		"no measurement":         func(in *replayInputs) { in.Steps[0].Moved = &movedFacts{} },
+		"another file moved":     func(in *replayInputs) { in.Steps[0].Moved.Paths = []string{"other.go"} },
+		"no change facts at all": func(in *replayInputs) { in.Steps[0].Moved = nil },
+	} {
+		rep, err := got.replay("", mutate)
+		if err == nil && (retainedIn(rep, "c1") || rep.Digest == got.replayDigest) {
+			t.Fatalf("with %s, c1 still replayed as satisfied", name)
+		}
+	}
+}
+
+// W11 PLANATTEMPT OWNER. A continuation is replayed only from a plan attempt
+// record that derives the identity it names. One whose id string matches the
+// checkpoint's PlanAttemptID but whose record derives another identity does
+// not replay, and neither does an origin that is not the task's.
+func TestB1W11AStringMatchedPlanAttemptContinuationDoesNotReplay(t *testing.T) {
+	e := fixtureEngine(t)
+	c := fixtureObligation(t, e, codeObligationFinding("c1"))
+	next := canonicalAttempt(t, e, "task-c", "the revised plan")
+	escalateAndContinue(t, e, c, next)
+	if c.PlanAttemptID != next.ID || !equalStrings(c.Continuations, c.Origin.Attempt.ID+"->"+next.ID) {
+		t.Fatalf("premise: the obligation was not continued: %+v", c)
+	}
+	commitLive(t, e, c)
+	got := committedOf(t, e, "task-c")
+	if got.rep.Completion.PlanAttemptID != next.ID {
+		t.Fatalf("premise: the continuation did not replay: %+v", got.rep.Completion)
+	}
+	for name, mutate := range map[string]func(*replayInputs){
+		"a continuation whose record derives another id": func(in *replayInputs) {
+			in.Steps[2].To.Attempt.Plan.Plan = "a plan nobody routed"
+		},
+		"a continuation with no record":        func(in *replayInputs) { in.Steps[2].To = nil },
+		"an origin of another task":            func(in *replayInputs) { in.Origin.Attempt.TaskID = "task-x" },
+		"an origin under another objective":    func(in *replayInputs) { in.Origin.Objective = "another objective" },
+		"no continuation to the named attempt": func(in *replayInputs) { in.Steps = in.Steps[:2] },
+	} {
+		if _, err := got.replay("", mutate); err == nil {
+			t.Fatalf("%s replayed", name)
+		}
+	}
+
+	// THE OBJECTIVE-64 OWNER, not a recomputed hash. Each obligation below
+	// names attempts whose identities their own records derive; none was
+	// made operative by the recorded transitions in the order it claims, and
+	// none is committed.
+	minted := mintedAttempt(t, "task-c", "a plan nobody routed")
+	if err := minted.binding().verify("task-c"); err != nil {
+		t.Fatalf("premise: the minted attempt does not derive its own identity: %v", err)
+	}
+	reversed := fixtureEngine(t)
+	later := canonicalAttempt(t, reversed, "task-c", "the revised plan")
+	earlier := canonicalAttempt(t, reversed, "task-c", "the plan")
+	for name, tc := range map[string]struct {
+		e *Engine
+		c func() *cycleCompletion
+	}{
+		"an origin never started or adopted": {e, func() *cycleCompletion {
+			c := obligationUnder(minted, codeObligationFinding("c1"))
+			retry(t, e, c)
+			return c
+		}},
+		"a continuation to an attempt never started or adopted": {e, func() *cycleCompletion {
+			c := obligationUnder(e.operativePlanAttempt("task-c"), codeObligationFinding("c1"))
+			escalateAndContinue(t, e, c, minted)
+			return c
+		}},
+		"a continuation to an attempt made operative before its origin": {reversed, func() *cycleCompletion {
+			c := obligationUnder(earlier, codeObligationFinding("c1"))
+			escalateAndContinue(t, reversed, c, later)
+			return c
+		}},
+	} {
+		before, _ := committedRecords(t, tc.e)
+		_, err := tc.e.commitCheckpoint(tc.c(), "live", "", fixtureCandidate)
+		var unrecorded *ObligationPersistenceFailed
+		if !errors.As(err, &unrecorded) || unrecorded.Attempts != 0 {
+			t.Fatalf("%s was not refused before commitment: %v", name, err)
+		}
+		if after, _ := committedRecords(t, tc.e); after != before {
+			t.Fatalf("%s was prepared", name)
+		}
+	}
+}
+
+// W12 LIFECYCLE OWNER. The settled invocation's open operations are 70A2's
+// generations of its observations, never stored. An observation stream under
+// which the open generation is not constructible -- a terminal no start
+// opened -- reconstructs another obligation and fails the ReplayDigest.
+func TestB1W12LifecycleGenerationsAreReplayedThrough70A2(t *testing.T) {
+	report := accounting(answerCode("f1"))
+	r := newCompletionRig(t, []string{codeOn("f1")},
+		incompleteTurn{value: 2, report: report, inv: structured(report, started(0, "op-1"))},
+		incompleteTurn{value: 3, unobserved: true, err: errors.New("the worker crashed")},
+	)
+	r.run()
+	got := committedOf(t, r.h.engine, "task-1")
+	if !equalStrings(got.rep.Completion.OpenOperations, "op-1#1") {
+		t.Fatalf("premise: the live checkpoint does not replay the open generation: %+v", got.rep.Completion)
+	}
+	for name, mutate := range map[string]func(*replayInputs){
+		"a terminal no start opened": func(in *replayInputs) {
+			in.Steps[0].Settled.Invocation.Lifecycle = append(in.Steps[0].Settled.Invocation.Lifecycle[:0], terminal(0, "op-1"))
+		},
+		"a transport without lifecycle": func(in *replayInputs) { in.Steps[0].Settled.Invocation.Transport.Lifecycle = false },
+	} {
+		rep, err := got.replay("", mutate)
+		if err == nil && rep.Digest == got.replayDigest {
+			t.Fatalf("%s replayed to the committed ReplayDigest", name)
+		}
+	}
+}
+
+// W15 PREPARE/COMMIT. The durable operations run in exactly the canonical
+// order, and the checkpoint is not eligible until its COMMITTED record exists.
+func TestB1W15ACheckpointIsEligibleOnlyAfterItsCommit(t *testing.T) {
+	e := fixtureEngine(t)
+	c := fixtureObligation(t, e, codeObligationFinding("c1"))
+	var beforeCommit bool
+	ops := failCheckpointIO(t, func(op string, _ int) bool {
+		if op == checkpointCommit {
+			_, _, _, found, _ := e.committedCheckpoint("task-c")
+			beforeCommit = found
+		}
+		return false
+	})
+	id := commitLive(t, e, c)
+	if strings.Join(*ops, ",") != "load,prepare,write,read,commit" {
+		t.Fatalf("the transaction ran %v", *ops)
+	}
+	if beforeCommit {
+		t.Fatal("the checkpoint was eligible before its COMMITTED record")
+	}
+	if got := committedOf(t, e, "task-c"); got.id != id || got.rep.Digest != got.replayDigest {
+		t.Fatalf("the committed checkpoint is not eligible: %+v", got)
+	}
+}
+
+// W15 READBACK. A payload that does not read back as the payload prepared --
+// here corrupted on disk between its write and its read -- is never
+// committed, however many attempts are made.
+func TestB1W15APayloadThatDoesNotReadBackIsNeverCommitted(t *testing.T) {
+	e := fixtureEngine(t)
+	c := fixtureObligation(t, e, codeObligationFinding("c1"))
+	dir := e.Repo.Root + "/.sensei-code/sessions/session-1/checkpoints/"
+	failCheckpointIO(t, func(op string, _ int) bool {
+		if op != checkpointRead {
+			return false
+		}
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range entries {
+			raw, err := os.ReadFile(dir + entry.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(dir+entry.Name(), []byte(strings.Replace(string(raw), `"live"`, `"blocked"`, 1)), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return false
+	})
+	retry(t, e, c)
+	_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+	var unrecorded *ObligationPersistenceFailed
+	if !errors.As(err, &unrecorded) || unrecorded.Attempts != maxCheckpointAttempts {
+		t.Fatalf("a corrupted read-back was not refused on every attempt: %v", err)
+	}
+	if _, committed := committedRecords(t, e); committed != 0 {
+		t.Fatal("a payload that did not read back as prepared was committed")
+	}
+}
+
+// W16 PERSIST RETRY. Two failed writes and then a success commit exactly one
+// checkpoint, from the third complete attempt, with nothing else committed.
+func TestB1W16TwoFailedWritesThenOneCommittedCheckpoint(t *testing.T) {
+	e := fixtureEngine(t)
+	c := fixtureObligation(t, e, codeObligationFinding("c1"))
+	failCheckpointIO(t, func(op string, call int) bool { return op == checkpointWrite && call <= 2 })
+	id := commitLive(t, e, c)
+	prepared, committed := committedRecords(t, e)
+	if prepared != 3 || committed != 1 {
+		t.Fatalf("expected three prepared attempts and one commit, got %d and %d", prepared, committed)
+	}
+	if got := committedOf(t, e, "task-c"); got.id != id {
+		t.Fatalf("the committed checkpoint is not the third attempt's: %s / %s", got.id, id)
+	}
+}
+
+// W17 THREE FAILURES, W18 PRIOR PRESERVED. Three failed writes return the typed
+// failure, commit nothing new, and the previously committed checkpoint stands
+// unchanged and verifiable.
+func TestB1W17W18ThreeFailedWritesPreserveThePriorCheckpoint(t *testing.T) {
+	e := fixtureEngine(t)
+	c := fixtureObligation(t, e, codeObligationFinding("c1"))
+	_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+	if err == nil {
+		t.Fatal("premise: an obligation that is not live was committed live")
+	}
+	prior := commitLive(t, e, c)
+	_, committedBefore := committedRecords(t, e)
+	failCheckpointIO(t, func(op string, _ int) bool { return op == checkpointWrite })
+	retry(t, e, c)
+	_, err = e.commitCheckpoint(c, "live", "", fixtureCandidate)
+	var unrecorded *ObligationPersistenceFailed
+	if !errors.As(err, &unrecorded) || unrecorded.Attempts != maxCheckpointAttempts ||
+		unrecorded.Prior != PriorCheckpointKnown || unrecorded.PriorCheckpointID != prior {
+		t.Fatalf("three failed writes are not the typed failure over the known prior checkpoint: %v", err)
+	}
+	if _, committed := committedRecords(t, e); committed != committedBefore {
+		t.Fatal("a failed checkpoint was committed")
+	}
+	got := committedOf(t, e, "task-c")
+	if got.id != prior || got.status != "live" || got.rep.Completion.Attempts != 1 {
+		t.Fatalf("the prior committed checkpoint did not stand: %+v", got)
+	}
+
+	fresh := fixtureEngine(t)
+	if canonicalAttempt(t, fresh, "task-c", "the plan").ID != c.PlanAttemptID {
+		t.Fatal("premise: the fresh session did not make the obligation's plan attempt operative")
+	}
+	_, err = fresh.commitCheckpoint(c, "live", "", fixtureCandidate)
+	if !errors.As(err, &unrecorded) || unrecorded.Prior != PriorCheckpointAbsent || unrecorded.PriorCheckpointID != "" {
+		t.Fatalf("a store read that found no checkpoint is not established absence: %v", err)
+	}
+}
+
+// W19 UNREADABLE STORE. A store that cannot be read says nothing about earlier
+// checkpoints: the failure states that availability is UNKNOWN, never absence.
+func TestB1W19AnUnreadableStoreIsUnknownNotAbsent(t *testing.T) {
+	e := fixtureEngine(t)
+	c := fixtureObligation(t, e, codeObligationFinding("c1"))
+	commitLive(t, e, c)
+	failCheckpointIO(t, func(op string, _ int) bool { return op == checkpointLoad })
+	retry(t, e, c)
+	_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+	var unrecorded *ObligationPersistenceFailed
+	if !errors.As(err, &unrecorded) || unrecorded.Prior != PriorCheckpointUnknown || unrecorded.PriorCheckpointID != "" {
+		t.Fatalf("an unreadable store was not reported as UNKNOWN: %v", err)
+	}
+	if msg := err.Error(); !strings.Contains(msg, "UNKNOWN") || strings.Contains(msg, "no earlier checkpoint") {
+		t.Fatalf("the failure reads as absence: %s", msg)
+	}
+}
+
+// W19 EVERY ATTEMPT READS AGAIN. The first attempt's read succeeds and finds
+// the prior checkpoint, its write fails, and the next two attempts cannot
+// read the store: what the first read established is not reported, and the
+// prior checkpoint's availability is UNKNOWN.
+func TestB1W19AReadThatFailsAfterASuccessfulOneIsUnknown(t *testing.T) {
+	for name, firstRead := range map[string]bool{"a prior checkpoint": true, "no prior checkpoint": false} {
+		// A subtest each, so one case's injected failures end with it.
+		t.Run(name, func(t *testing.T) {
+			e := fixtureEngine(t)
+			c := fixtureObligation(t, e, codeObligationFinding("c1"))
+			if firstRead {
+				commitLive(t, e, c)
+			}
+			failCheckpointIO(t, func(op string, call int) bool {
+				return op == checkpointWrite || (op == checkpointLoad && call > 1)
+			})
+			retry(t, e, c)
+			_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+			var unrecorded *ObligationPersistenceFailed
+			if !errors.As(err, &unrecorded) || unrecorded.Attempts != maxCheckpointAttempts ||
+				unrecorded.Prior != PriorCheckpointUnknown || unrecorded.PriorCheckpointID != "" {
+				t.Fatalf("%s: a store unreadable on the last attempt was not reported UNKNOWN: %v", name, err)
+			}
+		})
+	}
+}
+
+// W19 KNOWN MEANS VERIFIED. A prior committed checkpoint whose payload no
+// longer verifies -- unreadable, or not the bytes its record binds -- is not a
+// KNOWN prior and is never chained to: its availability is UNKNOWN, and
+// nothing new is committed over it.
+func TestB1W19APriorCheckpointThatDoesNotVerifyIsUnknown(t *testing.T) {
+	for name, damage := range map[string]func(path string) error{
+		"an unreadable payload": os.Remove,
+		"a corrupted payload": func(path string) error {
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(path, []byte(strings.Replace(string(raw), `"live"`, `"blocked"`, 1)), 0o600)
+		},
+		"a payload with a trailing value": func(path string) error {
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(path, append(raw, []byte(" {}")...), 0o600)
+		},
+	} {
+		e := fixtureEngine(t)
+		c := fixtureObligation(t, e, codeObligationFinding("c1"))
+		prior := commitLive(t, e, c)
+		if err := damage(e.Repo.Root + "/.sensei-code/sessions/session-1/checkpoints/" + prior + ".json"); err != nil {
+			t.Fatal(err)
+		}
+		_, committedBefore := committedRecords(t, e)
+		retry(t, e, c)
+		_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+		var unrecorded *ObligationPersistenceFailed
+		if !errors.As(err, &unrecorded) || unrecorded.Prior != PriorCheckpointUnknown || unrecorded.PriorCheckpointID != "" {
+			t.Fatalf("%s: an unverifiable prior checkpoint was reported %v", name, err)
+		}
+		if _, committed := committedRecords(t, e); committed != committedBefore {
+			t.Fatalf("%s: a checkpoint was committed over an unverifiable prior", name)
+		}
+	}
+}
+
+// THE PERSISTENCE FAILURE IS TERMINAL. Every checkpoint commit fails, so the
+// first counted retry's live obligation cannot be committed. Through
+// implement() with a second implementor configured, the run ends on the typed
+// persistence failure: no handoff is created, and no other implementer serves
+// the unrecorded obligation.
+func TestB1W17APersistenceFailureIsNeverHandedToAnotherImplementer(t *testing.T) {
+	r := exhaustingRig(t, 2)
+	second := r.h.worker
+	second.Name = "gemini"
+	r.h.engine.Config.Implementors = append(r.h.engine.Config.Implementors, second)
+	failCheckpointIO(t, func(op string, _ int) bool { return op == checkpointCommit })
+	failed, events := runImplement(r.h)
+	var unrecorded *ObligationPersistenceFailed
+	if !errors.As(failed, &unrecorded) || unrecorded.Attempts != maxCheckpointAttempts || unrecorded.Status != "live" {
+		t.Fatalf("implement() did not end on the typed persistence failure: %v", failed)
+	}
+	if contains(events, event.HandoffCreated) {
+		t.Fatalf("the unrecorded obligation was handed off: %v", kinds(events))
+	}
+	settled := r.h.engine.settledInvocations("task-1")
+	if !equalInts(r.cycles(), 1, 2) {
+		t.Fatalf("another implementer served the unrecorded obligation: cycles %v", r.cycles())
+	}
+	for _, s := range settled {
+		if s.Provider == "gemini" {
+			t.Fatal("the second implementor was invoked after the persistence failure")
+		}
+	}
+}
+
+// W21 NIL STORE. With no store nothing is committed: the first counted retry
+// already fails typed, no exhaustion, retirement or success is produced, and
+// what is known of a prior checkpoint is UNKNOWN.
+func TestB1W21ANilStoreCannotProduceDurableState(t *testing.T) {
+	r := exhaustingRig(t, 2)
+	r.h.engine.Store = nil
+	_, err := r.run()
+	var incomplete *ImplementerIncomplete
+	var unrecorded *ObligationPersistenceFailed
+	if errors.As(err, &incomplete) || !errors.As(err, &unrecorded) {
+		t.Fatalf("a nil store produced something other than the typed persistence failure: %v", err)
+	}
+	if unrecorded.Status != "live" || unrecorded.Prior != PriorCheckpointUnknown || !equalInts(r.cycles(), 1, 2) {
+		t.Fatalf("the nil store's failure is not the first retry's, over an UNKNOWN prior: %+v (cycles %v)", unrecorded, r.cycles())
+	}
+	fixture := fixtureEngine(t)
+	c := fixtureObligation(t, fixture, codeObligationFinding("c1"))
+	retry(t, fixture, c)
+	retry(t, fixture, c)
+	retry(t, fixture, c)
+	e := &Engine{}
+	if err := e.exhaustCycle(context.Background(), nil, "", c, nil, ""); !errors.As(err, &unrecorded) || errors.As(err, &incomplete) {
+		t.Fatalf("a nil store reached the typed exhaustion: %v", err)
+	}
+	c.CheckpointID = strings.Repeat("a", 64)
+	if err := e.retireCycle(context.Background(), nil, "", c, "completed"); !errors.As(err, &unrecorded) {
+		t.Fatalf("a nil store retired a checkpoint: %v", err)
+	}
+}
+
+// W3/W7 THE CYCLE OWNER'S SEQUENCING. The 70A3 owner admits only sequences
+// the live workflow can take, live and on replay: no counted transition once
+// the allowance is spent, so an exhausted cycle has exactly the maximum; no
+// route or account reopens a closed cycle; and a completed retirement
+// tombstones only a cycle that progressed.
+func TestB1W3W7TheCycleOwnerAdmitsOnlyLiveSequences(t *testing.T) {
+	e := fixtureEngine(t)
+	c := fixtureObligation(t, e, codeObligationFinding("c1"))
+	retry(t, e, c)
+	retry(t, e, c)
+	retry(t, e, c)
+	if !c.Exhausted() || c.Attempts != maxIncompleteImplementerAttempts || c.Continuing {
+		t.Fatalf("premise: the third retry did not exhaust the cycle: %+v", c)
+	}
+	held := len(c.Steps)
+	if _, err := c.transition(routeIncompleteRetry); err == nil {
+		t.Fatal("a fourth retry was admitted after the allowance was spent")
+	}
+	if err := c.admit(replayStep{Kind: stepAccount, Judging: judgeAll}); err == nil {
+		t.Fatal("an invocation was accounted to an exhausted cycle")
+	}
+	if len(c.Steps) != held || c.Attempts != maxIncompleteImplementerAttempts {
+		t.Fatalf("a refused transition changed the cycle: %+v", c)
+	}
+	if _, err := e.commitCheckpoint(c, "exhausted", "", fixtureCandidate); err != nil {
+		t.Fatalf("premise: the exhausted checkpoint was not committed: %v", err)
+	}
+	got := committedOf(t, e, "task-c")
+	for name, mutate := range map[string]func(*replayInputs){
+		"a fourth retry": func(in *replayInputs) {
+			n := len(in.Steps)
+			in.Steps = append(in.Steps, in.Steps[n-2], in.Steps[n-1])
+		},
+		"an account after exhaustion": func(in *replayInputs) { in.Steps = append(in.Steps, in.Steps[len(in.Steps)-2]) },
+		"a provider rebound reopening it": func(in *replayInputs) {
+			in.Steps = append(in.Steps, replayStep{Kind: stepRoute, Route: routeProviderRebound})
+		},
+		"a retry with no account before it": func(in *replayInputs) {
+			in.Steps = append(in.Steps[:0:0], in.Steps[1], in.Steps[1], in.Steps[1])
+		},
+	} {
+		if rep, err := got.replay("", mutate); err == nil {
+			t.Fatalf("%s replayed: %+v", name, rep.Completion)
+		}
+	}
+
+	// A completed cycle is closed: nothing reopens it, live or replayed.
+	done := obligationUnder(e.operativePlanAttempt("task-c"), codeObligationFinding("c1"))
+	reconcile(t, e, done, accounting(answerCode("c1")), map[string]bool{"main.go": true}, false)
+	if _, err := done.transition(routeProgress); err != nil {
+		t.Fatalf("premise: the completed cycle did not progress: %v", err)
+	}
+	for _, route := range []cycleRoute{routeProviderRebound, routeOrdinaryError, routeIncompleteRetry, routeErrorHandoff} {
+		if _, err := done.transition(route); err == nil || done.Continuing || done.Route != routeProgress {
+			t.Fatalf("route %s reopened a completed cycle: %+v", route, done)
+		}
+	}
+	if err := done.admit(replayStep{Kind: stepAccount, Judging: judgeUnsettled}); err == nil {
+		t.Fatal("an invocation was accounted to a completed cycle")
+	}
+	if _, err := e.commitCheckpoint(done, "retired", "completed", fixtureCandidate); err != nil {
+		t.Fatalf("premise: the completed cycle was not retired: %v", err)
+	}
+	tomb := committedOf(t, e, "task-c")
+	if tomb.status != "retired" {
+		t.Fatalf("premise: the tombstone is not the committed checkpoint: %+v", tomb)
+	}
+	if _, err := tomb.replay("", func(in *replayInputs) {
+		in.Steps = append(in.Steps, replayStep{Kind: stepRoute, Route: routeProviderRebound})
+	}); err == nil {
+		t.Fatal("a provider rebound after progress replayed")
+	}
+	// A completed retirement of a cycle that never progressed is refused.
+	live := obligationUnder(e.operativePlanAttempt("task-c"), codeObligationFinding("c1"))
+	retry(t, e, live)
+	if _, err := e.commitCheckpoint(live, "retired", "completed", fixtureCandidate); err == nil {
+		t.Fatal("a cycle that never progressed was retired as completed")
+	}
+}
+
+// W11 OPERATIVE AT THE BOUNDARY. A checkpoint's obligation must be owned by
+// the attempt operative at its own PREPARED record: one naming an attempt that
+// was operative once and superseded since is refused; a checkpoint committed
+// while it was operative still verifies, because its replay reads the record
+// as it stood then; a superseded retirement is proven by the transition that
+// superseded it; and a transition recorded only after PREPARED establishes
+// nothing.
+func TestB1W11ThePlanAttemptMustBeOperativeAtTheCheckpointBoundary(t *testing.T) {
+	e := fixtureEngine(t)
+	a := canonicalAttempt(t, e, "task-c", "the plan")
+	c := obligationUnder(a, codeObligationFinding("c1"))
+	prior := commitLive(t, e, c)
+	canonicalAttempt(t, e, "task-c", "the revised plan")
+	if got := committedOf(t, e, "task-c"); got.id != prior || got.rep.Digest != got.replayDigest {
+		t.Fatalf("a checkpoint committed while its attempt was operative no longer verifies: %+v", got)
+	}
+	retry(t, e, c)
+	before, _ := committedRecords(t, e)
+	_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+	var unrecorded *ObligationPersistenceFailed
+	if !errors.As(err, &unrecorded) || unrecorded.Attempts != 0 {
+		t.Fatalf("a live checkpoint naming a superseded plan attempt was not refused: %v", err)
+	}
+	if after, _ := committedRecords(t, e); after != before {
+		t.Fatal("a live checkpoint naming a superseded plan attempt was prepared")
+	}
+
+	// The superseded retirement: proven by the transition that superseded A.
+	disputed := obligationUnder(a, codeObligationFinding("c1"))
+	reconcile(t, e, disputed, accounting(), nil, false)
+	if _, err := disputed.transition(routeDisputeEscalation); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.commitCheckpoint(disputed, "retired", "superseded_plan_attempt", fixtureCandidate); err != nil {
+		t.Fatalf("the retirement of an obligation whose attempt was superseded was refused: %v", err)
+	}
+	current := obligationUnder(e.operativePlanAttempt("task-c"), codeObligationFinding("c1"))
+	reconcile(t, e, current, accounting(), nil, false)
+	if _, err := current.transition(routeDisputeEscalation); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.commitCheckpoint(current, "retired", "superseded_plan_attempt", fixtureCandidate); err == nil {
+		t.Fatal("an obligation of the operative attempt was retired as superseded")
+	}
+
+	// A transition that appears only after PREPARED.
+	e2 := fixtureEngine(t)
+	a2 := canonicalAttempt(t, e2, "task-c", "the plan")
+	b2 := canonicalAttempt(t, e2, "task-c", "the revised plan")
+	c2 := obligationUnder(a2, codeObligationFinding("c1"))
+	escalateAndContinue(t, e2, c2, b2)
+	id := commitLive(t, e2, c2)
+	binding, _, _, _, err := e2.committedCheckpoint("task-c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	history, err := e2.Store.ReadRecord()
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := e2.Store.ReadCheckpoint(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := verifyCheckpoint(payload, binding, replaySources{Record: history, Evidence: e2.retainedEvidence}, e2.SessionID); err != nil {
+		t.Fatalf("premise: the continued checkpoint does not verify: %v", err)
+	}
+	prepared, transition := -1, -1
+	for i, ev := range history {
+		if ev.Kind == event.CheckpointPrepared && strings.Contains(string(ev.Payload), id) {
+			prepared = i
+		}
+		if ev.Kind == event.PlanProposed && strings.Contains(string(ev.Payload), b2.ID) && transition < 0 {
+			transition = i
+		}
+	}
+	if prepared < 0 || transition < 0 || transition > prepared {
+		t.Fatalf("premise: the record does not hold B's transition before PREPARED: %d %d", transition, prepared)
+	}
+	var reordered []event.Event
+	for i, ev := range history {
+		if i == transition {
+			reordered = append(reordered, history[prepared])
+		}
+		if i != prepared {
+			reordered = append(reordered, ev)
+		}
+	}
+	if _, _, err := verifyCheckpoint(payload, binding, replaySources{Record: reordered, Evidence: e2.retainedEvidence}, e2.SessionID); err == nil {
+		t.Fatal("a transition recorded only after PREPARED established the checkpoint's continuation")
+	}
+}
+
+// W22 REPLAY DIGEST. Every load-bearing input is covered: changing any one of
+// them reconstructs an obligation that does not match the committed digest.
+func TestB1W22EveryLoadBearingInputMovesTheReplayDigest(t *testing.T) {
+	e := fixtureEngine(t)
+	c := fixtureObligation(t, e, evidenceOn("e1"), codeObligationFinding("c1"), codeObligationFinding("c2"))
+	reconcile(t, e, c, accounting(`{"id":"e1","answered_by":"evidence","evidence":"go test ./..."}`, answerCode("c1")),
+		map[string]bool{"main.go": true}, true)
+	commitLive(t, e, c)
+	got := committedOf(t, e, "task-c")
+	for name, mutate := range map[string]func(*replayInputs){
+		"the cycle":            func(in *replayInputs) { in.Cycle = 3; in.Steps[0].Settled.Cycle = 3 },
+		"the review attempt":   func(in *replayInputs) { in.Review.Attempt = 2 },
+		"a finding's claim":    func(in *replayInputs) { in.Review.Findings[2].Claim = "another claim" },
+		"the raised candidate": func(in *replayInputs) { in.Review.CandidateTree = "another-tree" },
+		"the report":           func(in *replayInputs) { in.Steps[0].Settled.Invocation.Report = accounting(answerCode("c1")) },
+		"the moved files":      func(in *replayInputs) { in.Steps[0].Moved.Paths = nil },
+		"the evidence":         func(in *replayInputs) { in.Steps[0].Evidence.Checks = nil },
+		"the route":            func(in *replayInputs) { in.Steps[1].Route = routeProviderRebound },
+		"the candidate tree":   func(in *replayInputs) { in.Candidate.Tree = "another-tree" },
+		"the candidate base":   func(in *replayInputs) { in.Candidate.Base = "another-base" },
+		"an extra attempt":     func(in *replayInputs) { in.Steps = append(in.Steps, in.Steps[1]) },
+	} {
+		rep, err := got.replay("", mutate)
+		if err == nil && rep.Digest == got.replayDigest {
+			t.Fatalf("changing %s left the ReplayDigest unchanged", name)
+		}
+	}
+	if rep, err := got.replay("", nil); err != nil || rep.Digest != got.replayDigest {
+		t.Fatalf("premise: the unchanged inputs do not replay to the committed digest: %v", err)
+	}
+}

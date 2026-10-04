@@ -1,10 +1,21 @@
 package workflow
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
+	"github.com/globulario/sensei-code/internal/agent"
+	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/session"
+	"github.com/globulario/sensei-code/internal/taskstate"
+	"github.com/globulario/sensei-code/internal/validation"
 )
 
 // THE INCOMPLETE IMPLEMENTER OBLIGATION REMAINS IN THE SAME LIVE REVIEW CYCLE
@@ -24,7 +35,10 @@ import (
 // an explicit continuation (continueCycleCompletion) is a different obligation,
 // and nothing retained under the old one satisfies it.
 //
-// It is in memory only. Restoring it in a fresh process is not this record's job.
+// It lives in memory. Its durable form is a replay capsule (70B1, RULING-153):
+// the canonical inputs it was built from, which only replaying them through the
+// same owners turns back into an obligation. Restoring it in a fresh process is
+// not this record's job.
 
 // maxIncompleteImplementerAttempts is the internal safety bound on settled
 // incomplete implementer invocations serving one logical review cycle. It is a
@@ -74,6 +88,15 @@ type cycleCompletion struct {
 	// Continuations are the PlanAttempt transitions this obligation was
 	// explicitly carried across, as "from->to".
 	Continuations []string
+	// Origin is the operative PlanAttempt the obligation was established
+	// under, with the objective its identity was derived from.
+	Origin planAttemptBinding
+	// Steps are the canonical inputs of every transition the obligation took,
+	// in order: what a replay drives the same owners with.
+	Steps []replayStep
+	// CheckpointID is the last checkpoint this process committed for the
+	// obligation, if any.
+	CheckpointID string
 }
 
 func newCycleCompletion(taskID, planAttemptID string, cycle int, open openReview) *cycleCompletion {
@@ -121,6 +144,7 @@ func (c *cycleCompletion) clone() *cycleCompletion {
 	out := *c
 	out.Findings = append([]roles.Finding(nil), c.Findings...)
 	out.Continuations = append([]string(nil), c.Continuations...)
+	out.Steps = append([]replayStep(nil), c.Steps...)
 	out.Retained = make(map[string]findingResponse, len(c.Retained))
 	for k, v := range c.Retained {
 		out.Retained[k] = v
@@ -316,24 +340,145 @@ const (
 // live for another implementer, and counts the attempt when the route retries
 // an incomplete obligation. It reports whether it counted. A counted attempt
 // that spends the allowance leaves the cycle not live: no further invocation
-// may be selected for it.
-func (c *cycleCompletion) transition(route cycleRoute) (counted bool) {
+// may be selected for it. A route the cycle's sequencing does not admit
+// (admit) is refused, and nothing changes.
+func (c *cycleCompletion) transition(route cycleRoute) (counted bool, err error) {
+	if err := c.admit(replayStep{Kind: stepRoute, Route: route}); err != nil {
+		return false, err
+	}
 	c.Route = route
+	c.Steps = append(c.Steps, replayStep{Kind: stepRoute, Route: route})
 	switch route {
 	case routeIncompleteRetry, routeErrorHandoff:
-		if route == routeErrorHandoff && !c.incompleteResponse() {
+		if !c.counts(route) {
 			c.Continuing = true
-			return false
+			return false, nil
 		}
 		c.Attempts++
 		c.Continuing = !c.Exhausted()
-		return true
+		return true, nil
 	case routeProviderRebound, routeOrdinaryError:
 		c.Continuing = true
 	default:
 		c.Continuing = false
 	}
-	return false
+	return false, nil
+}
+
+// counts reports whether route would count an incomplete attempt now.
+func (c *cycleCompletion) counts(route cycleRoute) bool {
+	return route == routeIncompleteRetry || (route == routeErrorHandoff && c.incompleteResponse())
+}
+
+// open reports whether the cycle may still be served: no route was selected
+// yet, or the last one kept it live.
+func (c *cycleCompletion) open() bool { return c.Route == "" || c.Continuing }
+
+// admit is THE sequencing rule of a cycle's transitions, the 70A3 owner's
+// own, applied to the live obligation and to its replay alike, so a replay
+// can reconstruct only a sequence the live workflow could have taken:
+//
+//   - an invocation is accounted only to an open cycle, and only after a
+//     selected route (each invocation's account is followed by its route);
+//   - incomplete_retry, progress, diagnosis and dispute_escalation follow only
+//     the account of a validated invocation (judgeAll); incomplete_retry also
+//     follows the one continuation path below;
+//   - provider_rebound and ordinary_error never follow a validated
+//     invocation's account;
+//   - error_handoff follows only the ordinary_error route it hands over;
+//   - a PlanAttempt continuation carries an open cycle between invocations,
+//     or a cycle escalated for a disputed finding, once;
+//   - a closed cycle admits nothing, except the exact owner-defined
+//     continuation: a dispute_escalation, then one PlanAttempt continuation,
+//     then incomplete_retry;
+//   - no counted transition is admitted once the allowance is spent, so an
+//     exhausted cycle has exactly maxIncompleteImplementerAttempts attempts.
+func (c *cycleCompletion) admit(s replayStep) error {
+	var last *replayStep
+	if n := len(c.Steps); n != 0 {
+		last = &c.Steps[n-1]
+	}
+	lastIs := func(k replayStepKind, j judgingSet) bool {
+		return last != nil && last.Kind == k && (j == "" || last.Judging == j)
+	}
+	switch s.Kind {
+	case stepAccount:
+		if s.Judging != judgeAll && s.Judging != judgeUnsettled {
+			return fmt.Errorf("an account judging %q is not an account of this cycle", s.Judging)
+		}
+		if !c.open() {
+			return fmt.Errorf("the cycle is closed on route %s: no invocation may be accounted to it", c.Route)
+		}
+		if lastIs(stepAccount, "") {
+			return errors.New("an invocation is accounted only after the previous one's route was selected")
+		}
+	case stepContinue:
+		if s.To == nil {
+			return errors.New("a continuation names no plan attempt")
+		}
+		escalated := c.Route == routeDisputeEscalation && lastIs(stepRoute, "")
+		if !escalated && (!c.open() || lastIs(stepAccount, "")) {
+			return errors.New("only an open cycle between invocations, or one escalated for a disputed finding and not yet continued, may be continued to another plan attempt")
+		}
+	case stepRoute:
+		if !s.Route.valid() {
+			return fmt.Errorf("route %q is not a route", s.Route)
+		}
+		// continued: the dispute continuation, whose one admitted route is
+		// the retry it was continued for.
+		continued := lastIs(stepContinue, "") && !c.open()
+		switch {
+		case continued && s.Route != routeIncompleteRetry:
+			return fmt.Errorf("a continued cycle is retried, not routed %s", s.Route)
+		case !continued && !c.open():
+			return fmt.Errorf("the cycle is closed on route %s: route %s cannot reopen it", c.Route, s.Route)
+		}
+		switch s.Route {
+		case routeIncompleteRetry, routeProgress, routeDiagnosis, routeDisputeEscalation:
+			if !lastIs(stepAccount, judgeAll) && !(s.Route == routeIncompleteRetry && continued) {
+				return fmt.Errorf("route %s follows only the account of a validated invocation", s.Route)
+			}
+		case routeErrorHandoff:
+			if c.Route != routeOrdinaryError || !c.Continuing || !lastIs(stepRoute, "") {
+				return errors.New("route error_handoff follows only the ordinary_error route it hands over")
+			}
+		case routeProviderRebound, routeOrdinaryError:
+			if lastIs(stepAccount, judgeAll) {
+				return fmt.Errorf("route %s does not follow the account of a validated invocation", s.Route)
+			}
+		}
+		if c.counts(s.Route) && c.Attempts >= maxIncompleteImplementerAttempts {
+			return fmt.Errorf("route %s would count attempt %d of %d: the allowance is spent", s.Route, c.Attempts+1, maxIncompleteImplementerAttempts)
+		}
+	default:
+		return fmt.Errorf("a %q step is not a transition", s.Kind)
+	}
+	return nil
+}
+
+// retires is the owner's rule for which obligation a retirement reason
+// tombstones: completed retires a cycle that progressed; superseded_plan_attempt
+// one escalated for a dispute whose continuation was refused (the superseding
+// transition itself is proven by the Objective-64 owner); replaced_checkpoint
+// one that still had a durable status. Nothing else is retired.
+func (c *cycleCompletion) retires(reason session.RetirementReason) error {
+	switch reason {
+	case session.RetiredCompleted:
+		if c.Route == routeProgress {
+			return nil
+		}
+	case session.RetiredSupersededPlanAttempt:
+		if n := len(c.Steps); c.Route == routeDisputeEscalation && n != 0 && c.Steps[n-1].Kind == stepRoute {
+			return nil
+		}
+	case session.RetiredReplacedCheckpoint:
+		if _, ok := c.durableStatus(); ok {
+			return nil
+		}
+	default:
+		return fmt.Errorf("%q is not a retirement reason", reason)
+	}
+	return fmt.Errorf("an obligation on route %s is not one a %s retirement tombstones", orNone(string(c.Route), "none"), reason)
 }
 
 // retryFeedback is what the next invocation of this cycle is told: the same
@@ -450,16 +595,20 @@ func openOperations(s settledInvocation) []string {
 // updates a record keyed by an invocation: whichever invocation asks, the same
 // cycle gets the same obligation, and a stale one is replaced, never carried.
 func (e *Engine) establishCycleCompletion(taskID string, cycle int, open openReview) *cycleCompletion {
-	attempt := e.operativePlanAttempt(taskID).ID
+	attempt := e.operativePlanAttempt(taskID)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.completions == nil {
 		e.completions = map[string]*cycleCompletion{}
 	}
-	if c := e.completions[taskID]; c.bindsCycle(taskID, attempt, cycle, open) {
+	// A bound obligation the owner has closed -- progressed, diagnosed,
+	// exhausted -- is not served again: a later invocation of the same review
+	// is a new obligation, never a reopened one.
+	if c := e.completions[taskID]; c.bindsCycle(taskID, attempt.ID, cycle, open) && c.open() {
 		return c.clone()
 	}
-	c := newCycleCompletion(taskID, attempt, cycle, open)
+	c := newCycleCompletion(taskID, attempt.ID, cycle, open)
+	c.Origin = attempt.binding()
 	e.completions[taskID] = c
 	return c.clone()
 }
@@ -484,7 +633,10 @@ func (e *Engine) routeCycle(taskID string, cycle int, route cycleRoute) bool {
 	if !ok || c.Cycle != cycle {
 		return false
 	}
-	counted := c.transition(route)
+	counted, err := c.transition(route)
+	if err != nil {
+		return false
+	}
 	e.saveCycleCompletion(c)
 	return counted
 }
@@ -496,21 +648,29 @@ func (e *Engine) routeCycle(taskID string, cycle int, route cycleRoute) bool {
 // incomplete, and the attempt that spends the allowance is returned typed, so
 // no further implementer is selected for the cycle. A cycle on any other route
 // -- a provider rebound, a diagnosis, normal progression -- is not touched.
-func (e *Engine) handOffCycle(taskID string, served bool) *ImplementerIncomplete {
+//
+// A counted handoff is checkpointed before anything is returned: the exhausted
+// one through the exhaustion choke point (exhaustCycle), any other as the live
+// obligation the next implementer serves. A checkpoint that cannot be committed
+// is returned as the typed persistence failure.
+func (e *Engine) handOffCycle(ctx context.Context, tc *taskContext, workspace, taskID string, served bool) error {
 	c, ok := e.liveCycleCompletion(taskID)
 	if !ok || !served || !c.Continuing || c.Route != routeOrdinaryError {
 		return nil
 	}
-	counted := c.transition(routeErrorHandoff)
+	counted, err := c.transition(routeErrorHandoff)
+	if err != nil {
+		return err
+	}
 	e.saveCycleCompletion(c)
 	if !counted {
 		return nil
 	}
 	e.reportIncompleteAttempt(taskID, c, map[string]any{"route": string(c.Route)})
 	if c.Exhausted() {
-		return c.incomplete(c.OpenOperations, "")
+		return e.exhaustCycle(ctx, tc, workspace, c, c.OpenOperations, "")
 	}
-	return nil
+	return e.checkpointCycle(ctx, tc, workspace, c, session.CheckpointLive, "")
 }
 
 // saveCycleCompletion stores c as its task's live obligation, unless another
@@ -550,20 +710,519 @@ func (e *Engine) liveCycleCompletion(taskID string) (*cycleCompletion, bool) {
 // dropped, and nothing retained under it satisfies the new attempt.
 func (e *Engine) continueCycleCompletion(taskID, from string) bool {
 	open, ok := e.openReview(taskID)
-	to := e.operativePlanAttempt(taskID).ID
+	to := e.operativePlanAttempt(taskID)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	c := e.completions[taskID]
 	if c == nil {
 		return false
 	}
-	if !ok || !c.binds(taskID, from, open) {
+	if !ok || !c.binds(taskID, from, open) || c.continueTo(to.binding()) != nil {
 		delete(e.completions, taskID)
 		return false
 	}
-	if to != from {
-		c.Continuations = append(c.Continuations, from+"->"+to)
-		c.PlanAttemptID = to
-	}
 	return true
 }
+
+// continueTo carries the obligation from its PlanAttempt to to, and records
+// the transition: the one rebinding rule, for the live obligation and for its
+// replay alike. A continuation the cycle's sequencing does not admit is
+// refused, and nothing changes.
+func (c *cycleCompletion) continueTo(to planAttemptBinding) error {
+	if err := c.admit(replayStep{Kind: stepContinue, To: &to}); err != nil {
+		return err
+	}
+	if to.Attempt.ID != c.PlanAttemptID {
+		c.Continuations = append(c.Continuations, c.PlanAttemptID+"->"+to.Attempt.ID)
+		c.PlanAttemptID = to.Attempt.ID
+	}
+	c.Steps = append(c.Steps, replayStep{Kind: stepContinue, To: &to})
+	return nil
+}
+
+// THE DURABLE CHECKPOINT IS A REPLAY CAPSULE (70B1, RULING-153).
+//
+// A checkpoint stores the canonical INPUTS the landed owners consumed -- the
+// open review's findings, the operative PlanAttempt and the objective its
+// identity was derived from, each settled invocation's observation, the
+// measured moved files, the executed validation and the identities of the
+// evidence read back for it, every selected route and PlanAttempt
+// continuation, and the 70A4 candidate measurement -- and nothing those owners
+// derive. It holds no "valid", no owed set, no lifecycle verdict and no
+// continuation verdict. It is valid only when replaying those inputs through
+// the same owners (newCycleCompletion, responsesFor, accountForFindings,
+// absorb, transition, continueTo, settleInvocation, the Objective-64 identity
+// and observedCandidate) reconstructs exactly one obligation whose canonical
+// digest is the ReplayDigest it was committed with. There is no field-by-field
+// substitute for that test, and none is written here.
+
+// replayStepKind is the closed kind of one recorded transition.
+type replayStepKind string
+
+const (
+	// stepAccount: one settled, returned invocation reconciled into the cycle.
+	stepAccount replayStepKind = "account"
+	// stepRoute: one route the workflow selected (transition).
+	stepRoute replayStepKind = "route"
+	// stepContinue: one explicit PlanAttempt continuation (continueTo).
+	stepContinue replayStepKind = "continue"
+)
+
+// judgingSet names which findings an account step judged.
+type judgingSet string
+
+const (
+	// judgeAll: every finding of the cycle, beside the retained responses --
+	// the account of a returned invocation whose candidate was validated.
+	judgeAll judgingSet = "all"
+	// judgeUnsettled: only what an error-bearing return could re-judge
+	// (cycleCompletion.judging).
+	judgeUnsettled judgingSet = "unsettled"
+)
+
+// replayStep is the canonical input of one transition, in the order the live
+// obligation took it.
+type replayStep struct {
+	Kind replayStepKind `json:"kind"`
+	// Account inputs.
+	Judging judgingSet    `json:"judging,omitempty"`
+	Settled *settledInput `json:"settled,omitempty"`
+	Moved   *movedFacts   `json:"moved,omitempty"`
+	// Evidence is the executed validation the account read, and ReadBack
+	// the durable identity (taskstate.RetainedEvidence.Key) of each record
+	// read back for an evidence finding, retained under EvidenceCandidate.
+	// Replay loads those records again; a key is never itself the answer.
+	Evidence          *validation.Bundle           `json:"evidence,omitempty"`
+	EvidenceCandidate *taskstate.CandidateIdentity `json:"evidence_candidate,omitempty"`
+	ReadBack          map[string]string            `json:"read_back,omitempty"`
+	// Route input.
+	Route cycleRoute `json:"route,omitempty"`
+	// Continuation input.
+	To *planAttemptBinding `json:"to,omitempty"`
+}
+
+// settledInput is what 70A2 settled one invocation from: the provider, the
+// cycle and the adapter's observation. Replay settles it again
+// (settleInvocation); the settled operations are never stored.
+type settledInput struct {
+	Provider   string            `json:"provider"`
+	Cycle      int               `json:"cycle"`
+	Invocation *agent.Invocation `json:"invocation,omitempty"`
+}
+
+// movedFacts is the canonical file-by-file change measurement an account read
+// (movedPathsSince), never a response's own paths. Measured=false is the
+// measurement that could not be made, which binds no change at all.
+type movedFacts struct {
+	Measured bool     `json:"measured"`
+	Paths    []string `json:"paths,omitempty"`
+}
+
+func movedFactsOf(moved map[string]bool) *movedFacts {
+	if moved == nil {
+		return &movedFacts{}
+	}
+	f := &movedFacts{Measured: true}
+	for p, ok := range moved {
+		if ok {
+			f.Paths = append(f.Paths, p)
+		}
+	}
+	sort.Strings(f.Paths)
+	return f
+}
+
+func (f movedFacts) moved() map[string]bool {
+	if !f.Measured {
+		return nil
+	}
+	out := make(map[string]bool, len(f.Paths))
+	for _, p := range f.Paths {
+		out[p] = true
+	}
+	return out
+}
+
+// recordAccount records the inputs of one account the live obligation is about
+// to absorb. readBack is what retainFindingEvidence read back. An account the
+// cycle's sequencing does not admit is refused: it must not be absorbed.
+func (c *cycleCompletion) recordAccount(judging judgingSet, settled settledInvocation, moved map[string]bool,
+	evidence validation.Bundle, evidenceCandidate taskstate.CandidateIdentity, readBack map[string]string) error {
+	step := replayStep{Kind: stepAccount, Judging: judging, Moved: movedFactsOf(moved),
+		Settled: &settledInput{Provider: settled.Provider, Cycle: settled.Cycle, Invocation: settled.observation()}}
+	if len(evidence.Checks) != 0 || evidence.DiffDigest != "" || evidence.CandidateID != "" {
+		b := evidence
+		step.Evidence = &b
+	}
+	if len(readBack) != 0 {
+		cand := evidenceCandidate
+		step.EvidenceCandidate = &cand
+		step.ReadBack = make(map[string]string, len(readBack))
+		for k, v := range readBack {
+			step.ReadBack[k] = v
+		}
+	}
+	if err := c.admit(step); err != nil {
+		return err
+	}
+	c.Steps = append(c.Steps, step)
+	return nil
+}
+
+// valid reports membership in the closed route vocabulary.
+func (r cycleRoute) valid() bool {
+	switch r {
+	case routeIncompleteRetry, routeProviderRebound, routeOrdinaryError, routeErrorHandoff,
+		routeProgress, routeDiagnosis, routeDisputeEscalation:
+		return true
+	}
+	return false
+}
+
+// durableStatus is the durable status this owner gives its own state: an
+// obligation whose allowance is spent is exhausted; one kept live for the next
+// provider after a provider proved it could not serve is blocked; any other
+// live one is live. Anything else has no durable status but retired.
+func (c *cycleCompletion) durableStatus() (session.CheckpointStatus, bool) {
+	switch {
+	case c.Attempts > maxIncompleteImplementerAttempts:
+		return "", false
+	case c.Exhausted():
+		return session.CheckpointExhausted, true
+	case c.Continuing && c.Route == routeProviderRebound:
+		return session.CheckpointBlocked, true
+	case c.Continuing:
+		return session.CheckpointLive, true
+	}
+	return "", false
+}
+
+// replayInputs is a checkpoint's opaque Inputs, as this owner reads them.
+type replayInputs struct {
+	Cycle     int                `json:"review_cycle"`
+	Review    replayReview       `json:"review"`
+	Origin    planAttemptBinding `json:"plan_attempt"`
+	Steps     []replayStep       `json:"steps"`
+	Candidate candidateInput     `json:"candidate"`
+}
+
+// replayReview is the open review the obligation answers: its attempt, the
+// candidate it was raised on, and its findings by full identity.
+type replayReview struct {
+	Attempt         int             `json:"review_attempt"`
+	CandidateDigest string          `json:"candidate_digest"`
+	CandidateTree   string          `json:"candidate_tree,omitempty"`
+	Findings        []roles.Finding `json:"findings"`
+}
+
+// capsule is c's canonical replay inputs, with cand as its candidate input.
+func (c *cycleCompletion) capsule(cand candidateInput) replayInputs {
+	return replayInputs{
+		Cycle: c.Cycle,
+		Review: replayReview{Attempt: c.ReviewAttempt, CandidateDigest: c.CandidateDigest, CandidateTree: c.CandidateTree,
+			Findings: append([]roles.Finding(nil), c.Findings...)},
+		Origin: c.Origin, Steps: append([]replayStep(nil), c.Steps...), Candidate: cand,
+	}
+}
+
+// replayedObligation is the canonical reconstructed obligation a ReplayDigest
+// is taken of. A retired checkpoint replays to a tombstone: no completion.
+type replayedObligation struct {
+	TaskID          string                   `json:"task_id"`
+	PlanAttemptID   string                   `json:"plan_attempt_id"`
+	Status          session.CheckpointStatus `json:"status"`
+	Retirement      session.RetirementReason `json:"retirement,omitempty"`
+	Cycle           int                      `json:"review_cycle"`
+	ReviewAttempt   int                      `json:"review_attempt"`
+	CandidateDigest string                   `json:"candidate_digest"`
+	CandidateTree   string                   `json:"candidate_tree,omitempty"`
+	Completion      *completionState         `json:"completion,omitempty"`
+	Candidate       candidateRecord          `json:"candidate"`
+}
+
+// completionState is the live state of a non-retired obligation.
+type completionState struct {
+	Findings       []roles.Finding            `json:"findings"`
+	Retained       map[string]findingResponse `json:"retained"`
+	Why            map[string]string          `json:"why"`
+	OpenOperations []string                   `json:"open_operations"`
+	Attempts       int                        `json:"attempts"`
+	Route          cycleRoute                 `json:"route"`
+	Continuing     bool                       `json:"continuing"`
+	Continuations  []string                   `json:"continuations"`
+}
+
+// obligation is c's canonical form under status, with cand its candidate.
+func (c *cycleCompletion) obligation(status session.CheckpointStatus, reason session.RetirementReason, cand candidateRecord) replayedObligation {
+	o := replayedObligation{
+		TaskID: c.TaskID, PlanAttemptID: c.PlanAttemptID, Status: status, Retirement: reason,
+		Cycle: c.Cycle, ReviewAttempt: c.ReviewAttempt, CandidateDigest: c.CandidateDigest, CandidateTree: c.CandidateTree,
+		Candidate: cand,
+	}
+	if status != session.CheckpointRetired {
+		o.Completion = &completionState{
+			Findings: append([]roles.Finding{}, c.Findings...), Retained: map[string]findingResponse{}, Why: map[string]string{},
+			OpenOperations: append([]string{}, c.OpenOperations...), Attempts: c.Attempts, Route: c.Route,
+			Continuing: c.Continuing, Continuations: append([]string{}, c.Continuations...),
+		}
+		for k, v := range c.Retained {
+			o.Completion.Retained[k] = v
+		}
+		for k, v := range c.Why {
+			o.Completion.Why[k] = v
+		}
+	}
+	return o
+}
+
+// digest is the ReplayDigest of o: sha256 of its canonical encoding.
+func (o replayedObligation) digest() (string, error) {
+	raw, err := json.Marshal(o)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// retainedEvidenceReader loads the evidence durable task state holds for one
+// candidate of a task.
+type retainedEvidenceReader func(taskID string, cand taskstate.CandidateIdentity) ([]taskstate.RetainedEvidence, error)
+
+// replaySources are the durable records a replay reads its owners' authority
+// from, never from the checkpoint itself: the session record, read
+// authoritatively, which holds every PlanAttempt start and operative
+// transition; and the task's retained evidence.
+type replaySources struct {
+	Record   []event.Event
+	Evidence retainedEvidenceReader
+}
+
+// replayed is one checkpoint as replay reconstructed it.
+type replayed struct {
+	Obligation replayedObligation
+	Digest     string
+	// Completion is the reconstructed live obligation; nil for a tombstone,
+	// which can never produce one.
+	Completion *cycleCompletion
+}
+
+// Replay reconstructs a checkpoint through the landed owners and returns the
+// one obligation its inputs establish, with its ReplayDigest. It refuses
+// inputs any owner refuses, an obligation not owned by the checkpoint's task
+// and named PlanAttempt, and a status the reconstructed obligation does not
+// have. Whether the result is the checkpoint's committed state is decided by
+// comparing Digest with the committed ReplayDigest, and by nothing else.
+func Replay(cp session.Checkpoint, durable replaySources) (replayed, error) {
+	refuse := func(format string, args ...any) (replayed, error) {
+		return replayed{}, fmt.Errorf("checkpoint %s does not replay: "+format, append([]any{short12(cp.CheckpointID)}, args...)...)
+	}
+	var in replayInputs
+	if err := session.DecodeExactlyOne(cp.Inputs, &in); err != nil {
+		return refuse("its inputs are malformed: %v", err)
+	}
+	// The obligation's PlanAttempts -- its origin and every continuation --
+	// are established by the Objective-64 owner from the durable record of
+	// their starts and operative transitions, before anything is rebound.
+	chain := []planAttemptBinding{in.Origin}
+	for i, step := range in.Steps {
+		if step.Kind != stepContinue {
+			continue
+		}
+		if step.To == nil {
+			return refuse("continuation step %d names no plan attempt", i+1)
+		}
+		chain = append(chain, *step.To)
+	}
+	superseded := cp.Status == session.CheckpointRetired && cp.Retirement == session.RetiredSupersededPlanAttempt
+	if err := verifyPlanAttemptTransitions(durable.Record, cp.TaskID, chain, superseded); err != nil {
+		return refuse("its plan attempts are not established by their durable transitions: %v", err)
+	}
+	c := newCycleCompletion(cp.TaskID, in.Origin.Attempt.ID, in.Cycle, openReview{Attempt: in.Review.Attempt,
+		CandidateDigest: in.Review.CandidateDigest, CandidateTree: in.Review.CandidateTree, Findings: in.Review.Findings})
+	c.Origin = in.Origin
+	if len(c.Findings) == 0 || len(c.Findings) != len(in.Review.Findings) {
+		return refuse("its review owes no finding, or names a finding no obligation is owed for")
+	}
+	for i, step := range in.Steps {
+		switch step.Kind {
+		case stepAccount:
+			if err := c.admit(step); err != nil {
+				return refuse("account step %d is not one the cycle's owner admits: %v", i+1, err)
+			}
+			if step.Settled == nil || step.Moved == nil {
+				return refuse("account step %d carries no settled invocation or no change measurement", i+1)
+			}
+			settled := settleInvocation(step.Settled.Provider, step.Settled.Cycle, agent.Result{Invocation: step.Settled.Invocation}, nil)
+			if !settled.Returned || settled.Cycle != c.Cycle {
+				return refuse("account step %d reconciles an invocation 70A2 did not settle as returned in cycle %d", i+1, c.Cycle)
+			}
+			fresh, _ := parseFindingResponses(strings.TrimSpace(settled.Report))
+			responses, _, conflicted := c.responsesFor(fresh)
+			var judging []roles.Finding
+			if step.Judging == judgeAll {
+				judging = c.Findings
+			} else {
+				judging = c.judging(conflicted)
+			}
+			var bundle validation.Bundle
+			if step.Evidence != nil {
+				bundle = *step.Evidence
+			}
+			// Each read-back identity is resolved to its durable record,
+			// which must be exactly the record the executed check builds
+			// for that finding: a key alone answers nothing.
+			readBack := map[string]string{}
+			if len(step.ReadBack) != 0 {
+				if step.EvidenceCandidate == nil {
+					return refuse("account step %d names retained evidence on no candidate", i+1)
+				}
+				if durable.Evidence == nil {
+					return refuse("account step %d names retained evidence and no durable task state can be read", i+1)
+				}
+				held, err := durable.Evidence(cp.TaskID, *step.EvidenceCandidate)
+				if err != nil {
+					return refuse("the retained evidence of account step %d could not be loaded: %v", i+1, err)
+				}
+				wanted := map[string]taskstate.RetainedEvidence{}
+				for _, rec := range retainedRecords(*step.EvidenceCandidate, judging, responses, bundle, step.Settled.Cycle) {
+					if step.ReadBack[rec.FindingID] == rec.Key() {
+						wanted[rec.FindingID] = rec
+					}
+				}
+				readBack = readBackRetained(held, wanted)
+			}
+			account := accountForFindings(judging, responses, step.Moved.moved(), bundle, readBack)
+			c.absorb(judging, account, responses, settled)
+			c.Steps = append(c.Steps, step)
+		case stepRoute:
+			if _, err := c.transition(step.Route); err != nil {
+				return refuse("route step %d is not one the cycle's owner admits: %v", i+1, err)
+			}
+		case stepContinue:
+			if err := c.continueTo(*step.To); err != nil {
+				return refuse("continuation step %d is not one the cycle's owner admits: %v", i+1, err)
+			}
+		default:
+			return refuse("step %d is a %q step, which is not a transition", i+1, step.Kind)
+		}
+	}
+	if c.PlanAttemptID != cp.PlanAttemptID {
+		return refuse("its inputs establish an obligation owned by plan attempt %s, not %s",
+			orNone(short12(c.PlanAttemptID), "none"), orNone(short12(cp.PlanAttemptID), "none"))
+	}
+	candidate, err := observedCandidate(in.Candidate)
+	if err != nil {
+		return refuse("%v", err)
+	}
+	out := replayed{Completion: c}
+	if cp.Status == session.CheckpointRetired {
+		if err := c.retires(cp.Retirement); err != nil {
+			return refuse("%v", err)
+		}
+		out.Completion = nil
+	} else if status, ok := c.durableStatus(); !ok || status != cp.Status {
+		return refuse("its inputs reconstruct a %s obligation, not a %s one", orNone(string(status), "non-durable"), cp.Status)
+	}
+	out.Obligation = c.obligation(cp.Status, cp.Retirement, candidate.record())
+	if out.Digest, err = out.Obligation.digest(); err != nil {
+		return refuse("its reconstructed obligation cannot be encoded: %v", err)
+	}
+	return out, nil
+}
+
+// IncompleteObligationPersistenceFailedState is the machine-readable state of
+// an obligation no checkpoint could be committed for.
+const IncompleteObligationPersistenceFailedState = "incomplete_obligation_persistence_failed"
+
+// PriorCheckpoint is what is known about the committed checkpoint before a
+// failed one: KNOWN names it, ABSENT is a successful authoritative read that
+// found none, and UNKNOWN is a store that could not be read -- never absence.
+type PriorCheckpoint string
+
+const (
+	PriorCheckpointKnown   PriorCheckpoint = "known"
+	PriorCheckpointAbsent  PriorCheckpoint = "absent"
+	PriorCheckpointUnknown PriorCheckpoint = "unknown"
+)
+
+// ObligationPersistenceFailed is the typed outcome of an obligation whose
+// checkpoint could not be committed. The obligation it describes is NOT
+// durable and NOT resumable, and nothing was retired or overwritten for it.
+type ObligationPersistenceFailed struct {
+	State         string                   `json:"state"`
+	TaskID        string                   `json:"task_id"`
+	PlanAttemptID string                   `json:"plan_attempt_id"`
+	Cycle         int                      `json:"review_cycle"`
+	Status        session.CheckpointStatus `json:"checkpoint_status"`
+	// Attempts are the complete durable write attempts made; 0 when the
+	// checkpoint could not even be constructed.
+	Attempts int `json:"attempts"`
+	// Prior is what is known of the last committed checkpoint, and
+	// PriorCheckpointID names it when it is known.
+	Prior             PriorCheckpoint `json:"prior_checkpoint"`
+	PriorCheckpointID string          `json:"prior_checkpoint_id,omitempty"`
+	Cause             string          `json:"cause"`
+}
+
+func (f *ObligationPersistenceFailed) Error() string {
+	prior := "whether an earlier checkpoint was committed is UNKNOWN: the store could not be read"
+	switch f.Prior {
+	case PriorCheckpointKnown:
+		prior = "the last committed checkpoint " + short12(f.PriorCheckpointID) + " stands unchanged"
+	case PriorCheckpointAbsent:
+		prior = "no earlier checkpoint was committed"
+	}
+	return fmt.Sprintf("%s: the %s obligation of review cycle %d (plan attempt %s) could not be checkpointed after %d attempt(s) "+
+		"and is not durable or resumable; %s: %s", f.State, f.Status, f.Cycle, orNone(short12(f.PlanAttemptID), "none"),
+		f.Attempts, prior, f.Cause)
+}
+
+// exhaustCycle is the ONE choke point of IMPLEMENTER_INCOMPLETE: the exhausted
+// obligation is checkpointed and committed first, and only then is the typed
+// state returned. A checkpoint that cannot be committed -- no store, or every
+// attempt failed -- returns the typed persistence failure instead, never the
+// exhaustion as though durable state existed.
+func (e *Engine) exhaustCycle(ctx context.Context, tc *taskContext, workspace string, c *cycleCompletion, openOperations []string, diagnosis string) error {
+	if err := e.checkpointCycle(ctx, tc, workspace, c, session.CheckpointExhausted, ""); err != nil {
+		return err
+	}
+	return c.incomplete(openOperations, diagnosis)
+}
+
+// checkpointCycle commits c's checkpoint under status and records it on the
+// live obligation.
+func (e *Engine) checkpointCycle(ctx context.Context, tc *taskContext, workspace string, c *cycleCompletion,
+	status session.CheckpointStatus, reason session.RetirementReason) error {
+	id, err := e.commitCheckpoint(c, status, reason, e.measureCandidate(ctx, tc, workspace))
+	if err != nil {
+		return err
+	}
+	c.CheckpointID = id
+	e.saveCycleCompletion(c)
+	return nil
+}
+
+// checkpointBlocked commits the blocked checkpoint of cycle's live obligation,
+// if one binds, before the provider-unavailable block is returned.
+func (e *Engine) checkpointBlocked(ctx context.Context, tc *taskContext, workspace, taskID string, cycle int) error {
+	c, ok := e.liveCycleCompletion(taskID)
+	if !ok || c.Cycle != cycle {
+		return nil
+	}
+	return e.checkpointCycle(ctx, tc, workspace, c, session.CheckpointBlocked, "")
+}
+
+// retireCycle commits the typed tombstone of an obligation this process
+// checkpointed, so its committed checkpoint no longer stands as live. An
+// obligation never checkpointed has nothing to retire.
+func (e *Engine) retireCycle(ctx context.Context, tc *taskContext, workspace string, c *cycleCompletion, reason session.RetirementReason) error {
+	if c == nil || c.CheckpointID == "" {
+		return nil
+	}
+	return e.checkpointCycle(ctx, tc, workspace, c, session.CheckpointRetired, reason)
+}
+
+// errCheckpointUnconstructible marks a checkpoint the owners refused to
+// construct: it is not a persistence failure a retry could repair.
+var errCheckpointUnconstructible = errors.New("the checkpoint could not be constructed")

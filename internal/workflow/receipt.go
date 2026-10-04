@@ -300,21 +300,18 @@ func (e *Engine) noteCaptureRefused(taskID, tree, baseTree string) {
 // already holding exactly that content is the same candidate measured more
 // strongly, and it stands; any other is replaced whole.
 func (e *Engine) noteCurrentCapture(taskID, what, base, tree, diff string) {
+	in := candidateInput{What: what, Base: base, Tree: tree, Empty: strings.TrimSpace(diff) == ""}
 	e.withReceipt(taskID, func(f *receiptFacts) {
-		if strings.TrimSpace(diff) == "" {
-			f.replaceCurrentCandidate(candidateWith(runreceipt.CandidateNone,
-				"no current candidate: "+what+" (tree "+tree+") holds no candidate change from the base"))
-			return
-		}
 		o := f.candidateObservation
-		if o.candidateState == runreceipt.CandidatePresent && o.unmeasured == "" &&
+		if !in.Empty && o.candidateState == runreceipt.CandidatePresent && o.unmeasured == "" &&
 			o.capturedTree.State == runreceipt.Known && o.capturedTree.Text == tree {
 			return
 		}
-		next := candidateWith(runreceipt.CandidatePresent, "the current candidate (tree "+tree+
-			") was measured by "+what+" and has not been certified")
-		next.capturedTree = runreceipt.MeasuredValue(tree, "the canonical tree the capture froze")
-		next.candBase = strings.TrimSpace(base)
+		next, err := observedCandidate(in)
+		if err != nil {
+			next = candidateWith(runreceipt.CandidateUnknown, what+" could not be observed: "+err.Error())
+			next.candBase, next.unmeasured = f.candBase, what+" could not be observed: "+err.Error()
+		}
 		f.replaceCurrentCandidate(next)
 	})
 }
@@ -346,12 +343,112 @@ func (e *Engine) observeCurrentCandidate(ctx context.Context, taskID string, tc 
 // never NONE, never PRESENT, and keeps no identity of the prior candidate, nor
 // is any ref read at the terminal merged into it.
 func (e *Engine) noteCandidateCaptureFailed(taskID, what string, err error) {
-	why := what + " failed: " + err.Error()
 	e.withReceipt(taskID, func(f *receiptFacts) {
-		next := candidateWith(runreceipt.CandidateUnknown, why)
-		next.candBase, next.unmeasured = f.candBase, why
+		next, cerr := observedCandidate(candidateInput{What: what, Base: f.candBase, Failure: err.Error()})
+		if cerr != nil {
+			why := what + " failed: " + err.Error()
+			next = candidateWith(runreceipt.CandidateUnknown, why)
+			next.candBase, next.unmeasured = f.candBase, why
+		}
 		f.replaceCurrentCandidate(next)
 	})
+}
+
+// candidateInput is one measurement of the current candidate, as a durable
+// checkpoint stores it (70B1): what measured it, the base it was cut from, and
+// either the tree the capture froze -- with whether it holds any change -- or
+// the capture's own failure. It is an input, never an observation: only
+// observedCandidate turns it into one.
+type candidateInput struct {
+	What    string `json:"what"`
+	Base    string `json:"base,omitempty"`
+	Tree    string `json:"tree,omitempty"`
+	Empty   bool   `json:"empty,omitempty"`
+	Failure string `json:"failure,omitempty"`
+}
+
+// observedCandidate is the ONE construction of the current candidate
+// observation from a capture's measurement: the live capture transitions use
+// it, and so does a checkpoint's replay. A measurement it cannot construct an
+// observation from is refused, never repaired.
+//
+//   - a failed capture establishes nothing: UNKNOWN, every field carrying the
+//     failure, and no tree -- a failure that also states a tree is refused;
+//   - a capture holding no change from the base is no current candidate: NONE;
+//   - a capture holding work is PRESENT and uncertified, with the tree it froze.
+func observedCandidate(in candidateInput) (candidateObservation, error) {
+	what := strings.TrimSpace(in.What)
+	switch {
+	case what == "":
+		return candidateObservation{}, errors.New("the candidate measurement names no capture")
+	case in.Failure != "":
+		if in.Tree != "" || in.Empty {
+			return candidateObservation{}, errors.New("the candidate measurement is a failed capture that also states what it captured")
+		}
+		why := in.What + " failed: " + in.Failure
+		o := candidateWith(runreceipt.CandidateUnknown, why)
+		o.candBase, o.unmeasured = in.Base, why
+		return o, nil
+	case strings.TrimSpace(in.Tree) == "":
+		return candidateObservation{}, errors.New("the candidate measurement is a capture that froze no tree")
+	case in.Empty:
+		return candidateWith(runreceipt.CandidateNone,
+			"no current candidate: "+in.What+" (tree "+in.Tree+") holds no candidate change from the base"), nil
+	}
+	o := candidateWith(runreceipt.CandidatePresent, "the current candidate (tree "+in.Tree+
+		") was measured by "+in.What+" and has not been certified")
+	o.capturedTree = runreceipt.MeasuredValue(in.Tree, "the canonical tree the capture froze")
+	o.candBase = strings.TrimSpace(in.Base)
+	return o, nil
+}
+
+// checkpointCapture names the capture a checkpoint measures its candidate by.
+const checkpointCapture = "the checkpoint's capture of the current candidate"
+
+// measureCandidate captures the current candidate for a checkpoint. It records
+// nothing: the receipt's observation is not touched.
+func (e *Engine) measureCandidate(ctx context.Context, tc *taskContext, workspace string) candidateInput {
+	in := candidateInput{What: checkpointCapture}
+	if tc == nil {
+		in.Failure = "no task context names the candidate"
+		return in
+	}
+	in.Base = tc.Identity.BaseSHA
+	if strings.TrimSpace(workspace) == "" {
+		in.Failure = "no candidate workspace is known"
+		return in
+	}
+	capture, err := gitx.Repo{Root: workspace}.CandidateCapture(ctx, tc.Identity.BaseSHA, tc.Files)
+	if err != nil {
+		in.Failure = err.Error()
+		return in
+	}
+	in.Tree, in.Empty = capture.Tree, strings.TrimSpace(capture.Diff) == ""
+	return in
+}
+
+// candidateRecord is the canonical form of one candidate observation: what a
+// checkpoint's ReplayDigest covers of it.
+type candidateRecord struct {
+	State          runreceipt.CandidateState `json:"state"`
+	Commit         runreceipt.Value          `json:"commit"`
+	Tree           runreceipt.Value          `json:"tree"`
+	Parent         runreceipt.Value          `json:"parent"`
+	Diff           runreceipt.Value          `json:"diff"`
+	CapturedTree   runreceipt.Value          `json:"captured_tree"`
+	Rendering      runreceipt.Value          `json:"rendering"`
+	DigestRelation runreceipt.DigestRelation `json:"digest_relation"`
+	Certified      bool                      `json:"certified"`
+	Base           string                    `json:"base,omitempty"`
+	Unmeasured     string                    `json:"unmeasured,omitempty"`
+}
+
+func (o candidateObservation) record() candidateRecord {
+	return candidateRecord{
+		State: o.candidateState, Commit: o.candCommit, Tree: o.candTree, Parent: o.candParent, Diff: o.candDiff,
+		CapturedTree: o.capturedTree, Rendering: o.candRendering, DigestRelation: o.digestRelation,
+		Certified: o.certified, Base: o.candBase, Unmeasured: o.unmeasured,
+	}
 }
 
 // Which capture failed, named in the reason every identity field carries.

@@ -95,6 +95,12 @@ func newGateHarness(t *testing.T, policy roles.Policy, mode roles.Session, decis
 	t.Cleanup(cancel)
 
 	e := &Engine{Repo: repo, SessionID: "session-1", Bus: bus}
+	// FIXTURE MIGRATION (70B1, RULING-154): the harness holds the durable
+	// session record a production engine holds -- a real session Store in
+	// test-owned storage, under the engine's own SessionID -- because an
+	// incomplete obligation is committed to it before any exhaustion is
+	// reported. Nothing here writes, fakes or bypasses a checkpoint.
+	_, _, e.Store = blockedEngine(t, t.TempDir(), e.SessionID)
 	e.recordObjective("task-1", Objective{Text: "task", Provenance: SubmittedUnattended})
 	e.Config.Permissions = config.Permissions{
 		ReadRepository: true, WriteCandidates: true, CreateWorktrees: true,
