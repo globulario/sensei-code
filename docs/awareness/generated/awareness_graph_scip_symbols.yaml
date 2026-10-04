@@ -43361,6 +43361,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.closures
     kind: var
+  - id: internal/workflow/engine.go:Engine.completions
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.completions
+    kind: var
   - id: internal/workflow/engine.go:Engine.continueAfterAdmissionRefusal
     namespace: structural.scip
     language: go
@@ -43468,6 +43474,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.implement
+    kind: method
+  - id: internal/workflow/engine.go:Engine.implementerRemains
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.implementerRemains
     kind: method
   - id: internal/workflow/engine.go:Engine.installOperativePlanAttempt
     namespace: structural.scip
@@ -43793,6 +43805,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.reportAdvisory
     kind: method
+  - id: internal/workflow/engine.go:Engine.reportIncompleteAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.reportIncompleteAttempt
+    kind: method
   - id: internal/workflow/engine.go:Engine.reportOutcome
     namespace: structural.scip
     language: go
@@ -43906,6 +43924,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.retainFindingEvidence
+    kind: method
+  - id: internal/workflow/engine.go:Engine.retainReturnedResponses
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.retainReturnedResponses
     kind: method
   - id: internal/workflow/engine.go:Engine.retainedEvidence
     namespace: structural.scip
@@ -47752,6 +47776,804 @@ code_symbols:
     language: go
     file: internal/workflow/graph_identity_test.go
     symbol: TestUnknownIdentityDoesNotBecomeAgreement
+    kind: function
+  - id: internal/workflow/implementer_incomplete.go:Engine.continueCycleCompletion
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: Engine.continueCycleCompletion
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:Engine.establishCycleCompletion
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: Engine.establishCycleCompletion
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:Engine.handOffCycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: Engine.handOffCycle
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:Engine.liveCycleCompletion
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: Engine.liveCycleCompletion
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:Engine.routeCycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: Engine.routeCycle
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:Engine.saveCycleCompletion
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: Engine.saveCycleCompletion
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:Engine.serveCycleCompletion
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: Engine.serveCycleCompletion
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.Attempts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncomplete.Attempts
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.Cycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncomplete.Cycle
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.Diagnosis
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncomplete.Diagnosis
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.Error
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncomplete.Error
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.MaxAttempts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncomplete.MaxAttempts
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.OpenOperations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncomplete.OpenOperations
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.Owed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncomplete.Owed
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.PlanAttemptID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncomplete.PlanAttemptID
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.Retained
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncomplete.Retained
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.ReviewAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncomplete.ReviewAttempt
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.State
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncomplete.State
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncomplete.TaskID
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncompleteState
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncompleteState
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ImplementerIncomplete
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Attempts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.Attempts
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.CandidateDigest
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.CandidateDigest
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.CandidateTree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.CandidateTree
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Continuations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.Continuations
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Continuing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.Continuing
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Cycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.Cycle
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Exhausted
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.Exhausted
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Findings
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.Findings
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.OpenOperations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.OpenOperations
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Owed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.Owed
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.PlanAttemptID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.PlanAttemptID
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Retained
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.Retained
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.RetainedIDs
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.RetainedIDs
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.ReviewAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.ReviewAttempt
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Route
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.Route
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.TaskID
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Why
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.Why
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.absorb
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.absorb
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.answers
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.answers
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.binds
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.binds
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.bindsCycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.bindsCycle
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.clone
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.clone
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.incomplete
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.incomplete
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.incompleteResponse
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.incompleteResponse
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.judging
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.judging
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.responsesFor
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.responsesFor
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.retryFeedback
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.retryFeedback
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.transition
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.transition
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:cycleRoute~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleRoute
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:maxIncompleteImplementerAttempts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: maxIncompleteImplementerAttempts
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:newCycleCompletion
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: newCycleCompletion
+    kind: function
+  - id: internal/workflow/implementer_incomplete.go:nextReviewCycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: nextReviewCycle
+    kind: function
+  - id: internal/workflow/implementer_incomplete.go:openOperations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: openOperations
+    kind: function
+  - id: internal/workflow/implementer_incomplete.go:routeDiagnosis
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: routeDiagnosis
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:routeDisputeEscalation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: routeDisputeEscalation
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:routeErrorHandoff
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: routeErrorHandoff
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:routeIncompleteRetry
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: routeIncompleteRetry
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:routeOrdinaryError
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: routeOrdinaryError
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:routeProgress
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: routeProgress
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:routeProviderRebound
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: routeProviderRebound
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:sameResponse
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: sameResponse
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W10BDiagnosesLeaveNoIncompleteContinuationForTheHandoff
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W10BDiagnosesLeaveNoIncompleteContinuationForTheHandoff
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W10ExistingDiagnosesAreNotSwallowed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W10ExistingDiagnosesAreNotSwallowed
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W11TheSettledInvocationIsTheOnlyProviderFactSource
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W11TheSettledInvocationIsTheOnlyProviderFactSource
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W12AStructuredOpenOperationIsCompletedByALaterSettledInvocation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W12AStructuredOpenOperationIsCompletedByALaterSettledInvocation
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W13APlainTextInvocationWithoutLifecycleIsNotIncomplete
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W13APlainTextInvocationWithoutLifecycleIsNotIncomplete
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W14BThreeIncompleteErrorHandoffsStopBeforeAFourthImplementer
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W14BThreeIncompleteErrorHandoffsStopBeforeAFourthImplementer
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W14TheThirdIncompleteAttemptEndsTypedWithNoFourth
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W14TheThirdIncompleteAttemptEndsTypedWithNoFourth
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W15TheRetryBoundIsAnInternalConstant
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W15TheRetryBoundIsAnInternalConstant
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W16NoProviderAfterAnIncompleteReturnKeepsTheExistingBlock
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W16NoProviderAfterAnIncompleteReturnKeepsTheExistingBlock
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W17RetentionComesOnlyFromTheCanonicalValidator
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W17RetentionComesOnlyFromTheCanonicalValidator
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W18TheObligationConsumesTheSettledInvocationsDirectly
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W18TheObligationConsumesTheSettledInvocationsDirectly
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W1W2AMissingResponseRetriesTheSameCycleAndTheSecondCompletesIt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W1W2AMissingResponseRetriesTheSameCycleAndTheSecondCompletesIt
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W3IncompleteRetriesConsumeNoReviewCycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W3IncompleteRetriesConsumeNoReviewCycle
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W4ARetainedSiblingSurvivesAMalformedRestatement
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W4ARetainedSiblingSurvivesAMalformedRestatement
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W4BReturnedErrorReconciliationKeepsAnUnjudgedRetainedSibling
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W4BReturnedErrorReconciliationKeepsAnUnjudgedRetainedSibling
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W5ADisputeRetainsItsSiblingsAcrossTheArchitectContinuation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W5ADisputeRetainsItsSiblingsAcrossTheArchitectContinuation
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W5BADecidedDisputeCountsOnceAfterTheContinuation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W5BADecidedDisputeCountsOnceAfterTheContinuation
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W6AProviderReboundKeepsTheCycleObligation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W6AProviderReboundKeepsTheCycleObligation
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W6BHandoffAfterAReturnedErrorKeepsTheCycleObligation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W6BHandoffAfterAReturnedErrorKeepsTheCycleObligation
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W7AReboundWithNothingRetainedKeepsTheCycleObligation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W7AReboundWithNothingRetainedKeepsTheCycleObligation
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W7BACompleteResponseReboundKeepsTheCycleAndItsContext
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W7BACompleteResponseReboundKeepsTheCycleAndItsContext
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W7TheFinalInvocationReboundKeepsTheObligation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W7TheFinalInvocationReboundKeepsTheObligation
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W8RetainedResponsesDoNotCrossAReplacedPlanAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W8RetainedResponsesDoNotCrossAReplacedPlanAttempt
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W9ACompleteResponseSetThatDoesNotConvergeIsOrdinaryNonConvergence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestDF41A3W9ACompleteResponseSetThatDoesNotConvergeIsOrdinaryNonConvergence
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:acceptVerdict
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: acceptVerdict
+    kind: const
+  - id: internal/workflow/implementer_incomplete_test.go:accounting
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: accounting
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:answerCode
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: answerCode
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:architectDouble
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: architectDouble
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:codeOn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: codeOn
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.Resolve
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.Resolve
+    kind: method
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.configure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.configure
+    kind: method
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.cycles
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.cycles
+    kind: method
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.events
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.events
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.h
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.h
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.handedOver
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.handedOver
+    kind: method
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.incompleteReports
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.incompleteReports
+    kind: method
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.live
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.live
+    kind: method
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.next
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.next
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.prompts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.prompts
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.reviews
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.reviews
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.run
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.run
+    kind: method
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.stored
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.stored
+    kind: method
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.turns
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.turns
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig.verdicts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig.verdicts
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:completionRig~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: completionRig
+    kind: type
+  - id: internal/workflow/implementer_incomplete_test.go:disputeF4
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: disputeF4
+    kind: const
+  - id: internal/workflow/implementer_incomplete_test.go:equalInts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: equalInts
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:equalStrings
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: equalStrings
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:exhaustingRig
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: exhaustingRig
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:incompleteTurn.err
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: incompleteTurn.err
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:incompleteTurn.inv
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: incompleteTurn.inv
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:incompleteTurn.provider
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: incompleteTurn.provider
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:incompleteTurn.report
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: incompleteTurn.report
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:incompleteTurn.unobserved
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: incompleteTurn.unobserved
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:incompleteTurn.value
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: incompleteTurn.value
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:incompleteTurn~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: incompleteTurn
+    kind: type
+  - id: internal/workflow/implementer_incomplete_test.go:newCompletionRig
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: newCompletionRig
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:owedLines
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: owedLines
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:plainReturn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: plainReturn
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:replacePlanAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: replacePlanAttempt
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:reviseVerdict
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: reviseVerdict
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:rigImplementer.Run
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: rigImplementer.Run
+    kind: method
+  - id: internal/workflow/implementer_incomplete_test.go:rigImplementer.r
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: rigImplementer.r
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:rigImplementer~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: rigImplementer
+    kind: type
+  - id: internal/workflow/implementer_incomplete_test.go:rigReviewer.Run
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: rigReviewer.Run
+    kind: method
+  - id: internal/workflow/implementer_incomplete_test.go:rigReviewer.r
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: rigReviewer.r
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:rigReviewer~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: rigReviewer
+    kind: type
+  - id: internal/workflow/implementer_incomplete_test.go:started
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: started
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:structured
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: structured
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:terminal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: terminal
     kind: function
   - id: internal/workflow/knowledge_limit_test.go:TestANarrowedFullyExaminedPlanIsNotAKnowledgeLimit
     namespace: structural.scip
