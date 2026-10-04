@@ -3215,6 +3215,12 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					e.routeCycle(taskID, cycle, routeProviderRebound)
 					return candidateNotConverged, plan, lastReview, lastAudit, blocked
 				}
+				// An ordinary error can be counted toward IMPLEMENTER_INCOMPLETE
+				// by the handoff, and the invocation may have written the
+				// worktree before it failed: what it left is recorded as the
+				// current candidate before the error is routed (DF-41A4). The
+				// capture's own outcome never replaces the invocation's error.
+				e.observeCurrentCandidate(ctx, taskID, tc, workspace, erroredWorkerCapture)
 				e.routeCycle(taskID, cycle, routeOrdinaryError)
 				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, settled.Err)
 			}
@@ -3225,8 +3231,16 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		candidate := gitx.Repo{Root: workspace}
 		capture, err := candidate.CandidateCapture(ctx, tc.Identity.BaseSHA, tc.Files)
 		if err != nil {
+			// Recorded BEFORE any return: every outcome of this capture can
+			// end the run, and the terminal must state the candidate as it is
+			// now, not as an earlier cycle established it (DF-41A4).
+			e.noteCandidateCaptureFailed(taskID, postWorkerCapture, err)
 			return candidateNotConverged, plan, lastReview, lastAudit, err
 		}
+		// Empty is no current candidate; work is the current, uncertified
+		// candidate. Either is recorded before the read-only refusals, the
+		// "no candidate diff" return and validation below.
+		e.noteCurrentCapture(taskID, postWorkerCapture, tc.Identity.BaseSHA, capture.Tree, capture.Diff)
 		diff := capture.Diff
 		// Every refusal at the boundary is REPRESENTED, with the path, size
 		// and reason, before anything downstream sees the candidate (#89).
@@ -3399,6 +3413,10 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// through the same capture the mint will later re-measure with.
 		reviewed, err := candidate.CandidateCapture(ctx, tc.Identity.BaseSHA, tc.Files)
 		if err != nil {
+			// Recorded BEFORE the return: a recapture that could not be
+			// measured is not an absence, and the observation must not keep
+			// stating an earlier capture's identity as the current one.
+			e.noteCandidateCaptureFailed(taskID, postValidationCapture, err)
 			return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("re-measure the candidate after validation: %w", err)
 		}
 		// The re-measurement is not trusted on its own. The evidence bundle and
@@ -3410,10 +3428,10 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// at the mint, which names the wrong cause.
 		if err := certifiedAgainstCapture(evidence, taskID, reviewed.Diff, diff); err != nil {
 			// Record the candidate outcome BEFORE the edge that terminates on
-			// it. The run knows here that work exists and that no canonical
-			// identity will ever be minted; returning first left the receipt
-			// saying UNKNOWN about something it had just established.
-			e.noteCandidateUnattempted(taskID)
+			// it. The run knows here whether the capture holds work and that no
+			// canonical identity will ever be minted; returning first left the
+			// receipt saying UNKNOWN about something it had just established.
+			e.noteCaptureRefused(taskID, reviewed.Tree, reviewed.BaseTree)
 			return candidateNotConverged, plan, lastReview, lastAudit, err
 		}
 		capture, diff = reviewed, reviewed.Diff
@@ -3421,6 +3439,8 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// audit below can end the run. Recorded only after they all passed, a
 		// run that failed at prospective inspection with a committed, validated
 		// candidate emitted a receipt saying no candidate was created (DF-35).
+		// It replaces the current candidate observation whole, and a capture
+		// validation emptied replaces it with no current candidate (DF-41A4).
 		e.noteCertifiedCandidate(taskID, tc.Identity.BaseSHA, candidateRevision(diff), capture.Tree, capture.BaseTree)
 
 		// Production-scope inspection of every existing production Go file
@@ -9717,8 +9737,16 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 		runner.Run(ctx, taskID, before, formats)
 		recapture, err := repo.CandidateCapture(ctx, base, intended)
 		if err != nil {
+			// The formatter may have rewritten the candidate, and nobody could
+			// measure what it left: recorded before the return, as UNKNOWN
+			// rather than as the identity captured before the rewrite.
+			e.noteCandidateCaptureFailed(taskID, postFormatCapture, err)
 			return validation.Bundle{}, diff, err
 		}
+		// Recorded at once, empty as no current candidate: the capture after
+		// this one can still fail, and its failure must be judged against what
+		// the formatter left, not against the candidate before it (DF-41A4).
+		e.noteCurrentCapture(taskID, postFormatCapture, base, recapture.Tree, recapture.Diff)
 		reread := recapture.Diff
 		// The formatter's own evidence is discarded above, but WHETHER IT
 		// REWROTE ANYTHING is not the formatter's evidence -- it is a fact
