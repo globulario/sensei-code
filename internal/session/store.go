@@ -44,6 +44,18 @@ const maxSessionEvent = 16 << 20
 const initialSessionEventBuffer = 1 << 20
 
 func (s *Store) Append(e event.Event) error {
+	return s.append(e, false)
+}
+
+// AppendDurable appends one readable event and does not acknowledge it until
+// the file contents and containing directory have been synchronized. Use it at
+// boundaries whose next transition depends on the record surviving a process
+// or host loss; ordinary diagnostic events need not pay that synchronous cost.
+func (s *Store) AppendDurable(e event.Event) error {
+	return s.append(e, true)
+}
+
+func (s *Store) append(e event.Event, durable bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -53,19 +65,12 @@ func (s *Store) Append(e event.Event) error {
 	// remove it. An Append that succeeds while the matching Load refuses is the same
 	// contradiction at a higher threshold: the writer still manufactures a record
 	// nothing can open, and by then it is durable.
-	//
-	// So the event is encoded into memory and measured first. Over the limit, nothing
-	// is written and the caller is told; the existing session stays exactly as it was,
-	// readable, with no partial line appended. Under it, the write is one call, so a
-	// record that exists is a record Load can read.
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(e); err != nil {
 		return err
 	}
 	// Encode appends the newline delimiter. Scanner's ceiling applies to the TOKEN,
-	// which excludes that byte, so the token is what must fit -- measured rather than
-	// assumed, because an off-by-one here is precisely the boundary that would make
-	// Append and Load disagree again.
+	// which excludes that byte, so the token is what must fit.
 	if token := buf.Len() - 1; token > maxSessionEvent {
 		return fmt.Errorf("session event for task %q is %d bytes, over the %d-byte maximum a single "+
 			"event may occupy; it is refused before it is written, because a durable record that "+
@@ -76,9 +81,28 @@ func (s *Store) Append(e event.Event) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	_, err = f.Write(buf.Bytes())
-	return err
+	if _, err := f.Write(buf.Bytes()); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if durable {
+		if err := f.Sync(); err != nil {
+			_ = f.Close()
+			return err
+		}
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	if !durable {
+		return nil
+	}
+	d, err := os.Open(filepath.Dir(s.path))
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
 }
 
 func (s *Store) Load() ([]event.Event, error) {
