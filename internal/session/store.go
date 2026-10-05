@@ -963,6 +963,204 @@ func loadRecord(repo, sessionID string) ([]event.Event, error) {
 // unused, because an authority-bearing shortcut that still compiles is one a
 // later caller will reach for. Ask FindActive, then Discovery.ScopedTo.
 
+
 func recordPath(repo, sessionID string) string {
 	return filepath.Join(repo, ".sensei-code", "sessions", sessionID, "events.jsonl")
+}
+
+// INCOMPLETE-OBLIGATION CHECKPOINT FRAMING.
+//
+// This package owns only durable checkpoint framing: exact payload bytes,
+// prepared/committed event pairing, canonical identifiers, and chain
+// continuity. Workflow owns what the payload means and must replay it through
+// the landed semantic owners before it may emit CheckpointCommitted.
+var ErrNoStore = errors.New("no durable session store is attached")
+
+// CheckpointRecord is the framing payload carried identically by
+// CheckpointPrepared and CheckpointCommitted.
+type CheckpointRecord struct {
+	TaskID               string `json:"task_id"`
+	PlanAttemptID        string `json:"plan_attempt_id"`
+	CheckpointID         string `json:"checkpoint_id"`
+	PreviousCheckpointID string `json:"previous_checkpoint_id,omitempty"`
+	PayloadDigest        string `json:"payload_digest"`
+	ReplayDigest         string `json:"replay_digest"`
+}
+
+// Checkpoint is a committed checkpoint after the session projection has
+// proved its event ownership.
+type Checkpoint struct {
+	CheckpointRecord
+	Source    event.Source
+	SessionID string
+}
+
+// DecodeStrict decodes exactly one JSON value. Unknown fields and every
+// trailing non-whitespace byte are malformed. In particular, this does not use
+// Decoder.More as an EOF test because More accepts a stray closing delimiter.
+func DecodeStrict(raw []byte, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	for i, b := range raw[dec.InputOffset():] {
+		switch b {
+		case ' ', '	', '
+', '':
+		default:
+			return fmt.Errorf("the record holds %d trailing byte(s) after its value, starting at offset %d",
+				len(raw)-int(dec.InputOffset())-i, int(dec.InputOffset())+i)
+		}
+	}
+	return nil
+}
+
+func validCheckpointID(id string) bool {
+	if len(id) != 64 {
+		return false
+	}
+	for _, c := range id {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func (r CheckpointRecord) canonical() bool {
+	return strings.TrimSpace(r.TaskID) != "" &&
+		validCheckpointID(r.PlanAttemptID) &&
+		validCheckpointID(r.CheckpointID) &&
+		validCheckpointID(r.PayloadDigest) &&
+		validCheckpointID(r.ReplayDigest) &&
+		(r.PreviousCheckpointID == "" || validCheckpointID(r.PreviousCheckpointID))
+}
+
+func (s *Store) checkpointPath(id string) (string, error) {
+	if s == nil {
+		return "", ErrNoStore
+	}
+	if !validCheckpointID(id) {
+		return "", fmt.Errorf("checkpoint id %q is not a canonical checkpoint identity", id)
+	}
+	return filepath.Join(filepath.Dir(s.path), "checkpoints", id+".json"), nil
+}
+
+// WriteCheckpoint atomically publishes one checkpoint payload and syncs both
+// file and containing directory before reporting success. Rewriting an existing
+// identity is idempotent only when the bytes are identical.
+func (s *Store) WriteCheckpoint(id string, payload []byte) error {
+	p, err := s.checkpointPath(id)
+	if err != nil {
+		return err
+	}
+	if len(payload) > maxSessionEvent {
+		return fmt.Errorf("checkpoint %s is %d bytes, over the %d-byte maximum", id, len(payload), maxSessionEvent)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	dir := filepath.Dir(p)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if existing, err := os.ReadFile(p); err == nil {
+		if bytes.Equal(existing, payload) {
+			return nil
+		}
+		return fmt.Errorf("checkpoint %s already exists with different bytes", id)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	tmp, err := os.CreateTemp(dir, id+".*.tmp")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	defer os.Remove(name)
+
+	if _, err := tmp.Write(payload); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(name, p); err != nil {
+		return err
+	}
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
+}
+
+// ReadCheckpoint returns the exact persisted payload. Decoding and semantic
+// replay intentionally remain outside session storage.
+func (s *Store) ReadCheckpoint(id string) ([]byte, error) {
+	p, err := s.checkpointPath(id)
+	if err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(p)
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > maxSessionEvent {
+		return nil, fmt.Errorf("checkpoint %s is %d bytes, over the %d-byte maximum", id, info.Size(), maxSessionEvent)
+	}
+	return os.ReadFile(p)
+}
+
+// LatestCommittedCheckpoint projects the newest checkpoint in one engine
+// session for one task. A commit is recognized only when an earlier matching
+// prepare record is canonical, system-sourced, bound to the requested session,
+// and extends the already committed predecessor chain.
+//
+// Malformed checkpoint framing is an error, not absence.
+func LatestCommittedCheckpoint(events []event.Event, sessionID, taskID string) (Checkpoint, bool, error) {
+	if strings.TrimSpace(sessionID) == "" {
+		return Checkpoint{}, false, errors.New("no engine session is named, so no checkpoint record can be shown to be its own")
+	}
+
+	prepared := map[string][]CheckpointRecord{}
+	var latest Checkpoint
+	found := false
+
+	for _, e := range events {
+		if e.TaskID != taskID || (e.Kind != event.CheckpointPrepared && e.Kind != event.CheckpointCommitted) {
+			continue
+		}
+		var rec CheckpointRecord
+		if err := DecodeStrict(e.Payload, &rec); err != nil {
+			return Checkpoint{}, false, fmt.Errorf("the %s record %s of task %s does not decode: %w", e.Kind, e.ID, taskID, err)
+		}
+		if rec.TaskID != e.TaskID || e.Source != event.SourceSystem || e.SessionID != sessionID || !rec.canonical() {
+			continue
+		}
+		if e.Kind == event.CheckpointPrepared {
+			prepared[rec.CheckpointID] = append(prepared[rec.CheckpointID], rec)
+			continue
+		}
+		if rec.PreviousCheckpointID != latest.CheckpointID {
+			continue
+		}
+		for _, p := range prepared[rec.CheckpointID] {
+			if p == rec {
+				latest = Checkpoint{CheckpointRecord: rec, Source: e.Source, SessionID: e.SessionID}
+				found = true
+				break
+			}
+		}
+	}
+	return latest, found, nil
 }
