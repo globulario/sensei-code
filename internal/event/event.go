@@ -238,6 +238,15 @@ const (
 	// bound to its PlanAttemptID. A refused attempt never becomes operative,
 	// and its refusal never attaches to any other attempt.
 	PlanAttemptRefused Kind = "plan.attempt.refused"
+	// CheckpointPrepared and CheckpointCommitted are the two records of one
+	// durable incomplete-obligation checkpoint (70B1). PREPARED binds a
+	// checkpoint id to its payload digest and ReplayDigest before the payload
+	// is written; COMMITTED, appended only after the written payload was read
+	// back and replayed to the same ReplayDigest, makes it authoritative. A
+	// prepared checkpoint with no matching commit is not a checkpoint. Neither
+	// is a run ending.
+	CheckpointPrepared  Kind = "checkpoint.prepared"
+	CheckpointCommitted Kind = "checkpoint.committed"
 )
 
 // Terminality is what a governed run's ending ends: the INVOCATION only, or

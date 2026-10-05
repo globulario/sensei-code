@@ -3,6 +3,7 @@ package workflow
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -861,8 +862,11 @@ func (e *Engine) terminateAuthorityOutcome(ctx context.Context, taskID, task str
 		// is not a terminal kind of its own.
 		var payload any
 		var incomplete *ImplementerIncomplete
+		var unrecorded *ObligationPersistenceFailed
 		if errors.As(err, &incomplete) {
 			payload = incomplete
+		} else if errors.As(err, &unrecorded) {
+			payload = unrecorded
 		}
 		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(taskID), err.Error(), payload)
@@ -1983,6 +1987,39 @@ type planAttempt struct {
 	PlanSource PlanSource           `json:"plan_source"`
 	PlanDigest string               `json:"plan_digest,omitempty"`
 	Plan       architectureDecision `json:"plan"`
+	// objective is the objective the identity was derived from. It is not
+	// part of the record; a checkpoint carries it in planAttemptBinding.
+	objective string
+}
+
+// planAttemptBinding is a plan attempt together with the objective its
+// identity was derived from: the canonical input from which the Objective-64
+// identity can be derived again, which a stored id alone is not.
+type planAttemptBinding struct {
+	Objective string      `json:"objective"`
+	Attempt   planAttempt `json:"attempt"`
+}
+
+func (a planAttempt) binding() planAttemptBinding {
+	return planAttemptBinding{Objective: a.objective, Attempt: a}
+}
+
+// verify establishes b as a canonical plan attempt of taskID: the attempt's own
+// record derives, through planAttemptID, exactly the identity it names. An id
+// that merely matches as a string establishes nothing.
+func (b planAttemptBinding) verify(taskID string) error {
+	a := b.Attempt
+	if a.ID == "" || a.TaskID != taskID {
+		return fmt.Errorf("plan attempt %s is not an attempt of task %s", orNone(short12(a.ID), "none"), taskID)
+	}
+	id, err := planAttemptID(a.TaskID, b.Objective, a.World, a.PlanSource, a.PlanDigest, a.Plan)
+	if err != nil {
+		return err
+	}
+	if id != a.ID {
+		return fmt.Errorf("the recorded plan does not derive its plan attempt identity: recorded %s, derived %s", short12(a.ID), short12(id))
+	}
+	return nil
 }
 
 // planAttemptRefusal is the PlanAttemptRefused payload: the typed
@@ -2088,7 +2125,7 @@ func (e *Engine) beginPlanAttempt(taskID, task string, d architectureDecision) (
 	if err != nil {
 		return planAttempt{}, err
 	}
-	a := planAttempt{ID: id, TaskID: taskID, World: world, PlanSource: source, PlanDigest: digest, Plan: d}
+	a := planAttempt{ID: id, TaskID: taskID, World: world, PlanSource: source, PlanDigest: digest, Plan: d, objective: task}
 	if err := e.emitDurable(event.New(e.SessionID, taskID, event.SourceSystem, event.PlanAttemptStarted,
 		"plan attempt "+short12(id)+" routed; plan-local authority derived for it binds to this identity", a)); err != nil {
 		return planAttempt{}, fmt.Errorf("plan attempt %s cannot be routed: %w", short12(id), err)
@@ -2679,45 +2716,11 @@ func (e *Engine) restorePlanAttempt(task session.Interrupted, world string) erro
 	if recorded == "" {
 		return nil
 	}
-	refuse := func(detail string) error {
+	a, detail := startedOperativeAttempt(task.TaskID, task.Task, world, recorded, task.PlanRecord, task.PlanAttemptStart, task.PlanAttemptStartFirst)
+	if detail != "" {
 		return &RestorationRefusal{TaskID: task.TaskID, Subject: restorationSubjectPlanAttempt,
 			Instrument: RestorationInstrumentRecord, Binding: RestorationPlanAttemptUnbound, Detail: detail}
 	}
-	var rec proposedPlan
-	if err := decodeExactly(task.PlanRecord, &rec); err != nil {
-		return refuse("the operative plan record does not decode as the plan contract: " + err.Error())
-	}
-	if rec.PlanAttemptID != recorded {
-		return refuse(fmt.Sprintf("the operative plan record names attempt %s, not %s", short12(rec.PlanAttemptID), short12(recorded)))
-	}
-	id, err := planAttemptID(task.TaskID, task.Task, strings.TrimSpace(world), PlanSource(rec.PlanSource), rec.PlanDigest, rec.architectureDecision)
-	if err != nil {
-		return refuse(err.Error())
-	}
-	if id != recorded {
-		return refuse(fmt.Sprintf("the recorded plan does not reproduce its plan attempt identity at the candidate's pinned base %s: "+
-			"recorded %s, recomputed %s", shortWorldID(world), short12(recorded), short12(id)))
-	}
-	// THE PREREQUISITE. Authority bound to an attempt whose start was never
-	// recorded, or was recorded only after that authority, is not admitted.
-	if len(task.PlanAttemptStart) == 0 {
-		return refuse(fmt.Sprintf("plan attempt %s holds operative authority but no record shows it was started", short12(recorded)))
-	}
-	if !task.PlanAttemptStartFirst {
-		return refuse(fmt.Sprintf("plan attempt %s was recorded as started only after the authority it must precede", short12(recorded)))
-	}
-	var start planAttempt
-	if err := decodeExactly(task.PlanAttemptStart, &start); err != nil {
-		return refuse("the plan attempt start record does not decode as the attempt contract: " + err.Error())
-	}
-	startPlan, _ := json.Marshal(start.Plan)
-	operativePlan, _ := json.Marshal(rec.architectureDecision)
-	if start.ID != recorded || start.TaskID != task.TaskID || start.World != strings.TrimSpace(world) ||
-		start.PlanSource != PlanSource(rec.PlanSource) || start.PlanDigest != rec.PlanDigest || !bytes.Equal(startPlan, operativePlan) {
-		return refuse(fmt.Sprintf("the start record of plan attempt %s does not describe the operative plan it precedes", short12(recorded)))
-	}
-	a := planAttempt{ID: id, TaskID: task.TaskID, World: strings.TrimSpace(world), PlanSource: PlanSource(rec.PlanSource),
-		PlanDigest: rec.PlanDigest, Plan: rec.architectureDecision}
 	e.mu.Lock()
 	// Operative now, so the grant restorers can check their records against
 	// it; it owns grant state only once they have verified that state.
@@ -2725,6 +2728,201 @@ func (e *Engine) restorePlanAttempt(task session.Interrupted, world string) erro
 	t.pending, t.operative = a, a
 	e.mu.Unlock()
 	return nil
+}
+
+// startedOperativeAttempt is THE check that recorded plan attempt held
+// operative authority lawfully, shared by a resume (restorePlanAttempt) and by
+// a checkpoint's replay (verifyPlanAttemptTransitions): planRecord, its
+// operative PlanProposed, decodes exactly as the plan contract, names recorded,
+// and reproduces that identity through planAttemptID at world; start, its FIRST
+// PlanAttemptStarted, was recorded before that operative record and before the
+// authority bound to it (startFirst), decodes exactly as the attempt contract,
+// and describes the same identity, world, source, digest and complete plan. It
+// returns the verified attempt, or why it is not one.
+func startedOperativeAttempt(taskID, objective, world, recorded string, planRecord, start json.RawMessage, startFirst bool) (planAttempt, string) {
+	world = strings.TrimSpace(world)
+	var rec proposedPlan
+	if err := decodeExactly(planRecord, &rec); err != nil {
+		return planAttempt{}, "the operative plan record does not decode as the plan contract: " + err.Error()
+	}
+	if rec.PlanAttemptID != recorded {
+		return planAttempt{}, fmt.Sprintf("the operative plan record names attempt %s, not %s", short12(rec.PlanAttemptID), short12(recorded))
+	}
+	id, err := planAttemptID(taskID, objective, world, PlanSource(rec.PlanSource), rec.PlanDigest, rec.architectureDecision)
+	if err != nil {
+		return planAttempt{}, err.Error()
+	}
+	if id != recorded {
+		return planAttempt{}, fmt.Sprintf("the recorded plan does not reproduce its plan attempt identity at the candidate's pinned base %s: "+
+			"recorded %s, recomputed %s", shortWorldID(world), short12(recorded), short12(id))
+	}
+	// THE PREREQUISITE. Authority bound to an attempt whose start was never
+	// recorded, or was recorded only after that authority, is not admitted.
+	if len(start) == 0 {
+		return planAttempt{}, fmt.Sprintf("plan attempt %s holds operative authority but no record shows it was started", short12(recorded))
+	}
+	if !startFirst {
+		return planAttempt{}, fmt.Sprintf("plan attempt %s was recorded as started only after the authority it must precede", short12(recorded))
+	}
+	var started planAttempt
+	if err := decodeExactly(start, &started); err != nil {
+		return planAttempt{}, "the plan attempt start record does not decode as the attempt contract: " + err.Error()
+	}
+	startPlan, _ := json.Marshal(started.Plan)
+	operativePlan, _ := json.Marshal(rec.architectureDecision)
+	if started.ID != recorded || started.TaskID != taskID || started.World != world ||
+		started.PlanSource != PlanSource(rec.PlanSource) || started.PlanDigest != rec.PlanDigest || !bytes.Equal(startPlan, operativePlan) {
+		return planAttempt{}, fmt.Sprintf("the start record of plan attempt %s does not describe the operative plan it precedes", short12(recorded))
+	}
+	return planAttempt{ID: id, TaskID: taskID, World: world, PlanSource: PlanSource(rec.PlanSource),
+		PlanDigest: rec.PlanDigest, Plan: rec.architectureDecision, objective: objective}, ""
+}
+
+// verifyPlanAttemptTransitions is the Objective-64 replay verifier: it
+// establishes from events -- the durable session record AS IT STOOD at the
+// checkpoint's boundary, never later -- that chain, an obligation's origin and
+// then each PlanAttempt it was continued to, is exactly the run of operative
+// transitions ending at that boundary: the last attempt chained is the attempt
+// operative there, and each continuation is the operative transition that
+// directly superseded the attempt before it. With superseded, the chain's last
+// attempt must instead be the one the boundary's operative transition directly
+// superseded: a typed superseded_plan_attempt retirement is proven by that
+// transition, never by the attempt having been operative at some time.
+//
+// Each attempt is checked by the same rule a resume restores one by
+// (startedOperativeAttempt), against the operative record at its position, and
+// the attempt the chain carries must be exactly the verified one. An identity
+// that merely recomputes from a plan nobody routed, an attempt operative once
+// and superseded since, and a transition recorded only after the boundary
+// establish nothing.
+//
+// Every transition the replay reads must be owner's: the session that the
+// checkpoint's PREPARED and COMMITTED records share. A same-task PlanProposed
+// from another session, or attributed to any source but the one planEventSource
+// gives its PlanSource, and a PlanAttemptStarted, ProspectiveGranted or
+// TestEditGranted naming an attempt of the chain that is not the system's in
+// that session, refuse the replay: foreign or spliced transition evidence is
+// never skipped past and never establishes an obligation.
+func verifyPlanAttemptTransitions(events []event.Event, taskID, owner string, chain []planAttemptBinding, superseded bool) error {
+	if strings.TrimSpace(owner) == "" {
+		return errors.New("the replay names no owning session for its plan attempt transitions")
+	}
+	var owned []planAttemptBinding
+	for i, b := range chain {
+		if i > 0 && b.Attempt.ID == owned[len(owned)-1].Attempt.ID {
+			// No transition is claimed: the obligation stayed with the
+			// attempt before, and must name it exactly.
+			if !samePlanAttemptBinding(b, owned[len(owned)-1]) {
+				return fmt.Errorf("a continuation names plan attempt %s with another record than the one verified", short12(b.Attempt.ID))
+			}
+			continue
+		}
+		owned = append(owned, b)
+	}
+	if len(owned) == 0 {
+		return errors.New("the obligation names no plan attempt")
+	}
+	// The operative transitions of the task, in record order; a repeated
+	// transition to the attempt already operative is not another one.
+	var transitions []int
+	for j, ev := range events {
+		if ev.TaskID != taskID || ev.Kind != event.PlanProposed {
+			continue
+		}
+		var proposed struct {
+			PlanSource PlanSource `json:"plan_source"`
+		}
+		if err := json.Unmarshal(ev.Payload, &proposed); err != nil {
+			return fmt.Errorf("a PlanProposed record of task %s does not decode: %v", taskID, err)
+		}
+		if ev.SessionID != owner {
+			return fmt.Errorf("a PlanProposed record of task %s naming plan attempt %s belongs to session %q, not the checkpoint's session %q",
+				taskID, orNone(short12(planAttemptNamed(ev.Payload)), "none"), ev.SessionID, owner)
+		}
+		if want := planEventSource(proposed.PlanSource); ev.Source != want {
+			return fmt.Errorf("a PlanProposed record of task %s naming plan attempt %s is attributed to %s, not %s",
+				taskID, orNone(short12(planAttemptNamed(ev.Payload)), "none"), ev.Source, want)
+		}
+		if n := len(transitions); n > 0 && planAttemptNamed(events[transitions[n-1]].Payload) == planAttemptNamed(ev.Payload) {
+			continue
+		}
+		transitions = append(transitions, j)
+	}
+	end := len(transitions)
+	if superseded {
+		end--
+	}
+	first := end - len(owned)
+	if end < 1 || first < 0 {
+		if superseded {
+			return fmt.Errorf("no operative transition at the checkpoint's boundary supersedes plan attempt %s", short12(owned[len(owned)-1].Attempt.ID))
+		}
+		return fmt.Errorf("plan attempt %s is not operative for task %s at the checkpoint's boundary", short12(owned[len(owned)-1].Attempt.ID), taskID)
+	}
+	for k, b := range owned {
+		operative := transitions[first+k]
+		if named := planAttemptNamed(events[operative].Payload); named != b.Attempt.ID {
+			if k == len(owned)-1 && !superseded {
+				return fmt.Errorf("plan attempt %s is not operative for task %s at the checkpoint's boundary: %s is",
+					short12(b.Attempt.ID), taskID, orNone(short12(named), "none"))
+			}
+			return fmt.Errorf("plan attempt %s is not the operative transition its obligation was carried across: %s is",
+				short12(b.Attempt.ID), orNone(short12(named), "none"))
+		}
+		if err := b.verify(taskID); err != nil {
+			return err
+		}
+		start, startAt := json.RawMessage(nil), -1
+		before := true
+		for j, ev := range events {
+			if ev.TaskID != taskID || planAttemptNamed(ev.Payload) != b.Attempt.ID {
+				continue
+			}
+			switch ev.Kind {
+			case event.PlanAttemptStarted, event.ProspectiveGranted, event.TestEditGranted:
+				if ev.SessionID != owner || ev.Source != event.SourceSystem {
+					return fmt.Errorf("a %s record naming plan attempt %s is %s's in session %q, not the system's in the checkpoint's session %q",
+						ev.Kind, short12(b.Attempt.ID), ev.Source, ev.SessionID, owner)
+				}
+			}
+			switch {
+			case ev.Kind == event.PlanAttemptStarted && startAt < 0:
+				start, startAt = ev.Payload, j
+			case ev.Kind == event.ProspectiveGranted || ev.Kind == event.TestEditGranted:
+				if startAt < 0 {
+					before = false
+				}
+			}
+		}
+		a, detail := startedOperativeAttempt(taskID, b.Objective, b.Attempt.World, b.Attempt.ID, events[operative].Payload,
+			start, before && startAt >= 0 && startAt < operative)
+		if detail != "" {
+			return errors.New(detail)
+		}
+		if !samePlanAttemptBinding(b, a.binding()) {
+			return fmt.Errorf("plan attempt %s is not the attempt its durable records establish", short12(b.Attempt.ID))
+		}
+	}
+	return nil
+}
+
+// planAttemptNamed is the PlanAttemptID a plan-attempt record names.
+func planAttemptNamed(payload json.RawMessage) string {
+	var bound struct {
+		ID string `json:"plan_attempt_id"`
+	}
+	if json.Unmarshal(payload, &bound) != nil {
+		return ""
+	}
+	return bound.ID
+}
+
+// samePlanAttemptBinding reports whether a and b are one attempt under one
+// objective, record for record.
+func samePlanAttemptBinding(a, b planAttemptBinding) bool {
+	ra, errA := json.Marshal(a)
+	rb, errB := json.Marshal(b)
+	return errA == nil && errB == nil && bytes.Equal(ra, rb)
 }
 
 // decodeExactly decodes one JSON value into v, refusing an unknown field and
@@ -2951,6 +3149,17 @@ type settledOperation struct {
 	Terminal   int
 }
 
+// observation is the adapter observation s was settled from, as far as
+// settlement reads it: settling it again (settleInvocation) reproduces every
+// settled fact but Err and Text. Nil when the adapter observed nothing.
+func (s settledInvocation) observation() *agent.Invocation {
+	if !s.Observed {
+		return nil
+	}
+	return &agent.Invocation{Transport: s.Transport, TransportFailed: s.TransportFailed, Exited: s.Exited, ExitCode: s.ExitCode,
+		Returned: s.Returned, Report: s.Report, Lifecycle: append([]agent.LifecycleObservation(nil), s.Lifecycle...)}
+}
+
 // Open reports operations started and never terminated.
 func (s settledInvocation) Open() []settledOperation {
 	var open []settledOperation
@@ -3037,10 +3246,13 @@ func (e *Engine) settledInvocations(taskID string) []settledInvocation {
 // response nothing contradicts is not judged again. It retains facts only: the
 // route the error takes -- and whether that route counts the invocation -- is
 // selected afterwards, by the route owner.
-func (e *Engine) retainReturnedResponses(ctx context.Context, taskID string, cycle int, tc *taskContext, workspace string, settled settledInvocation) {
+//
+// An account the cycle's owner refuses to admit is returned, and nothing is
+// absorbed for it.
+func (e *Engine) retainReturnedResponses(ctx context.Context, taskID string, cycle int, tc *taskContext, workspace string, settled settledInvocation) error {
 	open, ok := e.openReview(taskID)
 	if !ok || len(outstandingFindings(open)) == 0 {
-		return
+		return nil
 	}
 	fresh, _ := parseFindingResponses(strings.TrimSpace(settled.Report))
 	obligation := e.establishCycleCompletion(taskID, cycle, open)
@@ -3052,8 +3264,12 @@ func (e *Engine) retainReturnedResponses(ctx context.Context, taskID string, cyc
 	}
 	judging := obligation.judging(conflicted)
 	account := accountForFindings(judging, responses, moved, validation.Bundle{}, nil)
+	if err := obligation.recordAccount(judgeUnsettled, settled, moved, validation.Bundle{}, taskstate.CandidateIdentity{}, nil); err != nil {
+		return fmt.Errorf("review cycle %d could not account the returned invocation: %w", cycle, err)
+	}
 	obligation.absorb(judging, account, responses, settled)
 	e.saveCycleCompletion(obligation)
+	return nil
 }
 
 // reportIncompleteAttempt emits the machine-readable record of one counted
@@ -3072,6 +3288,269 @@ func (e *Engine) reportIncompleteAttempt(taskID string, c *cycleCompletion, extr
 		fmt.Sprintf("review cycle %d is incomplete after implementer attempt %d of %d; still owed: %s",
 			c.Cycle, c.Attempts, maxIncompleteImplementerAttempts, orNone(strings.Join(c.Owed(), ", "), "none")),
 		map[string]any{"implementer_incomplete": payload}))
+}
+
+// maxCheckpointAttempts bounds the synchronous internal attempts one
+// checkpoint gets, each the complete durable operation. They are not review
+// cycles and not implementer attempts, and nothing configures them.
+const maxCheckpointAttempts = 3
+
+// The durable operations of one checkpoint attempt, in order.
+const (
+	checkpointLoad    = "load"
+	checkpointPrepare = "prepare"
+	checkpointWrite   = "write"
+	checkpointRead    = "read"
+	checkpointCommit  = "commit"
+)
+
+// checkpointIO performs one durable checkpoint operation. It is indirected so
+// a test can make one operation fail; production never replaces it, and
+// nothing a replacement returns can stand in for a write: success is always
+// the real store's.
+var checkpointIO = func(op string, do func() error) error { return do() }
+
+// commitCheckpoint is the ONE transaction that makes an obligation's
+// checkpoint authoritative (70B1, RULING-153): construct the canonical replay
+// inputs, replay them through the landed owners for the ReplayDigest, append
+// CHECKPOINT_PREPARED, write the complete payload, read it back, strictly
+// decode it, replay what was read to the same ReplayDigest, and only then
+// append CHECKPOINT_COMMITTED binding exactly what was prepared.
+//
+// A checkpoint the owners refuse to construct is never written. With no store
+// nothing can be committed, and that is never success. A write failure is
+// retried, the complete operation again, up to maxCheckpointAttempts times;
+// every attempt failing returns the typed persistence failure, stating what is
+// known of the last committed checkpoint -- which nothing here retires,
+// overwrites or deletes.
+func (e *Engine) commitCheckpoint(c *cycleCompletion, status session.CheckpointStatus, reason session.RetirementReason, cand candidateInput) (string, error) {
+	failed := &ObligationPersistenceFailed{State: IncompleteObligationPersistenceFailedState, TaskID: c.TaskID,
+		PlanAttemptID: c.PlanAttemptID, Cycle: c.Cycle, Status: status, Prior: PriorCheckpointUnknown}
+	store := e.Store
+	if store == nil {
+		failed.Cause = "no durable session store is attached, so no checkpoint can be committed and none can be read"
+		return "", failed
+	}
+	inputs, err := json.Marshal(c.capsule(cand))
+	if err != nil {
+		failed.Cause = fmt.Sprintf("%v: %v", errCheckpointUnconstructible, err)
+		return "", failed
+	}
+	for attempt := 1; attempt <= maxCheckpointAttempts; attempt++ {
+		id, err := e.checkpointAttempt(store, c, status, reason, inputs, failed)
+		if err == nil {
+			return id, nil
+		}
+		failed.Cause = err.Error()
+		if errors.Is(err, errCheckpointUnconstructible) {
+			return "", failed
+		}
+		failed.Attempts = attempt
+	}
+	return "", failed
+}
+
+// checkpointAttempt is one complete attempt. It records on failed what THIS
+// attempt's authoritative read established about the prior committed
+// checkpoint: UNKNOWN until that read succeeds, ABSENT when it found none, and
+// KNOWN only for a prior checkpoint whose payload was read back and verified
+// in full -- its digest, its strict decoding, and its replay to its committed
+// ReplayDigest. A prior that cannot be verified is not chained to.
+func (e *Engine) checkpointAttempt(store *session.Store, c *cycleCompletion, status session.CheckpointStatus,
+	reason session.RetirementReason, inputs json.RawMessage, failed *ObligationPersistenceFailed) (string, error) {
+	failed.Prior, failed.PriorCheckpointID = PriorCheckpointUnknown, ""
+	var prior session.CheckpointBinding
+	var found bool
+	var durable replaySources
+	if err := checkpointIO(checkpointLoad, func() error {
+		var err error
+		durable, prior, found, err = e.verifiedCommittedCheckpoint(store, c.TaskID)
+		return err
+	}); err != nil {
+		return "", err
+	}
+	failed.Prior = PriorCheckpointAbsent
+	if found {
+		failed.Prior, failed.PriorCheckpointID = PriorCheckpointKnown, prior.CheckpointID
+	}
+	var entropy [32]byte
+	if _, err := rand.Read(entropy[:]); err != nil {
+		return "", err
+	}
+	cp := session.Checkpoint{Version: session.CheckpointVersion, CheckpointID: hex.EncodeToString(entropy[:]),
+		PreviousCheckpointID: prior.CheckpointID, TaskID: c.TaskID, PlanAttemptID: c.PlanAttemptID,
+		Status: status, Retirement: reason, Inputs: inputs}
+	unconstructible := func(err error) error { return fmt.Errorf("%w: %v", errCheckpointUnconstructible, err) }
+	payload, err := session.EncodeCheckpoint(cp)
+	if err != nil {
+		return "", unconstructible(err)
+	}
+	first, err := Replay(cp, durable)
+	if err != nil {
+		return "", unconstructible(err)
+	}
+	// The inputs must reproduce the obligation they were taken from: a
+	// capsule that replays to some other obligation records nothing.
+	live, err := c.obligation(status, reason, first.Obligation.Candidate).digest()
+	if err != nil {
+		return "", unconstructible(err)
+	}
+	if live != first.Digest {
+		return "", unconstructible(fmt.Errorf("its inputs replay to obligation %s, not the live obligation %s", short12(first.Digest), short12(live)))
+	}
+	sum := sha256.Sum256(payload)
+	binding := session.CheckpointBinding{CheckpointID: cp.CheckpointID, PreviousCheckpointID: cp.PreviousCheckpointID,
+		TaskID: c.TaskID, PlanAttemptID: c.PlanAttemptID, Status: status, Retirement: reason,
+		PayloadDigest: hex.EncodeToString(sum[:]), ReplayDigest: first.Digest}
+	record := func(op string, kind event.Kind, summary string) error {
+		ev := event.New(e.SessionID, c.TaskID, event.SourceSystem, kind, summary, binding)
+		// Synced before anything is published or returned: a record a
+		// crash can lose publishes nothing.
+		if err := checkpointIO(op, func() error { return store.AppendDurable(ev) }); err != nil {
+			return fmt.Errorf("the %s record could not be written durably: %w", kind, err)
+		}
+		if e.Bus != nil {
+			e.Bus.Publish(ev)
+		}
+		return nil
+	}
+	what := fmt.Sprintf("%s checkpoint %s of review cycle %d", status, short12(cp.CheckpointID), c.Cycle)
+	if err := record(checkpointPrepare, event.CheckpointPrepared, what+" prepared"); err != nil {
+		return "", err
+	}
+	if err := checkpointIO(checkpointWrite, func() error { return store.WriteCheckpoint(cp.CheckpointID, payload) }); err != nil {
+		return "", fmt.Errorf("the payload of %s could not be written: %w", what, err)
+	}
+	// The authoritative readback: the payload, and the session record that
+	// now holds its PREPARED record, whose boundary the replay is bound to.
+	var back []byte
+	var recorded replaySources
+	if err := checkpointIO(checkpointRead, func() error {
+		var err error
+		if back, err = store.ReadCheckpoint(cp.CheckpointID); err != nil {
+			return err
+		}
+		recorded, err = e.replaySourcesOf(store)
+		return err
+	}); err != nil {
+		return "", fmt.Errorf("the payload of %s could not be read back: %w", what, err)
+	}
+	if _, _, err := verifyCheckpoint(back, binding, recorded, e.SessionID); err != nil {
+		return "", fmt.Errorf("the payload of %s read back is not the checkpoint prepared: %w", what, err)
+	}
+	if err := record(checkpointCommit, event.CheckpointCommitted, what+" committed"); err != nil {
+		return "", err
+	}
+	return cp.CheckpointID, nil
+}
+
+// verifyCheckpoint is the validity test of one durable checkpoint payload
+// against the record that binds it: the bytes are exactly the payload digest
+// the record names, they strictly decode as one canonical checkpoint of that
+// identity, task, plan attempt and status, and replaying them through the
+// landed owners reproduces the record's ReplayDigest. The replay reads durable
+// only as it stood at the checkpoint's own PREPARED record in sessionID: what
+// was recorded afterwards cannot establish it. Nothing else makes a checkpoint
+// valid.
+func verifyCheckpoint(payload []byte, b session.CheckpointBinding, durable replaySources, sessionID string) (session.Checkpoint, replayed, error) {
+	if sum := sha256.Sum256(payload); hex.EncodeToString(sum[:]) != b.PayloadDigest {
+		return session.Checkpoint{}, replayed{}, errors.New("the payload is not the bytes its record binds")
+	}
+	cp, err := session.DecodeCheckpoint(payload)
+	if err != nil {
+		return session.Checkpoint{}, replayed{}, err
+	}
+	if cp.CheckpointID != b.CheckpointID || cp.PreviousCheckpointID != b.PreviousCheckpointID || cp.TaskID != b.TaskID ||
+		cp.PlanAttemptID != b.PlanAttemptID || cp.Status != b.Status || cp.Retirement != b.Retirement {
+		return session.Checkpoint{}, replayed{}, errors.New("the payload names another checkpoint than its record binds")
+	}
+	bounded, err := durable.atPrepared(b, sessionID)
+	if err != nil {
+		return session.Checkpoint{}, replayed{}, err
+	}
+	rep, err := Replay(cp, bounded)
+	if err != nil {
+		return session.Checkpoint{}, replayed{}, err
+	}
+	if rep.Digest != b.ReplayDigest {
+		return session.Checkpoint{}, replayed{}, fmt.Errorf("the payload replays to %s, not its ReplayDigest %s", short12(rep.Digest), short12(b.ReplayDigest))
+	}
+	return cp, rep, nil
+}
+
+// committedCheckpoint is the task's authoritative checkpoint in this engine's
+// session: the newest COMMITTED one whose ownership the record proves, read
+// back and verified. found=false with a nil error is absence established by a
+// successful read; an error is a record or payload that could not be read or
+// verified, never absence.
+func (e *Engine) committedCheckpoint(taskID string) (session.CheckpointBinding, session.Checkpoint, replayed, bool, error) {
+	if e.Store == nil {
+		return session.CheckpointBinding{}, session.Checkpoint{}, replayed{}, false,
+			errors.New("no durable session store is attached, so whether a checkpoint was committed is unknown")
+	}
+	durable, err := e.replaySourcesOf(e.Store)
+	if err != nil {
+		return session.CheckpointBinding{}, session.Checkpoint{}, replayed{}, false, err
+	}
+	b, found := session.CommittedCheckpoint(durable.Record, taskID, e.SessionID)
+	if !found {
+		return session.CheckpointBinding{}, session.Checkpoint{}, replayed{}, false, nil
+	}
+	payload, err := e.Store.ReadCheckpoint(b.CheckpointID)
+	if err != nil {
+		return b, session.Checkpoint{}, replayed{}, true, err
+	}
+	cp, rep, err := verifyCheckpoint(payload, b, durable, e.SessionID)
+	return b, cp, rep, true, err
+}
+
+// verifiedCommittedCheckpoint is one authoritative read for a checkpoint
+// attempt: the session record and the replay sources it yields, and the
+// task's newest committed checkpoint, verified in full. found=false with a nil
+// error is absence established by that read. Any record, payload or replay
+// failure is an error: whether a prior checkpoint stands is then unknown.
+func (e *Engine) verifiedCommittedCheckpoint(store *session.Store, taskID string) (replaySources, session.CheckpointBinding, bool, error) {
+	durable, err := e.replaySourcesOf(store)
+	if err != nil {
+		return replaySources{}, session.CheckpointBinding{}, false, err
+	}
+	b, found := session.CommittedCheckpoint(durable.Record, taskID, e.SessionID)
+	if !found {
+		return durable, session.CheckpointBinding{}, false, nil
+	}
+	payload, err := store.ReadCheckpoint(b.CheckpointID)
+	if err != nil {
+		return replaySources{}, session.CheckpointBinding{}, false,
+			fmt.Errorf("the committed checkpoint %s could not be read back: %w", short12(b.CheckpointID), err)
+	}
+	if _, _, err := verifyCheckpoint(payload, b, durable, e.SessionID); err != nil {
+		return replaySources{}, session.CheckpointBinding{}, false,
+			fmt.Errorf("the committed checkpoint %s does not verify: %w", short12(b.CheckpointID), err)
+	}
+	return durable, b, true, nil
+}
+
+// atPrepared is durable as it stood at b's PREPARED record in sessionID: the
+// record before it. A checkpoint with no such record has no boundary, and no
+// replay of it is authoritative.
+func (d replaySources) atPrepared(b session.CheckpointBinding, sessionID string) (replaySources, error) {
+	at, ok := session.PreparedAt(d.Record, b, sessionID)
+	if !ok {
+		return replaySources{}, fmt.Errorf("checkpoint %s has no owned PREPARED record to bound its replay", short12(b.CheckpointID))
+	}
+	d.Record = d.Record[:at:at]
+	d.Session = sessionID
+	return d, nil
+}
+
+// replaySourcesOf reads store's session record authoritatively, with this
+// engine's retained evidence, as the durable sources a replay reads.
+func (e *Engine) replaySourcesOf(store *session.Store) (replaySources, error) {
+	record, err := store.ReadRecord()
+	if err != nil {
+		return replaySources{}, err
+	}
+	return replaySources{Record: record, Evidence: e.retainedEvidence, Session: e.SessionID}, nil
 }
 
 // implementerRemains reports whether any of rest is eligible to implement the
@@ -3183,8 +3662,12 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			})
 			if err != nil {
 				// No invocation occurred: the cycle stays live for the next
-				// provider, and nothing is counted.
+				// provider, and nothing is counted. The blocked obligation is
+				// committed before the block is returned.
 				e.routeCycle(taskID, cycle, routeProviderRebound)
+				if cerr := e.checkpointBlocked(ctx, tc, workspace, taskID, cycle); cerr != nil {
+					return candidateNotConverged, plan, lastReview, lastAudit, cerr
+				}
 				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 			}
 			// The worker's own text is the artifact of a read-only plan.
@@ -3204,7 +3687,9 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				// validated responses are kept for the cycle before the route
 				// is taken.
 				if settled.Returned {
-					e.retainReturnedResponses(ctx, taskID, cycle, tc, workspace, settled)
+					if err := e.retainReturnedResponses(ctx, taskID, cycle, tc, workspace, settled); err != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, errors.Join(settled.Err, err)
+					}
 				}
 				// The cycle stays live for the next implementer either way,
 				// even when nothing is still owed. An unavailable provider is
@@ -3213,6 +3698,11 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				// obligation to another implementer.
 				if blocked != nil {
 					e.routeCycle(taskID, cycle, routeProviderRebound)
+					// No block advertises the obligation before its
+					// checkpoint is committed.
+					if err := e.checkpointBlocked(ctx, tc, workspace, taskID, cycle); err != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, err
+					}
 					return candidateNotConverged, plan, lastReview, lastAudit, blocked
 				}
 				// An ordinary error can be counted toward IMPLEMENTER_INCOMPLETE
@@ -3638,6 +4128,9 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				account := accountForFindings(outstanding, responses, moved, evidence, readBack)
 				var lapsed []string
 				if obligation != nil {
+					if err := obligation.recordAccount(judgeAll, settled, moved, evidence, retainedCandidate(tc.Identity.BaseSHA, evidence), readBack); err != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("review cycle %d could not account the invocation: %w", cycle, err)
+					}
 					lapsed = obligation.absorb(outstanding, account, responses, settled)
 					e.saveCycleCompletion(obligation)
 				}
@@ -3647,37 +4140,49 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				// incomplete counts one settled, returned implementer
 				// invocation that left this cycle owed, and says whether the
 				// cycle is tried again. The third ends it typed: no fourth
-				// invocation. An invocation with no obligation is not counted
-				// and is not retried.
-				incomplete := func() (bool, *ImplementerIncomplete) {
+				// invocation, and the typed state only through the exhaustion
+				// choke point. A retried cycle is committed live before it is
+				// served again. An invocation with no obligation is not
+				// counted and is not retried.
+				incomplete := func(diagnosis string) (bool, error) {
 					if obligation == nil {
 						return false, nil
 					}
-					obligation.transition(routeIncompleteRetry)
+					if _, err := obligation.transition(routeIncompleteRetry); err != nil {
+						return false, err
+					}
 					e.saveCycleCompletion(obligation)
 					e.reportIncompleteAttempt(taskID, obligation, map[string]any{
 						"route": string(obligation.Route), "restated_findings": restated, "conflicted_findings": conflicted,
 						"lapsed_findings": lapsed, "provider": settled.Provider,
 					})
 					if obligation.Exhausted() {
-						return false, obligation.incomplete(unterminated, account.Diagnosis())
+						return false, e.exhaustCycle(ctx, tc, workspace, obligation, unterminated, diagnosis)
+					}
+					if err := e.checkpointCycle(ctx, tc, workspace, obligation, session.CheckpointLive, ""); err != nil {
+						return false, err
 					}
 					return true, nil
 				}
 				// leave selects a route that ends this cycle's continuation:
 				// nothing live is left for the outer handoff to resume.
-				leave := func(route cycleRoute) {
+				leave := func(route cycleRoute) error {
 					if obligation != nil {
-						obligation.transition(route)
+						if _, err := obligation.transition(route); err != nil {
+							return fmt.Errorf("review cycle %d could not be routed %s: %w", cycle, route, err)
+						}
 						e.saveCycleCompletion(obligation)
 					}
+					return nil
 				}
 				if len(account.Disputes) != 0 {
 					// A dispute leaves its finding owed, but no implementer may
 					// serve the cycle again until the architect has decided it:
 					// the obligation keeps its facts, is not live and counts
 					// nothing while that decision is unresolved.
-					leave(routeDisputeEscalation)
+					if err := leave(routeDisputeEscalation); err != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, err
+					}
 					disputedAttempt := e.operativePlanAttempt(taskID).ID
 					// A classification disagreement is a ROUTE, not a licence:
 					// it goes to the architect by the same escalation a
@@ -3734,6 +4239,11 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 						continue
 					}
 					if !e.continueCycleCompletion(taskID, disputedAttempt) {
+						// The obligation is dropped with its PlanAttempt; a
+						// checkpoint this process committed for it is retired.
+						if err := e.retireCycle(ctx, tc, workspace, obligation, session.RetiredSupersededPlanAttempt); err != nil {
+							return candidateNotConverged, plan, lastReview, lastAudit, err
+						}
 						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
 							"review cycle %d's completion obligation could not be continued under the revised plan attempt", cycle)
 					}
@@ -3747,8 +4257,8 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					// workflow retry the cycle, and only now is the invocation
 					// counted.
 					obligation = c
-					if _, exhausted := incomplete(); exhausted != nil {
-						return candidateNotConverged, plan, lastReview, lastAudit, exhausted
+					if _, err := incomplete(account.Diagnosis()); err != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, err
 					}
 					feedback = obligation.retryFeedback("The architect resolved the classification dispute. The reviewer's class stands, and a disputed finding is owed a response of that class.", unterminated) +
 						"\n\nReconcile the current candidate with the revised plan."
@@ -3770,22 +4280,25 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					unchanged := strings.TrimSpace(verdict.InputDiffDigest) != "" && verdict.InputDiffDigest == previousDiffDigest
 					switch {
 					case unchanged && len(account.Evidenced) == 0 && !account.OwesChange():
-						leave(routeDiagnosis)
+						if err := leave(routeDiagnosis); err != nil {
+							return candidateNotConverged, plan, lastReview, lastAudit, err
+						}
 						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
 							"the candidate did not change between review cycles: %s produced an identical diff after being asked to revise. "+
 								"The last review asked for: %s. Nothing durable answers it: %s", config.DisplayName(worker.Name), oneLine(lastReview), diagnosis)
 					case len(account.Evidenced) != 0 && account.OnlyChangesOpen():
-						leave(routeDiagnosis)
+						if err := leave(routeDiagnosis); err != nil {
+							return candidateNotConverged, plan, lastReview, lastAudit, err
+						}
 						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
 							"the candidate did not converge: %s produced evidence, not code. Its retained evidence answers %s, and evidence never discharges a finding that requires a change: %s",
 							config.DisplayName(worker.Name), strings.Join(account.Evidenced, ", "), diagnosis)
 					}
 					// Every other open finding leaves the invocation incomplete:
 					// the same cycle is tried again for exactly what is owed.
-					retry, exhausted := incomplete()
-					if exhausted != nil {
-						exhausted.Diagnosis = diagnosis
-						return candidateNotConverged, plan, lastReview, lastAudit, exhausted
+					retry, err := incomplete(diagnosis)
+					if err != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, err
 					}
 					if !retry {
 						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
@@ -3799,9 +4312,9 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					// Every finding is answered and the settled invocation still
 					// holds a structured operation it never terminated: it did
 					// not complete its turn.
-					retry, exhausted := incomplete()
-					if exhausted != nil {
-						return candidateNotConverged, plan, lastReview, lastAudit, exhausted
+					retry, err := incomplete(account.Diagnosis())
+					if err != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, err
 					}
 					if retry {
 						feedback = obligation.retryFeedback("", unterminated)
@@ -3809,7 +4322,14 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 						continue
 					}
 				}
-				leave(routeProgress)
+				if err := leave(routeProgress); err != nil {
+					return candidateNotConverged, plan, lastReview, lastAudit, err
+				}
+				// The cycle is complete: a checkpoint this process committed
+				// for it no longer stands as live.
+				if err := e.retireCycle(ctx, tc, workspace, obligation, session.RetiredCompleted); err != nil {
+					return candidateNotConverged, plan, lastReview, lastAudit, err
+				}
 				accounted = true
 			}
 		}
@@ -6078,37 +6598,16 @@ func retainedCandidate(base string, b validation.Bundle) taskstate.CandidateIden
 // store is read back, and a finding is answered only by what the read found.
 // A write that did not land answers nothing, however well the response read.
 func (e *Engine) retainFindingEvidence(taskID string, cycle int, cand taskstate.CandidateIdentity, outstanding []roles.Finding, responses []findingResponse, b validation.Bundle) (map[string]string, error) {
-	byID := make(map[string]findingResponse, len(responses))
-	for _, r := range responses {
-		if id := strings.TrimSpace(r.ID); id != "" {
-			if _, seen := byID[id]; !seen {
-				byID[id] = r
-			}
-		}
-	}
-	wanted := map[string]string{}
+	wanted := map[string]taskstate.RetainedEvidence{}
 	var failed error
-	for _, f := range outstanding {
-		id := strings.TrimSpace(f.ID)
-		r, ok := byID[id]
-		if !ok || f.Class != roles.EvidenceFinding || r.AnsweredBy != roles.EvidenceFinding || r.DisputesClass != "" || unmetProof(f, r, b) != "" {
-			continue
-		}
-		c, _ := citedExecution(b, r.Evidence)
-		outcome, _ := retainedOutcome(c)
-		rec := taskstate.RetainedEvidence{
-			Candidate: cand, FindingID: id, FindingClass: string(f.Class),
-			Command: commandLine(c), Outcome: outcome, ExitStatus: c.ExitStatus, Attribution: c.Attribution,
-			Output: c.Output, OutputDigest: c.OutputDigest,
-			Producer: c.ExecutedBy, Source: "validation bundle " + shortDigest(b.DiffDigest), Cycle: cycle,
-		}
+	for _, rec := range retainedRecords(cand, outstanding, responses, b, cycle) {
 		if err := taskstate.RetainEvidence(e.Repo.Root, taskID, rec); err != nil {
 			if failed == nil {
-				failed = fmt.Errorf("the evidence for %s could not be retained: %w", id, err)
+				failed = fmt.Errorf("the evidence for %s could not be retained: %w", rec.FindingID, err)
 			}
 			continue
 		}
-		wanted[id] = rec.Key()
+		wanted[rec.FindingID] = rec
 	}
 	readBack := map[string]string{}
 	if len(wanted) == 0 {
@@ -6118,12 +6617,63 @@ func (e *Engine) retainFindingEvidence(taskID string, cycle int, cand taskstate.
 	if err != nil {
 		return readBack, fmt.Errorf("the retained evidence could not be read back: %w", err)
 	}
-	for _, r := range held {
-		if key, ok := wanted[r.FindingID]; ok && r.Key() == key && r.FindingClass == string(roles.EvidenceFinding) {
-			readBack[r.FindingID] = key
+	return readBackRetained(held, wanted), failed
+}
+
+// retainedRecords are the records the executed evidence in b builds for the
+// outstanding EVIDENCE findings responses answer: one per finding the reviewer
+// classed EVIDENCE whose response cites a check its proof gap names, built
+// from the broker's execution of that check and the reviewer's finding, never
+// from the worker's account of either. The one constructor of a retained
+// record, for the live cycle and for a checkpoint's replay alike.
+func retainedRecords(cand taskstate.CandidateIdentity, outstanding []roles.Finding, responses []findingResponse, b validation.Bundle, cycle int) []taskstate.RetainedEvidence {
+	byID := make(map[string]findingResponse, len(responses))
+	for _, r := range responses {
+		if id := strings.TrimSpace(r.ID); id != "" {
+			if _, seen := byID[id]; !seen {
+				byID[id] = r
+			}
 		}
 	}
-	return readBack, failed
+	var out []taskstate.RetainedEvidence
+	for _, f := range outstanding {
+		id := strings.TrimSpace(f.ID)
+		r, ok := byID[id]
+		if !ok || f.Class != roles.EvidenceFinding || r.AnsweredBy != roles.EvidenceFinding || r.DisputesClass != "" || unmetProof(f, r, b) != "" {
+			continue
+		}
+		c, _ := citedExecution(b, r.Evidence)
+		outcome, _ := retainedOutcome(c)
+		out = append(out, taskstate.RetainedEvidence{
+			Candidate: cand, FindingID: id, FindingClass: string(f.Class),
+			Command: commandLine(c), Outcome: outcome, ExitStatus: c.ExitStatus, Attribution: c.Attribution,
+			Output: c.Output, OutputDigest: c.OutputDigest,
+			Producer: c.ExecutedBy, Source: "validation bundle " + shortDigest(b.DiffDigest), Cycle: cycle,
+		})
+	}
+	return out
+}
+
+// readBackRetained is what a read of durable task state answers: per finding
+// id, the key of the record wanted for it, when a held EVIDENCE record for
+// that finding carries exactly that record's facts -- candidate, command,
+// outcome, exit status, attribution, output, producer and source. A held
+// record that merely shares the key while disagreeing on any of them answers
+// nothing, and neither does a record nothing held. When it was retained
+// (RetainedAt) and in which cycle are not facts about the execution.
+func readBackRetained(held []taskstate.RetainedEvidence, wanted map[string]taskstate.RetainedEvidence) map[string]string {
+	readBack := map[string]string{}
+	for _, r := range held {
+		w, ok := wanted[r.FindingID]
+		if !ok || r.FindingClass != string(roles.EvidenceFinding) {
+			continue
+		}
+		r.RetainedAt, r.Cycle = w.RetainedAt, w.Cycle
+		if r == w {
+			readBack[r.FindingID] = w.Key()
+		}
+	}
+	return readBack
 }
 
 // retainedEvidence is the valid evidence durable task state holds for this
@@ -8544,11 +9094,18 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			continue
 		}
 		var incomplete *ImplementerIncomplete
-		if errors.As(err, &incomplete) {
+		var unrecorded *ObligationPersistenceFailed
+		if errors.As(err, &incomplete) || errors.As(err, &unrecorded) {
 			// IMPLEMENTER_INCOMPLETE. The cycle's incomplete-invocation
 			// allowance is spent, so no further implementer is invoked for it:
 			// not this worker, and not the next one by handoff. The candidate
 			// is kept and the run ends with the typed state.
+			//
+			// incomplete_obligation_persistence_failed ends the run the same
+			// way: the obligation could not be committed, so no implementer
+			// may serve it as though it were durable, and no handoff carries
+			// it. The candidate observation and the open findings are kept,
+			// and the terminal carries the typed failure.
 			state.OpenFindings(openFindings(review, audit, err))
 			_ = state.Save(e.Repo.Root)
 			fail(err)
@@ -8583,7 +9140,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			// left its cycle incomplete is an incomplete attempt once another
 			// implementer will serve that cycle, and the attempt that spends
 			// the allowance ends the run typed: no further implementer.
-			if incomplete := e.handOffCycle(taskID, e.implementerRemains(taskID, e.Config.Implementors[position:], continuing)); incomplete != nil {
+			if incomplete := e.handOffCycle(ctx, tc, workspace, taskID, e.implementerRemains(taskID, e.Config.Implementors[position:], continuing)); incomplete != nil {
 				state.OpenFindings(openFindings(review, audit, incomplete))
 				_ = state.Save(e.Repo.Root)
 				fail(incomplete)

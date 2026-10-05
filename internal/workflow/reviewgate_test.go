@@ -95,6 +95,12 @@ func newGateHarness(t *testing.T, policy roles.Policy, mode roles.Session, decis
 	t.Cleanup(cancel)
 
 	e := &Engine{Repo: repo, SessionID: "session-1", Bus: bus}
+	// FIXTURE MIGRATION (70B1, RULING-154): the harness holds the durable
+	// session record a production engine holds -- a real session Store in
+	// test-owned storage, under the engine's own SessionID -- because an
+	// incomplete obligation is committed to it before any exhaustion is
+	// reported. Nothing here writes, fakes or bypasses a checkpoint.
+	_, _, e.Store = blockedEngine(t, t.TempDir(), e.SessionID)
 	e.recordObjective("task-1", Objective{Text: "task", Provenance: SubmittedUnattended})
 	e.Config.Permissions = config.Permissions{
 		ReadRepository: true, WriteCandidates: true, CreateWorktrees: true,
@@ -137,6 +143,83 @@ func newGateHarness(t *testing.T, policy roles.Policy, mode roles.Session, decis
 // it records binds to it), its explicit empty grant state is recorded, and it
 // is adopted. files is the plan's Files, which must name every existing
 // production file the fixture's candidate changes.
+// requireExhaustedCheckpointCommitted is W23 (RULING-154/161) for the
+// controls that run on newGateHarness: it reads e's real durable session
+// record and requires that the exhausted checkpoint of taskID under
+// planAttemptID was COMMITTED -- exactly one COMMITTED record, the system's
+// in e's session, binding the same checkpoint, task, plan attempt, payload
+// digest and ReplayDigest as one PREPARED record recorded before it. It is
+// called as soon as the typed IMPLEMENTER_INCOMPLETE is observed, so the
+// checkpoint was durable before the typed state became observable; any
+// failed terminal of the task already written must come after the COMMITTED
+// record. It reads what production wrote and writes nothing.
+func requireExhaustedCheckpointCommitted(t *testing.T, e *Engine, taskID, planAttemptID string) {
+	t.Helper()
+	if e.Store == nil {
+		t.Fatal("no durable session store: the exhausted checkpoint cannot have been committed")
+	}
+	history, err := e.Store.Load()
+	if err != nil {
+		t.Fatalf("the durable session record could not be read: %v", err)
+	}
+	type binding struct {
+		CheckpointID  string `json:"checkpoint_id"`
+		TaskID        string `json:"task_id"`
+		PlanAttemptID string `json:"plan_attempt_id"`
+		Status        string `json:"status"`
+		PayloadDigest string `json:"payload_digest"`
+		ReplayDigest  string `json:"replay_digest"`
+	}
+	exhausted := func(ev event.Event) (binding, bool) {
+		var b binding
+		if ev.TaskID != taskID || json.Unmarshal(ev.Payload, &b) != nil {
+			return binding{}, false
+		}
+		return b, b.Status == "exhausted" && b.TaskID == taskID && b.PlanAttemptID == planAttemptID
+	}
+	committed, at := binding{}, -1
+	for i, ev := range history {
+		if ev.Kind != event.CheckpointCommitted {
+			continue
+		}
+		if b, ok := exhausted(ev); ok {
+			if at >= 0 {
+				t.Fatalf("more than one exhausted checkpoint was committed for %s under plan attempt %s", taskID, short12(planAttemptID))
+			}
+			if ev.Source != event.SourceSystem || ev.SessionID != e.SessionID {
+				t.Fatalf("the exhausted COMMITTED record is %s's in session %q, not the system's in %q", ev.Source, ev.SessionID, e.SessionID)
+			}
+			committed, at = b, i
+		}
+	}
+	if at < 0 {
+		t.Fatalf("no exhausted checkpoint was committed for %s under plan attempt %s before IMPLEMENTER_INCOMPLETE became observable",
+			taskID, short12(planAttemptID))
+	}
+	prepared := 0
+	for _, ev := range history[:at] {
+		if ev.Kind != event.CheckpointPrepared {
+			continue
+		}
+		if b, ok := exhausted(ev); ok && b.CheckpointID == committed.CheckpointID {
+			if ev.Source != event.SourceSystem || ev.SessionID != e.SessionID || b != committed {
+				t.Fatalf("the PREPARED record of exhausted checkpoint %s does not bind what was committed: %+v (%s, %q) vs %+v",
+					short12(committed.CheckpointID), b, ev.Source, ev.SessionID, committed)
+			}
+			prepared++
+		}
+	}
+	if prepared != 1 || committed.PayloadDigest == "" || committed.ReplayDigest == "" {
+		t.Fatalf("exhausted checkpoint %s has %d matching PREPARED records before its COMMITTED one, payload %q replay %q",
+			short12(committed.CheckpointID), prepared, committed.PayloadDigest, committed.ReplayDigest)
+	}
+	for i, ev := range history[:at] {
+		if ev.TaskID == taskID && ev.Kind == event.WorkflowFailed {
+			t.Fatalf("the failed terminal (record %d) precedes the exhausted checkpoint's COMMITTED record (%d)", i, at)
+		}
+	}
+}
+
 func adoptFixturePlanAttempt(t *testing.T, e *Engine, taskID, objective, world, plan string, files []string, route func()) planAttempt {
 	t.Helper()
 	pin := candidateIdentityWithBase(world)
