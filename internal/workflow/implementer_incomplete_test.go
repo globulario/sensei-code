@@ -1252,3 +1252,65 @@ func TestDF41A3W18TheObligationConsumesTheSettledInvocationsDirectly(t *testing.
 		t.Fatalf("the open operation is not the settled first generation: %+v", settled[1].Operations)
 	}
 }
+
+
+// DF-41B1 candidate side. A blocked cycle leaves a real candidate observation
+// beside its live obligation. The checkpoint input must reconstruct that
+// observation by calling 70A4 again, and structurally plausible forged inputs
+// must fail before any checkpoint can trust them.
+func TestDF41B1CandidateReplayUses70A4Owner(t *testing.T) {
+	r := newCompletionRig(t, []string{codeOn("f1"), codeOn("f2")},
+		incompleteTurn{value: 2, report: accounting(answerCode("f1"))},
+		incompleteTurn{err: quota()},
+	)
+	_, err := r.run()
+	var blocked *RoleUnavailable
+	if !errors.As(err, &blocked) {
+		t.Fatalf("premise: run did not end on the unavailable-provider boundary: %v", err)
+	}
+	if c := r.live(t); c.Attempts != 1 || !equalStrings(c.RetainedIDs(), "f1") || !equalStrings(c.Owed(), "f2") {
+		t.Fatalf("premise: live obligation is not the expected partial cycle: %+v", c)
+	}
+
+	e := r.h.engine
+	want, in := e.currentCandidate("task-1")
+	if in.Kind == candidateUnreplayable || in.Kind == candidateUnrecorded {
+		t.Fatalf("the checkpoint boundary holds no replayable 70A4 input: %+v", in)
+	}
+	got, err := replayCandidateObservation(context.Background(), e.Repo, in)
+	if err != nil {
+		t.Fatalf("the live 70A4 input did not replay: %v", err)
+	}
+	wantJSON, _ := json.Marshal(want.semantic())
+	gotJSON, _ := json.Marshal(got.semantic())
+	if string(wantJSON) != string(gotJSON) {
+		t.Fatalf("70A4 replay changed candidate meaning:\nlive %s\nreplay %s", wantJSON, gotJSON)
+	}
+
+	bad := in
+	bad.Kind = candidateUnreplayable
+	if _, err := replayCandidateObservation(context.Background(), e.Repo, bad); err == nil {
+		t.Fatal("an unreplayable transition was accepted as candidate authority")
+	}
+
+	bad = in
+	switch in.Kind {
+	case candidateCaptured, candidateCertified, candidateRefused:
+		bad.Tree = strings.Repeat("0", 40)
+		if _, err := replayCandidateObservation(context.Background(), e.Repo, bad); err == nil {
+			t.Fatal("a candidate tree the repository cannot render was accepted")
+		}
+	}
+	if in.Kind == candidateCertified {
+		bad = in
+		bad.Digest = candidateRevision("forged candidate rendering")
+		if _, err := replayCandidateObservation(context.Background(), e.Repo, bad); err == nil {
+			t.Fatal("a certified digest that does not name the rendered tree was accepted")
+		}
+		bad = in
+		bad.BaseTree = bad.Tree
+		if _, err := replayCandidateObservation(context.Background(), e.Repo, bad); err == nil {
+			t.Fatal("a forged base-tree binding was accepted")
+		}
+	}
+}
