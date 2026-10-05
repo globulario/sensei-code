@@ -592,3 +592,72 @@ func TestCheckpointPayloadIsAtomicStableAndBounded(t *testing.T) {
 		t.Fatalf("nil store accepted read: %v", err)
 	}
 }
+
+
+func TestPlanTransitionsAgreeWithInterruptedProjection(t *testing.T) {
+	planEvent := func(kind event.Kind, id string) event.Event {
+		return event.New(
+			checkpointTestSession,
+			checkpointTestTask,
+			event.SourceSystem,
+			kind,
+			"plan",
+			map[string]string{"plan_attempt_id": id},
+		)
+	}
+
+	history := []event.Event{
+		event.New(checkpointTestSession, checkpointTestTask, event.SourceSystem, event.TaskCreated, "objective", nil),
+		planEvent(event.PlanAttemptStarted, "a"),
+		planEvent(event.TestEditGranted, "a"),
+		planEvent(event.PlanProposed, "a"),
+		planEvent(event.TestEditGranted, "b"),
+		planEvent(event.PlanAttemptStarted, "b"),
+		planEvent(event.PlanProposed, "b"),
+		planEvent(event.PlanProposed, "c"),
+	}
+
+	got := PlanTransitions(history, checkpointTestTask)
+	if len(got) != 3 {
+		t.Fatalf("got %d transitions, want 3", len(got))
+	}
+	if got[0].PlanAttemptID != "a" || !got[0].PlanAttemptStartFirst || len(got[0].PlanAttemptStart) == 0 {
+		t.Fatalf("first transition lost its prerequisite: %+v", got[0])
+	}
+	if got[1].PlanAttemptID != "b" || got[1].PlanAttemptStartFirst || len(got[1].PlanAttemptStart) == 0 {
+		t.Fatalf("second transition accepted a late start: %+v", got[1])
+	}
+	if got[2].PlanAttemptID != "c" || got[2].PlanAttemptStartFirst || len(got[2].PlanAttemptStart) != 0 {
+		t.Fatalf("third transition invented a missing start: %+v", got[2])
+	}
+
+	for i := range got {
+		end := 0
+		seen := -1
+		for j, e := range history {
+			if e.Kind != event.PlanProposed {
+				continue
+			}
+			seen++
+			if seen == i {
+				end = j + 1
+				break
+			}
+		}
+		interrupted := FindInterrupted(history[:end])
+		if len(interrupted) != 1 {
+			t.Fatalf("transition %d: FindInterrupted returned %d tasks", i, len(interrupted))
+		}
+		want := interrupted[0]
+		if got[i].PlanAttemptID != want.PlanAttemptID ||
+			string(got[i].PlanAttemptStart) != string(want.PlanAttemptStart) ||
+			got[i].PlanAttemptStartFirst != want.PlanAttemptStartFirst {
+			t.Errorf("transition %d disagrees with FindInterrupted: got %+v, want id=%q start-first=%v",
+				i, got[i], want.PlanAttemptID, want.PlanAttemptStartFirst)
+		}
+	}
+
+	if other := PlanTransitions(history, "task-other"); len(other) != 0 {
+		t.Fatalf("another task received %d transitions", len(other))
+	}
+}
