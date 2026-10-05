@@ -2767,11 +2767,15 @@ func TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview(t *tes
 	}
 }
 
-// The DF-39 refusal is terminal in the OUTER loop, not only in runCandidate:
-// with a second implementor configured, Engine.implement must end the run on
-// the production-scope refusal without asking that implementor and without
-// creating a handoff, exactly as a prospective or test-edit refutation does.
-// W8 drives runCandidate directly, so it cannot see this.
+// The DF-39 refusal holds in the OUTER loop, not only in runCandidate: with a
+// second implementor configured, Engine.implement must not ask that
+// implementor or create a handoff for the refused candidate. W8 drives
+// runCandidate directly, so it cannot see this.
+//
+// AMENDED FOR ROUTING ONLY (Objective 74, DF-48): the refusal no longer ends
+// the run itself; it is recorded, by path, and returned to the architect,
+// who here stops. The refusal and the no-handoff, no-second-implementor
+// assertions are unchanged.
 func TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff(t *testing.T) {
 	const fromEventsSrc = "package legacy\n\nfunc FromEvents() int { return 0 }\n"
 	h := newGateHarness(t, roles.Policy{Reason: "blast radius local with approval gate none"}, roles.Unverified, string(roles.Accept))
@@ -2787,6 +2791,10 @@ func TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff(t *te
 	second := h.worker
 	second.Name = "codex"
 	e.Config.Implementors = append(e.Config.Implementors, second)
+	architect := &scriptedArchitect{turns: []architectTurn{{text: df48Stop}}}
+	e.Config.Architect.Name, e.Config.Architect.Command, e.Config.Architect.Graph = "chatgpt", "true", "none"
+	e.Runners = implementerResolver{architect: architect, session: "session-1",
+		reviewer: answeringRunner{text: `{"decision":"accept","summary":"the candidate stands"}`, mode: roles.Unverified}}
 
 	var failed error
 	e.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
@@ -2802,7 +2810,12 @@ func TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff(t *te
 	if starts[event.SourceClaude] != 1 {
 		t.Fatalf("premise: the first implementor was asked %d times, want once: %v", starts[event.SourceClaude], failed)
 	}
-	df39Refused(t, "outer loop", failed, "edits", df39FromEvents, "main.go")
+	refusals := refusalsIn(t, seen)
+	if len(refusals) != 1 || refusals[0].Class != refusalProductionScope || len(architect.prompts) != 1 {
+		t.Fatalf("the production-scope refusal was not recorded and returned to the architect: %+v (%d architect turns, %v)",
+			refusals, len(architect.prompts), failed)
+	}
+	df39Refused(t, "outer loop", errors.New(refusals[0].Reason), "edits", df39FromEvents, "main.go")
 	if starts[event.SourceCodex] != 0 {
 		t.Error("a second implementor was asked after the production-scope refusal")
 	}
@@ -2948,5 +2961,1091 @@ func TestObj61W6UngrantedRequiredTestEditCannotReachImplementation(t *testing.T)
 			!strings.Contains(run.events[failed].Summary, "candidate worktree capability") {
 			t.Fatalf("the admitted plan did not proceed to implementation:\n%s", gapLoopTrace(run.events))
 		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// OBJECTIVE 74 (DF-48) -- CANDIDATE SCOPE REFUSAL RETURNS TO ARCHITECTURE.
+// The DF-39 refusal above is unchanged; these witnesses drive what happens
+// AFTER it, through a real governed run (Engine.run) over a real repository
+// with a certifying Sensei stub. The architect's first plan names main.go;
+// the candidate edits main.go and the existing other.go -- the 70B2 r3 shape,
+// one existing production file outside the operative plan.
+// ---------------------------------------------------------------------------
+
+const (
+	df48Task     = "task-df48"
+	df48Other    = "other.go"
+	df48OtherSrc = "package main\n\nfunc other() int { return 0 }\n"
+	// df48Revise objects with a real finding, so a candidate that reaches
+	// review spends its one cycle and the run ends NOT_CONVERGED, resumable.
+	df48Revise = `{"decision":"revise","summary":"the proof is missing","findings":[{"id":"1","severity":"blocking","class":"code",` +
+		`"claim":"the test does not fail without the fix","reference":"main.go","reason":"no mutation"}]}`
+	// df48Include names the refused path; df48Exclude does not; df48Narrow
+	// names the refused path and omits the planned one.
+	df48Include = `{"decision":"proceed","summary":"include other.go","plan":"rewrite main.go so it prints a number, keeping the other.go change","files":["main.go","other.go"],"mode":"modify"}`
+	df48Exclude = `{"decision":"proceed","summary":"exclude other.go","plan":"rewrite main.go so it prints a number; other.go must not change","files":["main.go"],"mode":"modify"}`
+	df48Narrow  = `{"decision":"proceed","summary":"other.go only","plan":"change other.go only","files":["other.go"],"mode":"modify"}`
+	df48Stop    = `{"decision":"reply","message":"the objective stops here: other.go is outside what this task may change"}`
+	// df48RefusedMarker is productionScopeRefusalPrompt's own heading.
+	df48RefusedMarker = "CANDIDATE PRODUCTION SCOPE REFUSED"
+)
+
+// df48Rig is one governed run of the specimen and what it recorded.
+type df48Rig struct {
+	e         *Engine
+	architect *scriptedArchitect
+	world     string
+	events    []event.Event
+}
+
+// df48Drive runs the specimen: the architect answers objectivePlan, then
+// turns in order, then stops. With alternate, a second implementor is
+// configured, so a handoff or a second implementor would be visible.
+func df48Drive(t *testing.T, alternate bool, turns ...string) df48Rig {
+	t.Helper()
+	return df48DriveOf(t, alternate, false, turns...)
+}
+
+// df48DriveOf is df48Drive; with supplied, objectivePlan is handed in as the
+// task's supplied plan instead of being the architect's first answer.
+func df48DriveOf(t *testing.T, alternate, supplied bool, turns ...string) df48Rig {
+	t.Helper()
+	script := []architectTurn{{text: objectivePlan}}
+	for _, turn := range turns {
+		script = append(script, architectTurn{text: turn})
+	}
+	script = append(script, architectTurn{text: df48Stop})
+	architect := &scriptedArchitect{turns: script}
+	e, _ := objectiveEngine(t, t.TempDir(), objectiveRoles{architect: architect, reviewer: df48Revise, bindings: make(chan RunnerSpec, 64)})
+	e.Config.Sensei.Args = []string{"-c", regionScript(objectiveRunScript, "main.go", df48Other)}
+	world := commitFixtureFile(t, e.Repo.Root, df48Other, df48OtherSrc)
+	// The task's candidate worktree, at the world the run will pin, already
+	// holds the unplanned edit of the existing other.go; the implementer
+	// then writes main.go beside it.
+	work, err := e.Repo.CreateWorktreeAt(context.Background(), df48Task, world)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitFixtureFile(t, work, df48Other, strings.Replace(df48OtherSrc, "return 0", "return 1", 1))
+	if supplied {
+		p, err := ParseSuppliedPlan([]byte(objectivePlan))
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.supplyPlan(df48Task, p)
+	}
+	if alternate {
+		second := e.Config.Implementors[0]
+		second.Name = "gemini"
+		e.Config.Implementors = append(e.Config.Implementors, second)
+	}
+	run := drivePlanAdmission(t, e, architect, world, df48Task, func(ctx context.Context) {
+		e.run(ctx, df48Task, attemptObjective, RequestedByHuman)
+	})
+	return df48Rig{e: e, architect: architect, world: world, events: run.events}
+}
+
+// scopeRefusals are the production_scope refusals the run recorded, in order.
+func (r df48Rig) scopeRefusals(t *testing.T) []planAttemptRefusal {
+	t.Helper()
+	var out []planAttemptRefusal
+	for _, rec := range refusalsIn(t, r.events) {
+		if rec.Class == refusalProductionScope {
+			out = append(out, rec)
+		}
+	}
+	return out
+}
+
+// starts are the implementer processes started, by source.
+func (r df48Rig) starts() map[event.Source]int {
+	n := map[event.Source]int{}
+	for _, ev := range r.events {
+		if ev.Kind == event.AgentStarted {
+			n[ev.Source]++
+		}
+	}
+	return n
+}
+
+// proposedAfter is the first plan made operative after index at, and where.
+func (r df48Rig) proposedAfter(t *testing.T, at int) (string, int) {
+	t.Helper()
+	for i := at + 1; i < len(r.events); i++ {
+		if r.events[i].Kind != event.PlanProposed {
+			continue
+		}
+		var p struct {
+			PlanAttemptID string `json:"plan_attempt_id"`
+		}
+		if err := json.Unmarshal(r.events[i].Payload, &p); err != nil {
+			t.Fatal(err)
+		}
+		return p.PlanAttemptID, i
+	}
+	return "", -1
+}
+
+// reviewedBetween reports whether any audit or review happened in [from, to).
+func (r df48Rig) reviewedBetween(from, to int) bool {
+	for _, ev := range r.events[from:to] {
+		switch ev.Kind {
+		case event.CandidateAudited, event.ReviewStarted, event.ReviewCompleted:
+			return true
+		}
+	}
+	return false
+}
+
+// df48RequireRefusal asserts rec is the typed DF-48 refusal of attempt, naming
+// exactly path as omitted, returned to the architect, carrying the refused
+// candidate's frozen identity at world as non-authoritative material.
+func df48RequireRefusal(t *testing.T, name string, rec planAttemptRefusal, attempt, path, world string) {
+	t.Helper()
+	var d productionScopeDeclaration
+	if err := json.Unmarshal(rec.Declaration, &d); err != nil {
+		t.Fatalf("%s: the production_scope declaration does not decode: %v", name, err)
+	}
+	if rec.Class != refusalProductionScope || rec.PlanAttemptID != attempt || len(d.OmittedPaths) != 1 || d.OmittedPaths[0] != path {
+		t.Errorf("%s: not a production_scope refusal of attempt %s naming exactly %s: %+v %+v", name, short12(attempt), path, rec, d)
+	}
+	if rec.Continuation != session.PlanAdmissionContinuationArchitectTurn {
+		t.Errorf("%s: the refusal was not recorded as returned to the architect: %q", name, rec.Continuation)
+	}
+	c := d.Candidate
+	if c.BaseSHA != world || strings.TrimSpace(c.Tree) == "" || strings.TrimSpace(c.Revision) == "" || c.Standing != refusedCandidateStanding {
+		t.Errorf("%s: the refused candidate's frozen identity is not recorded as non-authoritative material: %+v", name, c)
+	}
+	df39Refused(t, name, errors.New(rec.Reason), "edits", path)
+}
+
+// runreceiptKnown is runreceipt.Known, read without importing the package.
+const runreceiptKnown = "KNOWN"
+
+// W1 -- SPECIMEN SHAPE. The task does not end workflow.failed: a typed scope
+// refusal naming exactly other.go reaches the architect, before any audit or
+// review, and the candidate's identity is recorded as non-authoritative
+// material. Fails if the unplanned edit is not refused (DF-39) or if the
+// refusal ends the task instead of returning to architecture.
+func TestDF48W1AnUnplannedExistingProductionEditReturnsATypedScopeRefusalToTheArchitect(t *testing.T) {
+	r := df48Drive(t, false, df48Include)
+	attempts := startedAttempts(t, r.events)
+	refusals := r.scopeRefusals(t)
+	if len(attempts) < 2 || len(refusals) == 0 {
+		t.Fatalf("premise: the specimen candidate was refused for production scope (attempts %v):\n%s", attempts, gapLoopTrace(r.events))
+	}
+	df48RequireRefusal(t, "W1", refusals[0], attempts[0], df48Other, r.world)
+	refusedAt := indexOfKind(r.events, event.PlanAttemptRefused)
+	if r.reviewedBetween(0, refusedAt) {
+		t.Error("W1: the refused candidate reached audit or review before its scope refusal")
+	}
+	if len(r.architect.prompts) < 2 || !strings.Contains(r.architect.prompts[1], df48RefusedMarker) ||
+		!strings.Contains(r.architect.prompts[1], refusals[0].RefusalID) || !strings.Contains(r.architect.prompts[1], df48Other) {
+		t.Fatalf("W1: the typed scope refusal did not reach the architect (%d prompts)", len(r.architect.prompts))
+	}
+	if hasKind(kindsOf(r.events), event.WorkflowFailed) {
+		t.Fatalf("W1: the scope refusal ended the task workflow.failed:\n%s", gapLoopTrace(r.events))
+	}
+	// The refused candidate's certification is retracted the moment it is
+	// refused: whatever the run's receipt later holds was certified again,
+	// after the replacement was made operative (W2).
+	if _, at := r.proposedAfter(t, refusedAt); at < 0 || indexOfKindAfter(r.events, event.ValidationRun, at) < 0 {
+		t.Errorf("W1: no fresh validation followed the replacement:\n%s", gapLoopTrace(r.events))
+	}
+}
+
+// indexOfKindAfter is the index of the first event of kind after index at.
+func indexOfKindAfter(evs []event.Event, kind event.Kind, at int) int {
+	for i := at + 1; i < len(evs); i++ {
+		if evs[i].Kind == kind {
+			return i
+		}
+	}
+	return -1
+}
+
+// W2 -- NO STANDING CARRIES. The replacement PlanAttempt is a fresh identity,
+// operative, with its own freshly recorded grant state; its candidate is
+// validated and reviewed anew under it, starting again at cycle 1; and the
+// run's receipt binds the replacement, not the refused attempt.
+func TestDF48W2TheReplacementAttemptInheritsNoStandingFromTheRefusedCandidate(t *testing.T) {
+	r := df48Drive(t, false, df48Include)
+	refusals := r.scopeRefusals(t)
+	if len(refusals) != 1 {
+		t.Fatalf("premise: one scope refusal:\n%s", gapLoopTrace(r.events))
+	}
+	refused := refusals[0].PlanAttemptID
+	refusedAt := indexOfKind(r.events, event.PlanAttemptRefused)
+	replacement, at := r.proposedAfter(t, refusedAt)
+	if replacement == "" || replacement == refused {
+		t.Fatalf("W2: no fresh replacement attempt was made operative after the refusal:\n%s", gapLoopTrace(r.events))
+	}
+	if op := r.e.operativePlanAttempt(df48Task); op.ID != replacement {
+		t.Errorf("W2: the operative attempt is %s, not the replacement %s", short12(op.ID), short12(replacement))
+	}
+	if p, ed := r.e.recordedGrants(df48Task, replacement); p.PlanAttemptID != replacement || ed.PlanAttemptID != replacement {
+		t.Errorf("W2: the replacement holds no grant state recorded for itself: %+v %+v", p, ed)
+	}
+	validated := 0
+	for _, ev := range r.events[at:] {
+		if ev.Kind == event.ValidationRun {
+			validated++
+		}
+	}
+	if validated == 0 || !r.reviewedBetween(at, len(r.events)) || r.reviewedBetween(0, refusedAt) {
+		t.Errorf("W2: the replacement's candidate was not validated and reviewed anew under it (validations after: %d)", validated)
+	}
+	settled := r.e.settledInvocations(df48Task)
+	if len(settled) != 2 || settled[0].Cycle != 1 || settled[1].Cycle != 1 {
+		t.Errorf("W2: the replacement's implementation did not start its own cycle 1: %+v", settled)
+	}
+	if !hasKind(kindsOf(r.events), event.WorkflowNotConverged) {
+		t.Fatalf("W2: the replacement candidate's own review did not decide the run:\n%s", gapLoopTrace(r.events))
+	}
+	// The receipt binds the replacement, and the review it names is the
+	// replacement candidate's own, taken after the replacement was operative.
+	rec := receiptFrom(t, r.events)
+	if rec.PlanDigest.Text != replacement || rec.PlanDigest.Text == refused {
+		t.Errorf("W2: the receipt does not bind the replacement attempt: %+v", rec.PlanDigest)
+	}
+	if rec.ReviewedDigest.State == runreceiptKnown && indexOfKindAfter(r.events, event.ReviewCompleted, at) < 0 {
+		t.Errorf("W2: the receipt names a review not taken under the replacement: %+v", rec.ReviewedDigest)
+	}
+}
+
+// W3 -- ARCHITECT OPTIONS. (a) include: fresh authority admits a candidate
+// editing other.go, and it reaches review. (b) exclude: a new candidate still
+// editing other.go is refused again by name, under the replacement. (c) stop:
+// the task ends on the architect's stop, and the scope refusal stays a scope
+// refusal, never "objective impossible".
+func TestDF48W3TheArchitectMayIncludeExcludeOrStop(t *testing.T) {
+	t.Run("include", func(t *testing.T) {
+		r := df48Drive(t, false, df48Include)
+		refusedAt := indexOfKind(r.events, event.PlanAttemptRefused)
+		_, at := r.proposedAfter(t, refusedAt)
+		if len(r.scopeRefusals(t)) != 1 || at < 0 || !r.reviewedBetween(at, len(r.events)) ||
+			hasKind(kindsOf(r.events), event.WorkflowPlanAdmissionRefused) {
+			t.Fatalf("(a): the replacement naming other.go did not admit a candidate editing it to review:\n%s", gapLoopTrace(r.events))
+		}
+	})
+	t.Run("exclude", func(t *testing.T) {
+		r := df48Drive(t, false, df48Exclude)
+		refusals := r.scopeRefusals(t)
+		if len(refusals) != 2 {
+			t.Fatalf("(b): the candidate still editing the excluded path was not refused again:\n%s", gapLoopTrace(r.events))
+		}
+		replacement, _ := r.proposedAfter(t, indexOfKind(r.events, event.PlanAttemptRefused))
+		df48RequireRefusal(t, "(b)", refusals[1], replacement, df48Other, r.world)
+		if r.reviewedBetween(0, len(r.events)) || !hasKind(kindsOf(r.events), event.WorkflowPlanAdmissionRefused) {
+			t.Fatalf("(b): the refused candidate reached review, or the run did not park:\n%s", gapLoopTrace(r.events))
+		}
+	})
+	t.Run("stop", func(t *testing.T) {
+		r := df48Drive(t, false)
+		refusals := r.scopeRefusals(t)
+		completed := indexOfKind(r.events, event.WorkflowCompleted)
+		spoke := indexOfKind(r.events, event.ArchitectSpoke)
+		if len(refusals) != 1 || completed < 0 || spoke < 0 || spoke > completed {
+			t.Fatalf("(c): one scope refusal, then the architect's stop through the architect-reply terminal:\n%s", gapLoopTrace(r.events))
+		}
+		if hasKind(kindsOf(r.events), event.WorkflowFailed) || hasKind(kindsOf(r.events), event.WorkflowPlanAdmissionRefused) {
+			t.Fatalf("(c): the architect's stop ended the task as a failure or a park:\n%s", gapLoopTrace(r.events))
+		}
+		df48RequireRefusal(t, "(c)", refusals[0], startedAttempts(t, r.events)[0], df48Other, r.world)
+		var named planAttemptRefusal
+		if err := json.Unmarshal(r.events[completed].Payload, &named); err != nil || named.RefusalID != refusals[0].RefusalID ||
+			named.Class != refusalProductionScope {
+			t.Errorf("(c): the stop terminal does not carry the recorded production_scope refusal: %v %+v", err, named)
+		}
+		summary := r.events[completed].Summary
+		if strings.HasPrefix(summary, "production scope refuted:") || strings.Contains(strings.ToLower(summary), "impossible") {
+			t.Errorf("(c): the terminal restates the scope refusal as the objective: %q", summary)
+		}
+		// The architect-reply terminal's receipt: UNREVIEWED over the
+		// preserved candidate, which is UNATTEMPTED material -- its certified
+		// observation was replaced when it was refused -- naming no parked
+		// refusal. Only the terminal's own facts are held complete; mint
+		// evidence is absent for a candidate never minted.
+		rec := receiptFrom(t, r.events)
+		if rec.CandidateDigest.State == runreceiptKnown {
+			t.Errorf("(c): the stop receipt certifies a digest of the refused candidate: %+v", rec.CandidateDigest)
+		}
+		if rec.Outcome != "UNREVIEWED" || rec.CandidateState != "UNATTEMPTED" ||
+			rec.PlanAdmissionRefusal != nil && rec.PlanAdmissionRefusal.State == "KNOWN" {
+			t.Errorf("(c): the receipt is not the architect-reply terminal over the preserved candidate: %s %s %+v",
+				rec.Outcome, rec.CandidateState, rec.PlanAdmissionRefusal)
+		}
+		_, missing := rec.Completeness()
+		for _, m := range missing {
+			if strings.HasPrefix(m, "outcome") || strings.HasPrefix(m, "candidate_state") || strings.Contains(m, "plan_admission_refusal") ||
+				strings.HasPrefix(m, "terminal") || strings.HasPrefix(m, "plan_digest") {
+				t.Errorf("(c): the architect-stop receipt is not complete in its own facts: %s", m)
+			}
+		}
+		if id, _ := r.proposedAfter(t, indexOfKind(r.events, event.PlanAttemptRefused)); id != "" || len(r.starts()) != 1 {
+			t.Errorf("(c): work continued after the architect stopped: replacement %q, starts %v", short12(id), r.starts())
+		}
+	})
+}
+
+// W4 -- DF-39 STRICTNESS. The unplanned path is refused by name, typed or not;
+// no implementation is retried under the refused plan; no second implementor
+// and no handoff serves the refused candidate.
+func TestDF48W4TheProductionScopeRefusalStaysStrict(t *testing.T) {
+	err := df39Scope(df23Edit(df39A)+df23Edit(df39B), df39Attempt(t, df39A))
+	typed := refuseProductionScope(err, teWorld, "tree", "revision")
+	df39Refused(t, "W4 typed", typed, "edits", df39B, "edits "+df39A)
+	if scope, ok := productionScopeRefusalOf(typed); !ok || len(scope.paths) != 1 || scope.paths[0] != df39B {
+		t.Fatalf("W4: the omitted path is not carried by the typed refusal: %v", typed)
+	}
+
+	r := df48Drive(t, true, df48Exclude)
+	refusals := r.scopeRefusals(t)
+	if len(refusals) == 0 {
+		t.Fatalf("premise: the specimen candidate was refused:\n%s", gapLoopTrace(r.events))
+	}
+	for _, rec := range refusals {
+		df39Refused(t, "W4 loop", errors.New(rec.Reason), "edits", df48Other, "main.go")
+	}
+	refusedAt := indexOfKind(r.events, event.PlanAttemptRefused)
+	_, at := r.proposedAfter(t, refusedAt)
+	if at < 0 {
+		at = len(r.events)
+	}
+	if implementerStartedBefore(r.events[refusedAt:], at-refusedAt) {
+		t.Error("W4: an implementer was started under the refused plan after its scope refusal")
+	}
+	if starts := r.starts(); len(starts) != 1 {
+		t.Errorf("W4: a second implementor served the refused candidate: %v", starts)
+	}
+	if hasKind(kindsOf(r.events), event.HandoffCreated) {
+		t.Error("W4: the scope refusal created an implementer handoff")
+	}
+}
+
+// W5 -- BOUNDED ARCHITECTURAL RECONSIDERATION. A later production_scope
+// refusal naming a DIFFERENT path (main.go, after other.go) does not mint
+// another return: it is recorded and the invocation ends with the existing
+// PLAN_ADMISSION_REFUSED outcome, the architect is not asked a third time, and
+// the receipt names the canonical production_scope class, complete.
+func TestDF48W5ALaterScopeRefusalOfAnyPathsConsumesTheOneReplan(t *testing.T) {
+	r := df48Drive(t, false, df48Narrow, df48Include)
+	refusals := r.scopeRefusals(t)
+	if len(refusals) != 2 {
+		t.Fatalf("premise: two scope refusals, naming different paths:\n%s", gapLoopTrace(r.events))
+	}
+	replacement, _ := r.proposedAfter(t, indexOfKind(r.events, event.PlanAttemptRefused))
+	df48RequireRefusal(t, "W5 first", refusals[0], startedAttempts(t, r.events)[0], df48Other, r.world)
+	df48RequireRefusal(t, "W5 second", refusals[1], replacement, "main.go", r.world)
+	parked := indexOfKind(r.events, event.WorkflowPlanAdmissionRefused)
+	var named planAttemptRefusal
+	if parked < 0 || json.Unmarshal(r.events[parked].Payload, &named) != nil || named.RefusalID != refusals[1].RefusalID {
+		t.Fatalf("W5: the materially different scope refusal did not end the invocation PLAN_ADMISSION_REFUSED:\n%s", gapLoopTrace(r.events))
+	}
+	if len(r.architect.prompts) != 2 || r.reviewedBetween(0, len(r.events)) || hasKind(kindsOf(r.events), event.WorkflowFailed) {
+		t.Errorf("W5: the bound was not held (%d architect turns):\n%s", len(r.architect.prompts), gapLoopTrace(r.events))
+	}
+	// The bound is the canonical recorded refusals' to decide: both refusals
+	// are recorded under their own identities, and nothing else holds it.
+	if !r.e.refusalRecorded(df48Task, refusals[0].RefusalID) || !r.e.refusalRecorded(df48Task, refusals[1].RefusalID) ||
+		!r.e.refusalRecurs(df48Task, planAttemptRefusal{Class: refusalProductionScope}) {
+		t.Error("W5: the live bound is not derived from the task's recorded refusals")
+	}
+	rec := receiptFrom(t, r.events)
+	if rec.CandidateState != "UNATTEMPTED" || rec.CandidateDigest.State == runreceiptKnown {
+		t.Errorf("W5: the bounded terminal's receipt certifies the refused candidate: %s %+v", rec.CandidateState, rec.CandidateDigest)
+	}
+	if rec.Outcome != "PLAN_ADMISSION_REFUSED" || rec.PlanAdmissionRefusal == nil || rec.PlanAdmissionRefusal.Class != "production_scope" ||
+		rec.PlanAdmissionRefusal.RefusalID != refusals[1].RefusalID || rec.PlanAdmissionRefusal.Declaration != string(refusals[1].Declaration) {
+		t.Fatalf("W5: the receipt does not name the parked production_scope refusal: %+v", rec.PlanAdmissionRefusal)
+	}
+	_, missing := rec.Completeness()
+	for _, m := range missing {
+		if strings.Contains(m, "plan_admission_refusal") {
+			t.Errorf("W5: the receipt's production_scope refusal is not receipt-complete: %s", m)
+		}
+	}
+}
+
+// W6 -- TERMINALITY UNCHANGED OUTSIDE THE DF-48 SHAPE. A prospective-surface
+// refutation, an edit with no operative attempt, one under an attempt pinned
+// at another world, and one judged under an attempt no longer operative are
+// never typed or recorded as production_scope refusals; in the real loop the
+// no-plan and wrong-world shapes end terminal with no architect turn. The
+// authorized control is the omitted shape, which is returned.
+func TestDF48W6OnlyAnOmissionByAValidOperativeAttemptReturnsToTheArchitect(t *testing.T) {
+	diff := df23Edit(df39A) + df23Edit(df39B)
+	elsewhere := df39Attempt(t, df39A)
+	elsewhere.World = "another-world"
+	const created = "internal/workflow/df48new.go"
+	for name, err := range map[string]error{
+		"prospective surface": inspectProspectiveGrants(df39Created(created),
+			[]ProspectiveSurface{{Path: created, Package: "x", Role: "go-existing-package", Covering: df39A}}, nil),
+		"no operative plan attempt":     df39Scope(diff, planAttempt{}),
+		"plan attempt at another world": df39Scope(diff, elsewhere),
+	} {
+		if err == nil {
+			t.Fatalf("premise %s: the shape was not refused", name)
+		}
+		if got := refuseProductionScope(err, teWorld, "tree", "revision"); got != err {
+			t.Errorf("%s: the refusal was rewritten: %v", name, got)
+		}
+		if _, ok := productionScopeRefusalOf(err); ok {
+			t.Errorf("%s: typed as the DF-48 production_scope shape", name)
+		}
+	}
+	if got := refuseProductionScope(df39Scope(diff, df39Attempt(t, df39A)), "another-base", "tree", "revision"); func() bool {
+		_, ok := productionScopeRefusalOf(got)
+		return ok
+	}() {
+		t.Error("an omission measured at another base than the candidate's was typed as the DF-48 shape")
+	}
+
+	// The canonical owner refuses a production_scope refusal judged under an
+	// attempt that is no longer operative, and returns the one judged under
+	// the operative attempt.
+	const task = "task-df48-owner"
+	e := df23Engine(t, "", task)
+	a := df23Route(t, e, task, attemptPlan("plan A", df39A), nil)
+	stale := refuseProductionScope(inspectProductionScope(teDiffState(diff, df23Candidate), a), teWorld, "tree", "revision")
+	c := df23Route(t, e, task, attemptPlan("plan C", df39A), nil)
+	if got, err := e.continueAfterAdmissionRefusal(task, stale); err != stale || got.RefusalID != "" ||
+		e.refusalRecurs(task, planAttemptRefusal{Class: refusalProductionScope}) {
+		t.Errorf("a refusal judged under the superseded attempt %s was returned or recorded: %+v %v", short12(a.ID), got, err)
+	}
+	current := refuseProductionScope(inspectProductionScope(teDiffState(diff, df23Candidate), c), teWorld, "tree", "revision")
+	if got, err := e.continueAfterAdmissionRefusal(task, current); err != nil || got.PlanAttemptID != c.ID || got.Class != refusalProductionScope {
+		t.Fatalf("authorized control: the omission by the operative attempt was not returned to the architect: %+v %v", got, err)
+	}
+
+	for name, mutate := range map[string]func(*planAttempt){
+		"no operative plan attempt":     func(a *planAttempt) { *a = planAttempt{} },
+		"plan attempt at another world": func(a *planAttempt) { a.World = "another-world" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := newGateHarness(t, roles.Policy{Reason: "blast radius local with approval gate none"}, roles.Unverified, string(roles.Accept))
+			e := h.engine
+			world := commitFixtureFile(t, h.work, df39FromEvents, df48OtherSrc)
+			h.tc.Identity = candidateIdentityWithBase(world)
+			adoptFixturePlanAttempt(t, e, "task-1", h.tc.Task, world, "Rewrite main.go so it prints a number.", h.tc.Files, nil)
+			commitFixtureFile(t, h.work, df39FromEvents, strings.Replace(df48OtherSrc, "return 0", "return 1", 1))
+			e.mu.Lock()
+			mutate(&e.attempts["task-1"].operative)
+			e.mu.Unlock()
+			architect := &scriptedArchitect{turns: []architectTurn{{text: df48Exclude}}}
+			e.Config.Architect.Name, e.Config.Architect.Command, e.Config.Architect.Graph = "chatgpt", "true", "none"
+			e.Runners = implementerResolver{architect: architect, session: "session-1",
+				reviewer: answeringRunner{text: `{"decision":"accept","summary":"ok"}`, mode: roles.Unverified}}
+			var failed error
+			e.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+				"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
+			seen := drainEvents(h.events)
+			var parked *PlanAdmissionRefused
+			if failed == nil || !strings.HasPrefix(failed.Error(), "production scope refuted:") || errors.As(failed, &parked) {
+				t.Fatalf("the shape did not stay terminal on its own refusal: %v", failed)
+			}
+			if len(architect.prompts) != 0 || contains(seen, event.PlanAttemptRefused) {
+				t.Errorf("the shape entered the DF-48 architect-return route (%d architect turns)", len(architect.prompts))
+			}
+		})
+	}
+}
+
+// W7 -- INTERRUPTION. A scope refusal owed to the architect survives the
+// process ending right after it was durably recorded: the session projection
+// names it beside the refused operative plan, a fresh engine's Resume presents
+// it to the architect before any implementer runs, restores no authority from
+// the refused attempt, and the replacement is admitted as its own attempt.
+func TestDF48W7AnOwedScopeRefusalSurvivesInterruptionAndRestoresNoAuthority(t *testing.T) {
+	first := df48Drive(t, false, df48Include)
+	refusals := first.scopeRefusals(t)
+	if len(refusals) != 1 {
+		t.Fatalf("premise: one scope refusal:\n%s", gapLoopTrace(first.events))
+	}
+	owed := refusals[0]
+	history, err := first.e.Store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cut := -1
+	for i, ev := range history {
+		if ev.TaskID == df48Task && ev.Kind == event.PlanAttemptRefused {
+			cut = i
+			break
+		}
+	}
+	if cut < 0 {
+		t.Fatal("premise: the scope refusal was not durably recorded")
+	}
+	interrupted := sessionStore(t)
+	for _, ev := range history[:cut+1] {
+		if err := interrupted.Append(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	found := reconstructed(t, interrupted, df48Task)
+	var named planAttemptRefusal
+	if !found.Planned || found.PlanAttemptID != owed.PlanAttemptID || json.Unmarshal(found.PlanAdmissionRefused, &named) != nil ||
+		named.RefusalID != owed.RefusalID || named.Class != refusalProductionScope {
+		t.Fatalf("FindInterrupted does not name the owed scope refusal beside the refused operative plan: %s", found.PlanAdmissionRefused)
+	}
+
+	next, _, _ := newGapLoopEngine(t, &gapLoopRun{engine: first.e, world: first.world}, interrupted, df48Include)
+	next.Config = first.e.Config
+	answer := &scriptedArchitect{turns: []architectTurn{{text: df48Include}, {text: df48Stop}}}
+	next.Runners = objectiveRoles{architect: answer, reviewer: df48Revise, bindings: make(chan RunnerSpec, 64)}
+	run := drivePlanAdmission(t, next, answer, first.world, df48Task, func(ctx context.Context) { next.Resume(ctx, found) })
+	if len(answer.prompts) == 0 || !strings.Contains(answer.prompts[0], "RECORDED PLAN-ADMISSION REFUSALS") {
+		t.Fatalf("the resumed architect turn was not shown the owed scope refusal:\n%s", gapLoopTrace(run.events))
+	}
+	requireRefusalEnvelope(t, answer.prompts[0], obj61OwedHeading, owed)
+	admitted := indexOfKind(run.events, event.PlanProposed)
+	if admitted < 0 {
+		t.Fatalf("no replacement was admitted on resume:\n%s", gapLoopTrace(run.events))
+	}
+	if implementerStartedBefore(run.events, admitted) {
+		t.Fatalf("an implementer ran under the refused plan on resume:\n%s", gapLoopTrace(run.events))
+	}
+	replacement := next.operativePlanAttempt(df48Task).ID
+	if replacement == owed.PlanAttemptID || strings.Contains(string(run.events[admitted].Payload), owed.PlanAttemptID) {
+		t.Fatal("the refused attempt was made operative again on resume")
+	}
+	if p, ed := next.recordedGrants(df48Task, replacement); p.PlanAttemptID != replacement || ed.PlanAttemptID != replacement {
+		t.Errorf("the replacement's authority was not derived for it on resume: %+v %+v", p, ed)
+	}
+	// The restored record is the spent allowance: a resumed task does not
+	// regain a return to the architect for a later scope refusal.
+	if !next.refusalRecurs(df48Task, planAttemptRefusal{Class: refusalProductionScope}) {
+		t.Error("the resumed task regained its architectural reconsideration of candidate scope")
+	}
+
+	// Through execution: resumed under a replacement that names other.go
+	// only, the candidate's main.go edit is a later production_scope refusal
+	// naming a different path. The restored record bounds it exactly as the
+	// live one does (W5): it is recorded and parks, with no third turn.
+	again, _, _ := newGapLoopEngine(t, &gapLoopRun{engine: first.e, world: first.world}, interrupted, df48Narrow)
+	again.Config = first.e.Config
+	narrow := &scriptedArchitect{turns: []architectTurn{{text: df48Narrow}, {text: df48Stop}}}
+	again.Runners = objectiveRoles{architect: narrow, reviewer: df48Revise, bindings: make(chan RunnerSpec, 64)}
+	bounded := drivePlanAdmission(t, again, narrow, first.world, df48Task, func(ctx context.Context) { again.Resume(ctx, found) })
+	later := df48Rig{e: again, events: bounded.events}.scopeRefusals(t)
+	parked := indexOfKind(bounded.events, event.WorkflowPlanAdmissionRefused)
+	var ended planAttemptRefusal
+	if len(later) != 1 || later[0].RefusalID == owed.RefusalID || parked < 0 ||
+		json.Unmarshal(bounded.events[parked].Payload, &ended) != nil || ended.RefusalID != later[0].RefusalID {
+		t.Fatalf("the resumed later scope refusal was not bounded by the restored record:\n%s", gapLoopTrace(bounded.events))
+	}
+	if len(narrow.prompts) != 1 || hasKind(kindsOf(bounded.events), event.WorkflowFailed) {
+		t.Errorf("the resumed bound was not held (%d architect turns):\n%s", len(narrow.prompts), gapLoopTrace(bounded.events))
+	}
+}
+
+// DF-48 SUPPLIED PLAN. A supplied plan is an operative attempt like any
+// other: its omission is the DF-48 shape, recorded through the canonical
+// owner as returned to architecture -- not workflow.failed. Its architecture
+// is its supplier, never an architect in this run: the invocation parks on
+// the recorded refusal (PLAN_ADMISSION_REFUSED, resumable), no architect is
+// asked, no work continues, and the plan keeps its supplied provenance.
+func TestDF48SuppliedPlanScopeRefusalReturnsToArchitectureWithoutFailing(t *testing.T) {
+	r := df48DriveOf(t, false, true, df48Include)
+	refusals := r.scopeRefusals(t)
+	attempts := startedAttempts(t, r.events)
+	if len(attempts) != 1 || len(refusals) != 1 {
+		t.Fatalf("premise: the supplied plan's candidate was refused once for production scope (attempts %v):\n%s", attempts, gapLoopTrace(r.events))
+	}
+	df48RequireRefusal(t, "supplied", refusals[0], attempts[0], df48Other, r.world)
+	if hasKind(kindsOf(r.events), event.WorkflowFailed) {
+		t.Fatalf("supplied: the scope refusal ended the task workflow.failed:\n%s", gapLoopTrace(r.events))
+	}
+	parked := indexOfKind(r.events, event.WorkflowPlanAdmissionRefused)
+	var named planAttemptRefusal
+	if parked < 0 || json.Unmarshal(r.events[parked].Payload, &named) != nil || named.RefusalID != refusals[0].RefusalID ||
+		!strings.Contains(r.events[parked].Summary, "supplied") {
+		t.Fatalf("supplied: the invocation did not park on the recorded scope refusal:\n%s", gapLoopTrace(r.events))
+	}
+	if len(r.architect.prompts) != 0 || r.reviewedBetween(0, len(r.events)) || len(r.starts()) != 1 {
+		t.Errorf("supplied: work continued past the refusal (%d architect turns, starts %v)", len(r.architect.prompts), r.starts())
+	}
+	if r.e.planSource(df48Task) != PlanSupplied {
+		t.Error("supplied: the plan lost its supplied provenance")
+	}
+	rec := receiptFrom(t, r.events)
+	if rec.Outcome != "PLAN_ADMISSION_REFUSED" || rec.PlanAdmissionRefusal == nil || rec.PlanAdmissionRefusal.Class != "production_scope" ||
+		rec.CandidateState != "UNATTEMPTED" || rec.CandidateDigest.State == runreceiptKnown {
+		t.Errorf("supplied: the receipt is not the parked production_scope refusal over refused material: %s %s %+v",
+			rec.Outcome, rec.CandidateState, rec.PlanAdmissionRefusal)
+	}
+
+	// The supplier's three answers, read off the parked task: the session
+	// projection names the refusal as owed (include or exclude is the next
+	// supplied plan; stop is leaving it), and the task stays resumable.
+	history, err := r.e.Store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := sessionStore(t)
+	for _, ev := range history {
+		if err := store.Append(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	found := reconstructed(t, store, df48Task)
+	var owed planAttemptRefusal
+	if json.Unmarshal(found.PlanAdmissionRefused, &owed) != nil || owed.RefusalID != refusals[0].RefusalID || found.PlanSource != string(PlanSupplied) {
+		t.Errorf("supplied: the parked task does not owe the scope refusal under its supplied plan: %s %q", found.PlanAdmissionRefused, found.PlanSource)
+	}
+
+	// RESUMED, twice: the parked refusal is re-parked as the typed refusal it
+	// is. No architect is asked, nothing is routed, granted or worked under,
+	// the task never ends workflow.failed, and it stays resumable.
+	for round := 1; round <= 2; round++ {
+		found := reconstructed(t, store, df48Task)
+		next, _, _ := newGapLoopEngine(t, &gapLoopRun{engine: r.e, world: r.world}, store, df48Stop)
+		next.Config = r.e.Config
+		answer := &scriptedArchitect{turns: []architectTurn{{text: df48Stop}}}
+		next.Runners = objectiveRoles{architect: answer, reviewer: df48Revise, bindings: make(chan RunnerSpec, 64)}
+		run := drivePlanAdmission(t, next, answer, r.world, df48Task, func(ctx context.Context) { next.Resume(ctx, found) })
+		if hasKind(kindsOf(run.events), event.WorkflowFailed) {
+			t.Fatalf("supplied resume %d: the parked scope refusal ended the task workflow.failed:\n%s", round, gapLoopTrace(run.events))
+		}
+		parked := indexOfKind(run.events, event.WorkflowPlanAdmissionRefused)
+		var ended planAttemptRefusal
+		if parked < 0 || json.Unmarshal(run.events[parked].Payload, &ended) != nil || ended.RefusalID != refusals[0].RefusalID ||
+			!strings.Contains(run.events[parked].Summary, "supplied") {
+			t.Fatalf("supplied resume %d: the scope refusal was not re-parked:\n%s", round, gapLoopTrace(run.events))
+		}
+		if len(answer.prompts) != 0 || df48AuthorityEvents(run.events, 0) != 0 || len(df48Rig{events: run.events}.starts()) != 0 {
+			t.Errorf("supplied resume %d: an architect was asked, or authority recorded, or work started (%d turns):\n%s",
+				round, len(answer.prompts), gapLoopTrace(run.events))
+		}
+		if op := next.operativePlanAttempt(df48Task); op.ID != attempts[0] {
+			t.Errorf("supplied resume %d: the operative attempt moved to %s", round, short12(op.ID))
+		}
+		rec := receiptFrom(t, run.events)
+		if rec.Outcome != "PLAN_ADMISSION_REFUSED" || rec.PlanAdmissionRefusal == nil || rec.PlanAdmissionRefusal.Class != "production_scope" ||
+			rec.PlanDigest.Text != attempts[0] {
+			t.Errorf("supplied resume %d: the receipt is not the re-parked production_scope refusal: %s %+v", round, rec.Outcome, rec.PlanAdmissionRefusal)
+		}
+		again := reconstructed(t, store, df48Task)
+		var still planAttemptRefusal
+		if json.Unmarshal(again.PlanAdmissionRefused, &still) != nil || still.RefusalID != refusals[0].RefusalID || !again.Planned {
+			t.Errorf("supplied resume %d: the task no longer owes the scope refusal, so it is not resumable: %s", round, again.PlanAdmissionRefused)
+		}
+	}
+}
+
+// df48AuthorityPlan names main.go and the existing test beside it, so routing
+// derives a real existing-test edit grant for main_test.go: authority A.
+const df48AuthorityPlan = `{"decision":"proceed","summary":"print a number","plan":"rewrite main.go so it prints a number, proving it in main_test.go",` +
+	`"files":["main.go","main_test.go"],"mode":"modify",` +
+	`"test_edits":[{"path":"main_test.go","operation":"edit","package":"main","build_constraints":[],"imports":["testing"]}]}`
+
+// df48CountingScript is base with its scoped preflight over exactly files
+// numbered: the first answer is authority A and every later one authority B
+// (always B with onlyB), in the decision's coverage note. A second routing of
+// the same plan therefore records a scoped preflight distinguishable from
+// the first. marker is the file the first answer leaves behind.
+func df48CountingScript(t *testing.T, base, marker string, onlyB bool, files ...string) string {
+	t.Helper()
+	pattern := "\t*'\"" + strings.Join(files, "\",\"") + "\"]'*'\"name\":\"awareness_preflight\"}}')\n"
+	at := strings.Index(base, pattern)
+	if at < 0 {
+		t.Fatal("premise: the stub answers no preflight over exactly the plan's files")
+	}
+	head, tail := base[:at+len(pattern)], base[at+len(pattern):]
+	end := strings.Index(tail, " ;;\n")
+	body := strings.Replace(tail[:end], `"sufficient":true}`, `"sufficient":true,"note":"'"$note"'"}`, 1)
+	// Each note is spelled in two shell words, so the script text -- which
+	// the run records with the binding -- never contains the answer itself.
+	count := "\t\tif [ -e '" + marker + "' ]; then note='authority ''B'; else note='authority ''A'; : > '" + marker + "'; fi\n"
+	if onlyB {
+		count = "\t\tnote='authority ''B'\n"
+	}
+	return head + count + body + tail[end:]
+}
+
+// df48AuthorityDrive is df48Drive in the grant world: the architect first
+// answers df48AuthorityPlan, the candidate edits the unplanned other.go, and
+// the scoped preflight is numbered (df48CountingScript).
+func df48AuthorityDrive(t *testing.T, turns ...string) df48Rig {
+	t.Helper()
+	script := make([]architectTurn, 0, len(turns))
+	for _, turn := range turns {
+		script = append(script, architectTurn{text: turn})
+	}
+	return df48AuthorityDriveTurns(t, script...)
+}
+
+// df48AuthorityDriveTurns is df48AuthorityDrive with turns that may fail.
+func df48AuthorityDriveTurns(t *testing.T, turns ...architectTurn) df48Rig {
+	t.Helper()
+	script := append([]architectTurn{{text: df48AuthorityPlan}}, turns...)
+	script = append(script, architectTurn{text: df48Stop})
+	architect := &scriptedArchitect{turns: script}
+	e, _ := objectiveEngine(t, t.TempDir(), objectiveRoles{architect: architect, reviewer: df48Revise, bindings: make(chan RunnerSpec, 64)})
+	grantWorld(t, e)
+	e.Config.Sensei.Args = []string{"-c", df48CountingScript(t, regionScript(objectiveRunScript, "main.go", "main_test.go"),
+		t.TempDir()+"/scoped", false, "main.go", "main_test.go")}
+	world := commitFixtureFile(t, e.Repo.Root, df48Other, df48OtherSrc)
+	work, err := e.Repo.CreateWorktreeAt(context.Background(), df48Task, world)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commitFixtureFile(t, work, df48Other, strings.Replace(df48OtherSrc, "return 0", "return 1", 1))
+	run := drivePlanAdmission(t, e, architect, world, df48Task, func(ctx context.Context) {
+		e.run(ctx, df48Task, attemptObjective, RequestedByHuman)
+	})
+	return df48Rig{e: e, architect: architect, world: world, events: run.events}
+}
+
+// df48AuthorityOf is the task's complete plan-local authority state in e, as
+// one comparable value: the pending and operative attempts, the live grant
+// slices, the recorded grant maps and the scoped preflight of every attempt,
+// and the coverage world.
+func df48AuthorityOf(t *testing.T, e *Engine) string {
+	t.Helper()
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	a := e.attempts[df48Task]
+	if a == nil {
+		t.Fatal("premise: the task holds no plan-attempt state")
+	}
+	raw, err := json.Marshal(map[string]any{
+		"pending": a.pending.ID, "operative": a.operative.ID,
+		"live_prospective": e.prospective[df48Task], "live_edits": e.testEdits[df48Task],
+		"operative_prospective": a.operativeProspective, "operative_edits": a.operativeEdits,
+		"recorded_prospective": a.recordedProspective, "recorded_edits": a.recordedEdits,
+		"scoped_preflight": a.scopedPreflight, "coverage_world": e.coverageWorlds[df48Task],
+		"operative_coverage_world": a.operativeCoverageWorld,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
+}
+
+// df48AuthorityEvents counts the durable records of plan-local authority --
+// attempt starts, grant records and operative transitions -- in evs from at.
+func df48AuthorityEvents(evs []event.Event, at int) int {
+	n := 0
+	for _, ev := range evs[at:] {
+		switch ev.Kind {
+		case event.PlanAttemptStarted, event.ProspectiveGranted, event.TestEditGranted, event.PlanProposed:
+			n++
+		}
+	}
+	return n
+}
+
+// df48Same reports whether a and b record the same value.
+func df48Same(t *testing.T, a, b any) bool {
+	t.Helper()
+	x, err := json.Marshal(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	y, err := json.Marshal(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(x) == string(y)
+}
+
+// df48Mentions reports whether any event names text, in its summary or payload.
+func df48Mentions(evs []event.Event, text string) bool {
+	for _, ev := range evs {
+		if strings.Contains(ev.Summary, text) || strings.Contains(string(ev.Payload), text) {
+			return true
+		}
+	}
+	return false
+}
+
+// DF-48 EXACT-SAME PLAN. The architect answering the scope refusal with the
+// refused plan itself is not a replacement: the response is refused at the
+// pre-routing proposal guard, before any attempt is begun, any scoped
+// preflight or coverage is derived, any grant is recorded or the receipt's
+// plan is rebound. The original authority A -- a real main_test.go grant and
+// the scoped preflight numbered "authority A" -- is all that exists, live,
+// on the durable record and after reconstruction; the authority B a second
+// routing would derive ("authority B") never appears, and resuming the parked
+// task again changes nothing. The authorized control is W2: a materially
+// different plan is a fresh attempt.
+func TestDF48TheRefusedAttemptIsNeverItsOwnReplacement(t *testing.T) {
+	r := df48AuthorityDrive(t, df48AuthorityPlan)
+	refusals := r.scopeRefusals(t)
+	if len(refusals) != 1 {
+		t.Fatalf("premise: one scope refusal:\n%s", gapLoopTrace(r.events))
+	}
+	refused := refusals[0].PlanAttemptID
+	refusedAt := indexOfKind(r.events, event.PlanAttemptRefused)
+	if len(r.architect.prompts) != 2 || !strings.Contains(r.architect.prompts[1], df48RefusedMarker) {
+		t.Fatalf("premise: the architect answered the scope refusal (%d turns)", len(r.architect.prompts))
+	}
+	// Authority A, as routing derived and recorded it before the refusal.
+	_, editsA := r.e.recordedGrants(df48Task, refused)
+	if editsA.PlanAttemptID != refused || len(editsA.Grants) != 1 || editsA.Grants[0].Path != "main_test.go" {
+		t.Fatalf("premise: routing recorded the main_test.go grant for the refused attempt: %+v", editsA)
+	}
+	if n := df48AuthorityEvents(r.events, 0); n == 0 || df48AuthorityEvents(r.events, refusedAt) != 0 {
+		t.Errorf("the identical answer began an attempt, recorded a grant or was made operative after the refusal:\n%s", gapLoopTrace(r.events))
+	}
+	if df48Mentions(r.events, "authority B") {
+		t.Errorf("the identical answer was routed again: a second scoped preflight was taken for it")
+	}
+	if id, _ := r.proposedAfter(t, refusedAt); id != "" {
+		t.Errorf("the refused attempt's plan was proposed again as %s", short12(id))
+	}
+	if len(r.starts()) != 1 || r.reviewedBetween(0, len(r.events)) {
+		t.Errorf("a worker ran under the refused attempt after its refusal: starts %v", r.starts())
+	}
+	parked := indexOfKind(r.events, event.WorkflowPlanAdmissionRefused)
+	var named planAttemptRefusal
+	if parked < 0 || json.Unmarshal(r.events[parked].Payload, &named) != nil || named.RefusalID != refusals[0].RefusalID ||
+		named.PlanAttemptID != refused || hasKind(kindsOf(r.events), event.WorkflowFailed) {
+		t.Fatalf("the identical answer did not end on the existing bound:\n%s", gapLoopTrace(r.events))
+	}
+	r.e.mu.Lock()
+	a := r.e.attempts[df48Task]
+	pending, operative, scoped := a.pending.ID, a.operative.ID, a.scopedPreflight[refused].Coverage.Note
+	r.e.mu.Unlock()
+	if pending != refused || operative != refused || scoped != "authority A" {
+		t.Errorf("the live authority is not A: pending %s operative %s scoped %q", short12(pending), short12(operative), scoped)
+	}
+	if _, edits := r.e.recordedGrants(df48Task, refused); !df48Same(t, edits, editsA) {
+		t.Errorf("the refused attempt's recorded grants changed: %+v", edits)
+	}
+	rec := receiptFrom(t, r.events)
+	if rec.CandidateState != "UNATTEMPTED" || rec.CandidateDigest.State == runreceiptKnown {
+		t.Errorf("the refused candidate kept receipt standing: %s %+v", rec.CandidateState, rec.CandidateDigest)
+	}
+	if rec.PlanDigest.Text != refused {
+		t.Errorf("the receipt's plan identity moved to %s", short12(rec.PlanDigest.Text))
+	}
+
+	// RESUME, twice. Each resumed engine's Sensei answers only authority B,
+	// and its architect reproposes the refused plan once more: the parked
+	// refusal is presented, the response is refused before routing, and the
+	// reconstructed authority is A alone, unchanged by the repetition.
+	history, err := r.e.Store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := sessionStore(t)
+	for _, ev := range history {
+		if err := store.Append(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var restored string
+	for round := 1; round <= 2; round++ {
+		found := reconstructed(t, store, df48Task)
+		var owed planAttemptRefusal
+		if found.PlanAttemptID != refused || json.Unmarshal(found.PlanAdmissionRefused, &owed) != nil || owed.RefusalID != refusals[0].RefusalID {
+			t.Fatalf("resume %d: the parked task does not owe the scope refusal under the refused attempt: %s %s",
+				round, short12(found.PlanAttemptID), found.PlanAdmissionRefused)
+		}
+		next, _, _ := newGapLoopEngine(t, &gapLoopRun{engine: r.e, world: r.world}, store, df48AuthorityPlan)
+		next.Config = r.e.Config
+		next.Config.Sensei.Args = []string{"-c", df48CountingScript(t, regionScript(objectiveRunScript, "main.go", "main_test.go"),
+			"", true, "main.go", "main_test.go")}
+		answer := &scriptedArchitect{turns: []architectTurn{{text: df48AuthorityPlan}, {text: df48Stop}}}
+		next.Runners = objectiveRoles{architect: answer, reviewer: df48Revise, bindings: make(chan RunnerSpec, 64)}
+		run := drivePlanAdmission(t, next, answer, r.world, df48Task, func(ctx context.Context) { next.Resume(ctx, found) })
+		if len(answer.prompts) != 1 {
+			t.Fatalf("resume %d: the architect was not asked exactly once (%d):\n%s", round, len(answer.prompts), gapLoopTrace(run.events))
+		}
+		if df48AuthorityEvents(run.events, 0) != 0 || df48Mentions(run.events, "authority B") || len(df48Rig{events: run.events}.starts()) != 0 {
+			t.Errorf("resume %d: the identical answer was routed, granted, made operative or worked under:\n%s", round, gapLoopTrace(run.events))
+		}
+		parked := indexOfKind(run.events, event.WorkflowPlanAdmissionRefused)
+		var ended planAttemptRefusal
+		if parked < 0 || json.Unmarshal(run.events[parked].Payload, &ended) != nil || ended.RefusalID != refusals[0].RefusalID ||
+			hasKind(kindsOf(run.events), event.WorkflowFailed) {
+			t.Fatalf("resume %d: the identical answer did not end on the existing bound:\n%s", round, gapLoopTrace(run.events))
+		}
+		if op := next.operativePlanAttempt(df48Task); op.ID != refused || next.pendingPlanAttempt(df48Task).ID != refused {
+			t.Errorf("resume %d: the restored attempt is not the refused one: %s", round, short12(op.ID))
+		}
+		if _, edits := next.recordedGrants(df48Task, refused); !df48Same(t, edits, editsA) {
+			t.Errorf("resume %d: reconstruction did not restore exactly authority A: %+v", round, edits)
+		}
+		if rec := receiptFrom(t, run.events); rec.PlanDigest.Text != refused {
+			t.Errorf("resume %d: the receipt's plan identity moved to %s", round, short12(rec.PlanDigest.Text))
+		}
+		now := df48AuthorityOf(t, next)
+		if strings.Contains(now, "authority B") {
+			t.Errorf("resume %d: authority B entered the restored state: %s", round, now)
+		}
+		if round == 2 && now != restored {
+			t.Errorf("a repeated resume changed the restored authority:\n%s\n%s", restored, now)
+		}
+		restored = now
+	}
+
+	// And across an interrupted architect turn, live and resumed.
+	df48AcrossInterruptions(t)
+}
+
+// df48ClaimPlan is a materially different replacement resting on an
+// unverified premise, so routing it reaches a human authority question.
+const df48ClaimPlan = `{"decision":"proceed","summary":"print a number","plan":"rewrite main.go so it prints a number, resting on a premise",` +
+	`"files":["main.go","main_test.go"],"mode":"modify",` +
+	`"test_edits":[{"path":"main_test.go","operation":"edit","package":"main","build_constraints":[],"imports":["testing"]}],` +
+	`"claims":[{"statement":"main has no callers","about":"main.go","source":"inference"}]}`
+
+// df48Answering is drivePlanAdmission answering the first human question
+// with option and deferring any later one.
+func df48Answering(t *testing.T, e *Engine, architect *scriptedArchitect, world, option string, start func(context.Context)) gapLoopRun {
+	t.Helper()
+	ch, cancel := e.Bus.Subscribe(8192)
+	defer cancel()
+	ctx, stop := context.WithTimeout(context.Background(), 90e9)
+	defer stop()
+	go start(ctx)
+	run := gapLoopRun{engine: e, world: world}
+	asked := 0
+	for {
+		select {
+		case ev := <-ch:
+			run.events = append(run.events, ev)
+			if ev.Kind == event.AuthorityRequired {
+				asked++
+				waitForPending(t, e, df48Task)
+				if asked == 1 {
+					e.ResolveHuman(df48Task, option)
+				} else {
+					e.DeferAuthority(df48Task)
+				}
+			}
+			if _, ok := event.RunTerminality(ev.Kind); ok {
+				settle, done := context.WithTimeout(context.Background(), 3e8)
+				defer done()
+				for {
+					select {
+					case ev := <-ch:
+						run.events = append(run.events, ev)
+					case <-settle.Done():
+						run.prompts = append(run.prompts, architect.prompts...)
+						return run
+					}
+				}
+			}
+		case <-ctx.Done():
+			t.Fatalf("the governed run did not end:\n%s", gapLoopTrace(run.events))
+		}
+	}
+}
+
+// df48InterruptedReproposal resumes r's interrupted task twice in fresh
+// engines whose Sensei answers only authority B and whose architect
+// reproposes the refused plan. The first resume answers a standing question
+// with option, when one stands. Each resume must answer the owed scope
+// refusal through its guarded owner: nothing is routed, granted or made
+// operative, the run parks on the refusal, the restored authority is A
+// alone, and repeating the resume changes nothing.
+func df48InterruptedReproposal(t *testing.T, r df48Rig, owed planAttemptRefusal, editsA any, option string) {
+	t.Helper()
+	history, err := r.e.Store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := sessionStore(t)
+	for _, ev := range history {
+		if err := store.Append(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var restored string
+	for round := 1; round <= 2; round++ {
+		found := reconstructed(t, store, df48Task)
+		var named planAttemptRefusal
+		if json.Unmarshal(found.PlanAdmissionRefused, &named) != nil || named.RefusalID != owed.RefusalID || !found.Planned {
+			t.Fatalf("resume %d: the task does not owe the scope refusal: %s", round, found.PlanAdmissionRefused)
+		}
+		next, _, _ := newGapLoopEngine(t, &gapLoopRun{engine: r.e, world: r.world}, store, df48AuthorityPlan)
+		next.Config = r.e.Config
+		next.Config.Sensei.Args = []string{"-c", df48CountingScript(t, regionScript(objectiveRunScript, "main.go", "main_test.go"),
+			"", true, "main.go", "main_test.go")}
+		answer := &scriptedArchitect{turns: []architectTurn{{text: df48AuthorityPlan}, {text: df48Stop}}}
+		next.Runners = objectiveRoles{architect: answer, reviewer: df48Revise, bindings: make(chan RunnerSpec, 64)}
+		run := df48Answering(t, next, answer, r.world, option, func(ctx context.Context) { next.Resume(ctx, found) })
+		if len(answer.prompts) != 1 {
+			t.Fatalf("resume %d: the architect was not asked exactly once (%d):\n%s", round, len(answer.prompts), gapLoopTrace(run.events))
+		}
+		if df48AuthorityEvents(run.events, 0) != 0 || df48Mentions(run.events, "authority B") || len(df48Rig{events: run.events}.starts()) != 0 {
+			t.Errorf("resume %d: the refused plan was routed, granted, made operative or worked under:\n%s", round, gapLoopTrace(run.events))
+		}
+		parked := indexOfKind(run.events, event.WorkflowPlanAdmissionRefused)
+		var ended planAttemptRefusal
+		if parked < 0 || json.Unmarshal(run.events[parked].Payload, &ended) != nil || ended.RefusalID != owed.RefusalID ||
+			hasKind(kindsOf(run.events), event.WorkflowFailed) {
+			t.Fatalf("resume %d: the reproposal did not end on the existing bound:\n%s", round, gapLoopTrace(run.events))
+		}
+		if op := next.operativePlanAttempt(df48Task); op.ID != owed.PlanAttemptID {
+			t.Errorf("resume %d: the restored operative attempt is not the refused one: %s", round, short12(op.ID))
+		}
+		if _, edits := next.recordedGrants(df48Task, owed.PlanAttemptID); !df48Same(t, edits, editsA) {
+			t.Errorf("resume %d: reconstruction did not restore exactly authority A: %+v", round, edits)
+		}
+		if rec := receiptFrom(t, run.events); rec.PlanDigest.Text != owed.PlanAttemptID {
+			t.Errorf("resume %d: the receipt's plan identity moved to %s", round, short12(rec.PlanDigest.Text))
+		}
+		now := df48AuthorityOf(t, next)
+		if strings.Contains(now, "authority B") {
+			t.Errorf("resume %d: authority B entered the restored state: %s", round, now)
+		}
+		if round == 2 && now != restored {
+			t.Errorf("a repeated resume changed the restored authority:\n%s\n%s", restored, now)
+		}
+		restored = now
+	}
+}
+
+// df48AcrossInterruptions is the exact-same-plan witness across an
+// interrupted architect turn. The turn owed for a scope refusal may itself be
+// interrupted: by a provider that cannot serve it (BLOCKED_EXTERNAL beside
+// the owed refusal), or by a human question asked while routing a different
+// replacement and deferred. Either way the resumed turn is still the scope
+// refusal's, answered through its guarded owner: the refused plan reproposed
+// after the interruption is refused before routing, and authority A stays the
+// only authority there is.
+func df48AcrossInterruptions(t *testing.T) {
+	t.Helper()
+	premise := func(t *testing.T, r df48Rig, ending event.Kind) (planAttemptRefusal, any) {
+		t.Helper()
+		refusals := r.scopeRefusals(t)
+		if len(refusals) != 1 || !hasKind(kindsOf(r.events), ending) || hasKind(kindsOf(r.events), event.WorkflowFailed) {
+			t.Fatalf("premise: one scope refusal, then %s:\n%s", ending, gapLoopTrace(r.events))
+		}
+		_, editsA := r.e.recordedGrants(df48Task, refusals[0].PlanAttemptID)
+		if editsA.PlanAttemptID != refusals[0].PlanAttemptID || len(editsA.Grants) != 1 {
+			t.Fatalf("premise: routing recorded authority A for the refused attempt: %+v", editsA)
+		}
+		return refusals[0], editsA
+	}
+	t.Run("architect unavailable", func(t *testing.T) {
+		r := df48AuthorityDriveTurns(t, architectTurn{err: quota()})
+		owed, editsA := premise(t, r, event.WorkflowBlockedExternal)
+		df48InterruptedReproposal(t, r, owed, editsA, "")
+	})
+	t.Run("deferred authority", func(t *testing.T) {
+		r := df48AuthorityDrive(t, df48ClaimPlan, df48ClaimPlan, df48ClaimPlan, df48ClaimPlan)
+		owed, editsA := premise(t, r, event.WorkflowAwaitingAuthority)
+		history, err := r.e.Store.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		store := sessionStore(t)
+		for _, ev := range history {
+			if err := store.Append(ev); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if found := reconstructed(t, store, df48Task); len(found.AwaitingAuthority) == 0 {
+			t.Fatal("premise: the human question stands on the interrupted task")
+		}
+		df48InterruptedReproposal(t, r, owed, editsA, "1")
 	})
 }

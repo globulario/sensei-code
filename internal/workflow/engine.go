@@ -2059,12 +2059,13 @@ type taskPlanAttempts struct {
 	operative            planAttempt
 	operativeProspective []prospectiveGrant
 	operativeEdits       []testEditGrant
-	// refused are the canonical refusal identities already recorded for this
-	// task -- each bound to its attempt, since the attempt is part of the
-	// identity -- so each refusal is recorded exactly once, and a refusal met
-	// again under an identity already recorded is the repetition behaviour 7
-	// bounds.
-	refused map[string]bool
+	// refused are the canonical refusal records already recorded for this
+	// task, keyed by their identity -- each bound to its attempt, since the
+	// attempt is part of the identity -- so each refusal is recorded exactly
+	// once, and a refusal met again under an identity already recorded is the
+	// repetition behaviour 7 bounds. They are the records as written, live or
+	// as a resume restored them, and the one source refusalRecurs reads.
+	refused map[string]planAttemptRefusal
 	// restoredRefusals are the durable refusals a resume reconstructed, held
 	// to be presented to the architect's next turn once. Evidence only: they
 	// confer no grant and make no attempt operative.
@@ -2088,6 +2089,10 @@ type taskPlanAttempts struct {
 	// operativeCoverageWorld is the world the operative attempt's coverage was
 	// computed in, reinstated with its grant state.
 	operativeCoverageWorld string
+	// proposalGuard is set only while resolveProductionScopeRevision asks the
+	// architect to answer a DF-48 refusal: the refused attempt a returned
+	// decision must not reproduce, checked before every routePlan.
+	proposalGuard *refusedProposal
 }
 
 // planAttemptsOf is t's state, created on first use. The caller holds e.mu.
@@ -2101,7 +2106,7 @@ func (e *Engine) planAttemptsOf(taskID string) *taskPlanAttempts {
 		e.attempts[taskID] = t
 	}
 	if t.refused == nil {
-		t.refused = map[string]bool{}
+		t.refused = map[string]planAttemptRefusal{}
 		t.recordedProspective = map[string]prospectiveRecord{}
 		t.recordedEdits = map[string]testEditRecord{}
 		t.scopedPreflight = map[string]sensei.PreflightDecision{}
@@ -2279,6 +2284,11 @@ const (
 	// refusalSuppliedPlan: a supplied plan only a revision could admit, and no
 	// architect in this run may revise it.
 	refusalSuppliedPlan planAdmissionRefusalClass = "supplied_plan_unrevisable"
+	// refusalProductionScope (DF-48): candidate inspection found existing
+	// production files the OPERATIVE attempt, valid at the candidate's pinned
+	// world, does not name. It refuses that attempt's scope, not the
+	// objective; the candidate is preserved with no authority.
+	refusalProductionScope planAdmissionRefusalClass = "production_scope"
 )
 
 // returnsToArchitect reports whether a refusal of this class establishes only
@@ -2288,7 +2298,7 @@ const (
 // routed as it always was.
 func (c planAdmissionRefusalClass) returnsToArchitect() bool {
 	switch c {
-	case refusalProspectiveAdmission, refusalTestEditAdmission:
+	case refusalProspectiveAdmission, refusalTestEditAdmission, refusalProductionScope:
 		return true
 	}
 	return false
@@ -2358,6 +2368,16 @@ func (e *Engine) admissionRefusalOf(taskID string, cause error) (planAttemptRefu
 	e.mu.Lock()
 	t := e.planAttemptsOf(taskID)
 	a, operative := t.pending, t.operative.ID
+	if refusal.class == refusalProductionScope {
+		// A candidate-scope refusal refuses the OPERATIVE attempt the
+		// candidate was inspected under -- that attempt and no other.
+		var scope *productionScopeRefutation
+		if !errors.As(cause, &scope) || !scope.amendable() || scope.attempt != t.operative.ID {
+			e.mu.Unlock()
+			return planAttemptRefusal{}, false
+		}
+		a, operative = t.operative, ""
+	}
 	p, ed, scoped := t.recordedProspective[a.ID], t.recordedEdits[a.ID], t.scopedPreflight[a.ID]
 	graph := ""
 	if b := e.graphs[taskID]; b != nil {
@@ -2388,7 +2408,33 @@ func (e *Engine) noteScopedPreflight(taskID string, scoped sensei.PreflightDecis
 func (e *Engine) refusalRecorded(taskID, refusalID string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return e.planAttemptsOf(taskID).refused[refusalID]
+	_, ok := e.planAttemptsOf(taskID).refused[refusalID]
+	return ok
+}
+
+// refusalRecurs reports whether rec recurs against the task's recorded
+// refusals: its exact canonical identity is already recorded, or -- for
+// production_scope, whose one architectural reconsideration belongs to the
+// task's candidate scope and not to any path -- a production_scope refusal of
+// the task is already recorded as returned to the architect, whichever paths
+// either names. It reads the durable records alone, so a live run and a
+// resumed one decide recurrence identically.
+func (e *Engine) refusalRecurs(taskID string, rec planAttemptRefusal) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	t := e.planAttemptsOf(taskID)
+	if _, ok := t.refused[rec.RefusalID]; ok {
+		return true
+	}
+	if rec.Class != refusalProductionScope {
+		return false
+	}
+	for _, r := range t.refused {
+		if r.Class == refusalProductionScope && r.Continuation == session.PlanAdmissionContinuationArchitectTurn {
+			return true
+		}
+	}
+	return false
 }
 
 // PlanAdmissionRefused ends an INVOCATION, never the task: the architect was
@@ -2400,9 +2446,29 @@ func (e *Engine) refusalRecorded(taskID, refusalID string) bool {
 type PlanAdmissionRefused struct {
 	planAttemptRefusal
 	cause error
+	// unrevisable is a production_scope refusal of a SUPPLIED plan: returned
+	// to architecture, which no architect in this run may answer
+	// (resolveArchitectureForRevision), so its allowance in this run is none.
+	unrevisable bool
+	// reproposed is a production_scope refusal the architect answered with
+	// the refused plan itself: the same canonical PlanAttemptID.
+	reproposed bool
 }
 
 func (r *PlanAdmissionRefused) Error() string {
+	switch {
+	case r.Class == refusalProductionScope && r.unrevisable:
+		return "the candidate under supplied plan attempt " + short12(r.PlanAttemptID) + " was refused for production scope; the typed " +
+			"refusal is returned to architecture, and a supplied plan is revised only by whoever supplied it, never by an architect " +
+			"in this run, so the supplier answers it with a revised plan or by stopping: " + r.Reason
+	case r.Class == refusalProductionScope && r.reproposed:
+		return "the architect answered the production-scope refusal of plan attempt " + short12(r.PlanAttemptID) + " with that same " +
+			"plan attempt, unchanged, so it was not made operative again: " + r.Reason
+	case r.Class == refusalProductionScope:
+		return "the candidate under plan attempt " + short12(r.PlanAttemptID) + " was refused for production scope after a " +
+			"production-scope refusal of this task was already returned to the architect, so its one architectural " +
+			"reconsideration of candidate scope is spent: " + r.Reason
+	}
 	return "plan attempt " + short12(r.PlanAttemptID) + " was refused at admission again, unchanged and with no new governed evidence, " +
 		"after the refusal was returned to the architect: " + r.Reason
 }
@@ -2437,7 +2503,14 @@ func (e *Engine) continueAfterAdmissionRefusal(taskID string, cause error) (plan
 		return planAttemptRefusal{}, cause
 	}
 	rec.Continuation = session.PlanAdmissionContinuationArchitectTurn
-	if e.refusalRecorded(taskID, rec.RefusalID) {
+	if e.refusalRecurs(taskID, rec) {
+		// A recurrence not yet recorded under its own identity -- a later
+		// production_scope refusal naming other paths -- is recorded first,
+		// so the parked refusal is bound to a durable record a resume can
+		// present; an identity already recorded is not recorded again.
+		if err := e.recordPlanAdmissionRefusal(taskID, cause, rec.Continuation); err != cause {
+			return planAttemptRefusal{}, err
+		}
 		return planAttemptRefusal{}, &PlanAdmissionRefused{planAttemptRefusal: rec, cause: cause}
 	}
 	if err := e.recordPlanAdmissionRefusal(taskID, cause, rec.Continuation); err != cause {
@@ -2532,7 +2605,7 @@ func (e *Engine) restorePlanAdmissionRefusals(task session.Interrupted) error {
 	t := e.planAttemptsOf(task.TaskID)
 	t.restoredRefusals = nil
 	for _, k := range order {
-		t.refused[k] = true
+		t.refused[k] = kept[k]
 		if owed == nil || k != owed.RefusalID {
 			t.restoredRefusals = append(t.restoredRefusals, kept[k])
 		}
@@ -2602,7 +2675,7 @@ func (e *Engine) recordPlanAdmissionRefusal(taskID string, cause error, continua
 		return errors.Join(cause, err)
 	}
 	e.mu.Lock()
-	e.planAttemptsOf(taskID).refused[rec.RefusalID] = true
+	e.planAttemptsOf(taskID).refused[rec.RefusalID] = rec
 	e.mu.Unlock()
 	return cause
 }
@@ -3020,8 +3093,11 @@ func planSummary(d architectureDecision) string {
 // here, and a path this inspection admits still continues to them.
 //
 // Every unauthorized path is named, sorted, in one error beginning
-// "production scope refuted:", and the refusal is terminal, as a test-edit
-// refutation is.
+// "production scope refuted:". Each refusal of a measured candidate is a
+// *productionScopeRefutation naming its shape; only the DF-48 shape -- existing
+// production files an operative attempt at the candidate's base omits -- may
+// return to the architect (refuseProductionScope). Every other shape stays
+// terminal, as a test-edit refutation is.
 func inspectProductionScope(state candidateTestState, operative planAttempt) error {
 	mutated, deleted, renamed, err := existingProductionMutations(state)
 	if err != nil {
@@ -3039,12 +3115,14 @@ func inspectProductionScope(state candidateTestState, operative planAttempt) err
 	}
 	attemptID, world, base := strings.TrimSpace(operative.ID), strings.TrimSpace(operative.World), strings.TrimSpace(state.World)
 	if attemptID == "" {
-		return fmt.Errorf("production scope refuted: the candidate %s, and no operative plan attempt is established, so no plan names it",
-			describe(mutated))
+		return &productionScopeRefutation{shape: scopeNoOperativeAttempt, world: base, paths: mutated,
+			text: fmt.Sprintf("production scope refuted: the candidate %s, and no operative plan attempt is established, so no plan names it",
+				describe(mutated))}
 	}
 	if world == "" || base == "" || world != base {
-		return fmt.Errorf("production scope refuted: the candidate %s, and the operative plan attempt %s is pinned at world %s, not the candidate's base %s; its plan does not describe this candidate",
-			describe(mutated), short12(attemptID), orNone(shortWorldID(world), "none"), orNone(shortWorldID(base), "none"))
+		return &productionScopeRefutation{shape: scopeAttemptAtAnotherWorld, attempt: attemptID, world: base, paths: mutated,
+			text: fmt.Sprintf("production scope refuted: the candidate %s, and the operative plan attempt %s is pinned at world %s, not the candidate's base %s; its plan does not describe this candidate",
+				describe(mutated), short12(attemptID), orNone(shortWorldID(world), "none"), orNone(shortWorldID(base), "none"))}
 	}
 	planned := make(map[string]bool, len(operative.Plan.Files))
 	for _, f := range operative.Plan.Files {
@@ -3057,10 +3135,96 @@ func inspectProductionScope(state candidateTestState, operative planAttempt) err
 		}
 	}
 	if len(unplanned) != 0 {
-		return fmt.Errorf("production scope refuted: the candidate %s, and the operative plan attempt %s does not name it; an existing production file outside the operative plan is refused",
-			describe(unplanned), short12(attemptID))
+		return &productionScopeRefutation{shape: scopeOmittedByOperativePlan, attempt: attemptID, world: base, paths: unplanned,
+			text: fmt.Sprintf("production scope refuted: the candidate %s, and the operative plan attempt %s does not name it; an existing production file outside the operative plan is refused",
+				describe(unplanned), short12(attemptID))}
 	}
 	return nil
+}
+
+// productionScopeShape is the closed vocabulary of production-scope refusals
+// of a measured candidate, read by membership.
+type productionScopeShape string
+
+const (
+	// scopeNoOperativeAttempt: no PlanAttempt governs the candidate's
+	// production edits. There is no plan envelope to amend.
+	scopeNoOperativeAttempt productionScopeShape = "no_operative_plan_attempt"
+	// scopeAttemptAtAnotherWorld: the operative attempt does not govern the
+	// candidate's pinned world -- an authority failure, not an omission.
+	scopeAttemptAtAnotherWorld productionScopeShape = "plan_attempt_at_another_world"
+	// scopeOmittedByOperativePlan (DF-48): an operative attempt valid at the
+	// candidate's pinned world omits existing production files the candidate
+	// mutates.
+	scopeOmittedByOperativePlan productionScopeShape = "omitted_by_operative_plan"
+)
+
+// productionScopeRefutation is inspectProductionScope's typed refusal. Its
+// text is the DF-39 refusal, unchanged; its shape, the attempt it was judged
+// under, the candidate's base and the sorted refused paths are what routing
+// reads, never the sentence.
+type productionScopeRefutation struct {
+	shape   productionScopeShape
+	attempt string
+	world   string
+	paths   []string
+	text    string
+}
+
+func (r *productionScopeRefutation) Error() string { return r.text }
+
+// amendable reports whether this refusal is the DF-48 shape: an operative
+// attempt, valid at the candidate's base, that omits named existing production
+// paths. Only that shape names a plan envelope the architect could amend.
+func (r *productionScopeRefutation) amendable() bool {
+	return r != nil && r.shape == scopeOmittedByOperativePlan && r.attempt != "" && r.world != "" && len(r.paths) != 0
+}
+
+// productionScopeDeclaration is the declaration a production_scope refusal
+// carries: every omitted existing production path, sorted, and the refused
+// candidate's frozen identity -- preserved as implementation material that
+// holds NO authority, no validation, review, cycle or receipt standing.
+type productionScopeDeclaration struct {
+	OmittedPaths []string                 `json:"omitted_existing_production_paths"`
+	Candidate    refusedCandidateMaterial `json:"refused_candidate"`
+}
+
+// refusedCandidateMaterial is the frozen identity of a candidate refused for
+// production scope.
+type refusedCandidateMaterial struct {
+	BaseSHA  string `json:"base_sha"`
+	Tree     string `json:"tree"`
+	Revision string `json:"revision"`
+	Standing string `json:"standing"`
+}
+
+// refusedCandidateStanding is the only standing a refused candidate has.
+const refusedCandidateStanding = "non_authoritative_material"
+
+// refuseProductionScope marks a DF-48 production-scope refusal of a certified
+// candidate as a production_scope plan-admission refusal of the operative
+// attempt, carrying the omitted paths and the candidate's frozen identity. The
+// refusal itself, and its text, are unchanged; every other error -- including
+// the no-operative-attempt and another-world shapes -- is returned as it is.
+func refuseProductionScope(err error, base, tree, revision string) error {
+	var scope *productionScopeRefutation
+	if !errors.As(err, &scope) || !scope.amendable() || scope.world != base {
+		return err
+	}
+	return refusePlanAdmission(refusalProductionScope, productionScopeDeclaration{
+		OmittedPaths: append([]string(nil), scope.paths...),
+		Candidate:    refusedCandidateMaterial{BaseSHA: base, Tree: tree, Revision: revision, Standing: refusedCandidateStanding},
+	}, err)
+}
+
+// productionScopeRefusalOf is the DF-48 refusal err carries, if any.
+func productionScopeRefusalOf(err error) (*productionScopeRefutation, bool) {
+	var refusal *planAdmissionRefusal
+	var scope *productionScopeRefutation
+	if !errors.As(err, &refusal) || refusal.class != refusalProductionScope || !errors.As(err, &scope) || !scope.amendable() {
+		return nil, false
+	}
+	return scope, true
 }
 
 // existingProductionMutations classifies, from the candidate's exact path set
@@ -3941,9 +4105,21 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// plan does not name is refused by name; one it names continues to
 		// the prospective and test-edit inspections below, which keep their
 		// own authority over created files and existing tests.
+		//
+		// The refusal is unchanged (DF-48 changes routing, not refusal): an
+		// omission by an operative attempt valid at this base is typed as a
+		// production_scope refusal carrying this candidate's frozen identity,
+		// for implement to return to the architect. From that moment the
+		// candidate is material, not a candidate: its certified observation
+		// is replaced whole, so no certified digest or standing of it reaches
+		// the replacement attempt or any terminal receipt.
 		operative := e.operativePlanAttempt(taskID)
 		mutations := candidateTestStateAt(ctx, workspace, tc.Identity.BaseSHA, capture.Tree, capture.Paths, diff)
 		if err := inspectProductionScope(mutations, operative); err != nil {
+			err = refuseProductionScope(err, tc.Identity.BaseSHA, capture.Tree, candidateRevision(diff))
+			if _, ok := productionScopeRefusalOf(err); ok {
+				e.noteRefusedCandidateMaterial(taskID, capture.Tree)
+			}
 			return candidateNotConverged, plan, lastReview, lastAudit, err
 		}
 
@@ -5075,6 +5251,86 @@ func (e *Engine) resolveArchitectureForRevision(ctx context.Context, sc *sensei.
 	return e.resolveArchitecture(ctx, sc, start, taskID, task, prompt)
 }
 
+// refusedProposal is the DF-48 pre-routing proposal guard: the refused
+// operative attempt, the production_scope refusal recorded against it, and
+// that refusal's cause.
+type refusedProposal struct {
+	attempt planAttempt
+	refusal planAttemptRefusal
+	cause   error
+}
+
+// resolveProductionScopeRevision is THE revision owner for a DF-48
+// production_scope refusal, live (returnProductionScopeRefusal) and resumed
+// (Resume) alike. It is resolveArchitectureForRevision with the proposal guard
+// held for the turn: a returned decision that derives the refused attempt's
+// canonical PlanAttemptID is refused as reproposed before routePlan, so no
+// attempt is begun, no scoped preflight or coverage is derived, no grant is
+// recorded and the receipt's plan is not rebound for it. Any other decision is
+// routed as any revision is, and becomes operative only through
+// adoptPlanAttempt.
+//
+// The refused attempt must be the operative attempt and re-derive its own
+// identity; otherwise the guard could not recognise it, and no replacement is
+// routed against it. A refusal of a SUPPLIED plan is re-parked here, live and
+// resumed alike, as the typed refusal it is: its architecture is whoever
+// supplied it, so no architect is asked and nothing is routed.
+func (e *Engine) resolveProductionScopeRevision(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt, why string, refusal planAttemptRefusal, cause error) (architectureDecision, error) {
+	refused := e.operativePlanAttempt(taskID)
+	id, err := planAttemptID(refused.TaskID, refused.objective, refused.World, refused.PlanSource, refused.PlanDigest, refused.Plan)
+	if err != nil {
+		return architectureDecision{}, err
+	}
+	if refused.ID == "" || refused.ID != refusal.PlanAttemptID || id != refused.ID {
+		return architectureDecision{}, fmt.Errorf("production-scope refusal %s refuses plan attempt %s, which is not the operative attempt "+
+			"re-derivable as itself (%s); no replacement is routed against it", short12(refusal.RefusalID), short12(refusal.PlanAttemptID),
+			orNone(short12(refused.ID), "none"))
+	}
+	// The receipt names the refused operative attempt this turn answers
+	// before the turn can end the invocation -- live, where it already does,
+	// and resumed, where nothing has named it yet. Only adoptPlanAttempt moves
+	// it to a replacement.
+	e.notePlan(taskID, refused.PlanDigest, refused.ID)
+	if _, supplied := e.suppliedPlan(taskID); supplied {
+		return architectureDecision{}, &PlanAdmissionRefused{planAttemptRefusal: refusal, cause: cause, unrevisable: true}
+	}
+	e.mu.Lock()
+	e.planAttemptsOf(taskID).proposalGuard = &refusedProposal{attempt: refused, refusal: refusal, cause: cause}
+	e.mu.Unlock()
+	defer func() {
+		e.mu.Lock()
+		e.planAttemptsOf(taskID).proposalGuard = nil
+		e.mu.Unlock()
+	}()
+	return e.resolveArchitectureForRevision(ctx, sc, start, taskID, task, prompt, why)
+}
+
+// guardProposal is the pre-routing proposal guard, called immediately before
+// every routePlan. With no guard held it admits every decision unchanged. With
+// one held it derives d's canonical PlanAttemptID under the refused attempt's
+// task, objective, world, plan source and plan digest -- pure, nothing is
+// written -- and refuses d as reproposed when that is the refused attempt.
+func (e *Engine) guardProposal(taskID string, d architectureDecision) error {
+	e.mu.Lock()
+	var g *refusedProposal
+	if t := e.attempts[taskID]; t != nil {
+		g = t.proposalGuard
+	}
+	e.mu.Unlock()
+	if g == nil {
+		return nil
+	}
+	a := g.attempt
+	id, err := planAttemptID(a.TaskID, a.objective, a.World, a.PlanSource, a.PlanDigest, d)
+	if err != nil {
+		return err
+	}
+	if id != g.refusal.PlanAttemptID {
+		return nil
+	}
+	return &PlanAdmissionRefused{planAttemptRefusal: g.refusal, cause: g.cause, reproposed: true}
+}
+
 // resolveSuppliedPlan routes a supplied plan through the same authority
 // boundary an architect's plan crosses in resolveArchitectureIn's "proceed"
 // branch, with the same router and the same recorded routing.
@@ -5095,6 +5351,9 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 		"the plan was supplied with the task (sha256 "+supplied.Digest+"); the architect is not consulted for it, and it is routed as any plan is", nil))
 	// The bound is named before routing can terminate this run, by routePlan's
 	// first act (beginPlanAttempt).
+	if err := e.guardProposal(taskID, d); err != nil {
+		return architectureDecision{}, err
+	}
 	routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
 	if err != nil {
 		return architectureDecision{}, err
@@ -5501,6 +5760,9 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			// through a region the graph cannot cover is the exact failure this
 			// routing exists to catch, and it is invisible at the time because
 			// the model sounds no different than usual.
+			if err := e.guardProposal(taskID, d); err != nil {
+				return architectureDecision{}, err
+			}
 			routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
 			if err != nil {
 				// A typed refusal of THIS plan returns to the architect once,
@@ -5669,6 +5931,9 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			// architect decides architecturally. A nervous model must not be
 			// able to manufacture Level-3 events, for the same reason a
 			// confident one must not be able to skip them.
+			if err := e.guardProposal(taskID, d); err != nil {
+				return architectureDecision{}, err
+			}
 			routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
 			if err != nil {
 				// A typed refusal of THIS plan returns to the architect once,
@@ -8883,6 +9148,28 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				config.DisplayName(worker.Name)+" is continuing the existing candidate, not starting over", nil))
 		}
 		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, start, taskID, tc, plan, worker, workspace, carried)
+		// CANDIDATE SCOPE REFUSAL RETURNS TO ARCHITECTURE (DF-48). Only the
+		// typed production_scope refusal -- an operative attempt valid at the
+		// candidate's base omitting existing production paths -- whoever
+		// authored that attempt. Every other production-scope refusal stays
+		// terminal below. The refused candidate keeps no standing: the
+		// replacement attempt is routed, granted and implemented afresh, and
+		// a later production_scope refusal parks.
+		for {
+			if _, ok := productionScopeRefusalOf(err); !ok {
+				break
+			}
+			replanned, ok := e.returnProductionScopeRefusal(ctx, sc, start, taskID, tc, plan, err, fail)
+			if !ok {
+				state.OpenFindings(openFindings("", "", err))
+				_ = state.Save(e.Repo.Root)
+				return
+			}
+			plan, carried = replanned, productionScopeReplanNote
+			state.Evidence = tc.EvidenceSnapshot
+			_ = state.Save(e.Repo.Root)
+			accepted, finalPlan, review, audit, err = e.runCandidate(ctx, sc, start, taskID, tc, plan, worker, workspace, carried)
+		}
 		if accepted == candidateReviewUnanswered {
 			// The candidate was validated and audited, a review request for that
 			// exact candidate was published, and no answer arrived before its
@@ -9348,6 +9635,129 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	fail(fmt.Errorf("no bounded implementor produced an acceptable candidate: %s", strings.Join(failures, " | ")))
 }
 
+// productionScopeReplanNote is what the implementer of a replacement plan is
+// told about the candidate it inherits. It carries no review finding and no
+// standing: the inherited work is material, judged afresh.
+const productionScopeReplanNote = "The previous candidate in this worktree was refused before review because it modified existing " +
+	"production files its plan did not name. The architect has issued a replacement plan. The worktree's existing changes are " +
+	"non-authoritative material: nothing in them was reviewed or carries any standing. Bring the candidate exactly within the " +
+	"replacement plan's files -- revert any existing production file it does not name -- and complete the plan."
+
+// returnProductionScopeRefusal returns a DF-48 production_scope refusal to the
+// architect through the canonical continuation (continueAfterAdmissionRefusal)
+// and adopts the replacement plan the architect returns: a fresh PlanAttempt,
+// routed and granted afresh, whose whole scope replaces the refused one. The
+// refused candidate is preserved where it stands, as non-authoritative
+// material; nothing it established -- validation, review, cycle or receipt
+// standing -- crosses into the replacement.
+//
+// It reports false when the invocation ended here: on the architect's REPLY,
+// through the architect-reply terminal (workflow.completed, UNREVIEWED), and
+// otherwise through fail -- a refusal past the task's one architectural
+// reconsideration of candidate scope, a supplied plan's refusal (whose
+// architecture is its supplier, outside this run), or a replacement that is
+// the refused attempt itself, refused before routing by its revision owner
+// (resolveProductionScopeRevision), each the existing PLAN_ADMISSION_REFUSED bound;
+// an unrecordable refusal, an architect turn that produced no replacement
+// plan, or a replacement that could not be made operative. The scope refusal
+// is never restated as the objective being impossible.
+func (e *Engine) returnProductionScopeRefusal(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, tc *taskContext, plan string, cause error, fail func(error)) (string, bool) {
+	refusal, err := e.continueAfterAdmissionRefusal(taskID, cause)
+	if err != nil {
+		fail(err)
+		return "", false
+	}
+	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		"the candidate's production scope was refused; the candidate is preserved as non-authoritative material and the "+
+			"typed scope refusal returns to the architect: "+refusal.Reason,
+		refusal))
+	// The refusal is recorded as returned to architecture. A supplied plan's
+	// architecture is whoever supplied it, so its revision owner parks the
+	// invocation on the recorded refusal -- resumable, never workflow.failed
+	// -- for the supplier to include the paths, exclude them, or stop.
+	why := "candidate production scope refused (refusal " + short12(refusal.RefusalID) + ")"
+	revised, err := e.resolveProductionScopeRevision(ctx, sc, start, taskID, tc.Task, productionScopeRefusalPrompt(tc.Task, plan, refusal), why, refusal, cause)
+	if err != nil {
+		fail(err)
+		return "", false
+	}
+	if revised.Decision == "reply" {
+		// The architect's stop is a decision, not a failure: it ends through
+		// the same architect-reply terminal an initial REPLY takes. The
+		// candidate stays where it stands, never minted, and the recorded
+		// refusal stays a refusal of the plan's scope.
+		e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke, revised.Message, revised))
+		e.emitRunTerminal(taskID, event.WorkflowCompleted, event.SourceSystem,
+			runreceipt.OutcomeUnreviewed, e.candidateStateFor(taskID),
+			"the architect stopped the objective in answer to production-scope refusal "+short12(refusal.RefusalID)+
+				"; the refused candidate is preserved as non-authoritative material and the refusal stands as a refusal of the plan's scope",
+			refusal)
+		return "", false
+	}
+	if strings.TrimSpace(revised.Plan) == "" {
+		fail(fmt.Errorf("the architect returned no replacement plan for the production-scope refusal %s and so stopped the objective here; "+
+			"the refusal refused the plan's scope, not the objective: %s", short12(refusal.RefusalID), oneLine(revised.Message)))
+		return "", false
+	}
+	if _, err := e.adoptPlanAttempt(taskID, tc.Task, revised); err != nil {
+		fail(err)
+		return "", false
+	}
+	applyPlanScope(tc, revised)
+	// No validation standing of the refused candidate survives into the
+	// replacement's account.
+	tc.EvidenceSnapshot = taskstate.Evidence{}
+	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		"the replacement plan is operative; the next candidate is validated and reviewed anew under it: "+scopeSummary(*tc), nil))
+	return revised.Plan, true
+}
+
+// noteRefusedCandidateMaterial records the current candidate once a DF-48
+// production_scope refusal has made it non-authoritative material: work
+// exists, no canonical identity will be created for it, and its certified
+// observation -- digest and certification -- is replaced whole. The tree it
+// froze is kept as what was measured of it.
+func (e *Engine) noteRefusedCandidateMaterial(taskID, tree string) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		next := candidateWith(runreceipt.CandidateUnattempted,
+			"the current candidate was refused for production scope before the mint; it is preserved as non-authoritative "+
+				"material and no canonical identity is created for it")
+		if strings.TrimSpace(tree) != "" {
+			next.capturedTree = runreceipt.MeasuredValue(tree, "the canonical tree the refused candidate froze")
+		}
+		next.candBase = f.candBase
+		f.replaceCurrentCandidate(next)
+	})
+}
+
+// productionScopeRefusalPrompt returns a DF-48 production_scope refusal to the
+// architect as bounded evidence, through the one refusal rendering.
+func productionScopeRefusalPrompt(task, plan string, r planAttemptRefusal) string {
+	return fmt.Sprintf(`CANDIDATE PRODUCTION SCOPE REFUSED — THIS PLAN'S SCOPE, NOT THE OBJECTIVE:
+A candidate implementing the operative plan modified existing production files that plan does not name, and candidate
+inspection refused it before any review. The refusal establishes only that the candidate exceeded this plan's scope;
+it does not establish that the objective is impossible. The typed refusal, exactly as recorded:
+
+%s
+
+The refused candidate is preserved in the task's worktree as NON-AUTHORITATIVE material: none of its validation,
+review, cycle or receipt standing carries to any plan you return, and every grant is derived again, from scratch,
+for that plan. Choose one:
+  - include the named paths in a replacement plan if they belong to this objective;
+  - return a replacement plan that excludes them, and the next candidate must not modify them;
+  - or stop the objective by returning a REPLY decision with your reason.
+This is the task's one architectural reconsideration of candidate scope: a later production-scope refusal, naming any
+paths, ends this invocation with the refusal named.
+
+TASK:
+%s
+
+OPERATIVE PLAN:
+%s
+
+Return ONLY the same architecture JSON contract as before.`, planAdmissionRefusalEnvelope(r), task, plan)
+}
+
 func isProspectiveSurfaceRefutation(err error) bool {
 	return err != nil && (strings.HasPrefix(err.Error(), "prospective surface refuted:") || strings.HasPrefix(err.Error(), "test edit refuted:"))
 }
@@ -9515,7 +9925,12 @@ func (e *Engine) disposeIfEmpty(ctx context.Context, taskID string, identity can
 }
 
 // resumeAuthority re-asks a Level-3 question that was deferred, exactly as it
-// was asked.
+// was asked, and continues the task once it is answered. It reports true only
+// when that continuation is the planned resume's: a planned task owed a
+// production_scope refusal was asked inside that refusal's architect turn, so
+// Resume continues it there, through the guarded revision owner -- never
+// through an initial architect turn, which would route the refused attempt as
+// though nothing had refused it.
 //
 // Nothing is re-derived on the way in: no preflight, no start gate, no router.
 // That is the whole point. The router already exercised authority
@@ -9525,19 +9940,19 @@ func (e *Engine) disposeIfEmpty(ctx context.Context, taskID string, identity can
 // question is settled history. What happens after it is answered is not: the
 // work re-derives from current evidence, and the recorded answer is honoured
 // there by the same mechanism that stops the router asking twice in one task.
-func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) {
+func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) bool {
 	var deferred DeferredAuthority
 	if err := json.Unmarshal(task.AwaitingAuthority, &deferred); err != nil {
 		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 			"the deferred authority question could not be read back, so it cannot be asked again: "+err.Error(), nil)
-		return
+		return false
 	}
 	if len(deferred.Decision.Options) == 0 {
 		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 			"the deferred authority question carried no options, so there is nothing to answer", nil)
-		return
+		return false
 	}
 
 	// The record must be about the task being resumed, and this is checked
@@ -9550,7 +9965,7 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 			"the preserved question is bound to task "+deferred.TaskID+", not to this one; it cannot be answered here", nil)
-		return
+		return false
 	}
 	// A question about a plan attempt is answerable only if that attempt was
 	// durably started by this task: the answer will be owned by it, and an
@@ -9559,7 +9974,7 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 			"the preserved question names plan attempt "+short12(id)+", which this task never recorded as started; it cannot be answered here", nil)
-		return
+		return false
 	}
 	// A refusal decidable before the answer is consumed is decided before it.
 	// The candidate's base and the checkout it governs are read now, so a
@@ -9568,7 +9983,7 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	// (task-1790489127599728062, 2026-09-27).
 	if err := e.resumePrecondition(ctx, task.TaskID); err != nil {
 		e.terminateRun(ctx, task.TaskID, task.Task, err)
-		return
+		return false
 	}
 	// A question deferred before the scope was preserved cannot say what it was
 	// about, and this must not guess. Reconstructing a scope from the repository
@@ -9604,7 +10019,7 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 			fmt.Errorf("start Sensei: %w", err).Error(), nil)
-		return
+		return false
 	}
 	defer sc.Close()
 
@@ -9624,14 +10039,21 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 		// move past the boundary in any of the three, and which ending it was
 		// is not decided here -- one classifier owns that for both paths.
 		e.terminateAuthorityOutcome(ctx, task.TaskID, task.Task, err)
-		return
+		return false
 	}
 	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 		"authority decision answered on resume; continuing the task: "+choice, nil))
+	if r, refused := e.owedPlanAdmissionRefusal(task.TaskID); task.Planned && refused && r.Class == refusalProductionScope {
+		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+			"the question was asked inside the architect turn owed for production-scope refusal "+short12(r.RefusalID)+
+				"; the task continues at that turn", nil))
+		return true
+	}
 	// The objective is the recorded one: every architect turn reads it through
 	// recordedObjective, which recovers it from TaskCreated in a restarted
 	// process (task-1790481145146367848, 2026-09-27, bound an empty digest here).
 	e.execute(ctx, task.TaskID, task.Task)
+	return false
 }
 
 // resumeUnplannedArchitecture continues a task that never reached a plan: the
@@ -9703,18 +10125,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// which opens its own.
 		planned := len(task.AwaitingAuthority) == 0 && task.Planned
 		if planned {
-			e.beginReceipt(task.TaskID)
-			// The receipt opens with candidate_state NONE, a positive claim. A
-			// resumed task may already hold a retained candidate, and a failure
-			// before implement measures it -- a refused restoration included --
-			// would record "no candidate" beside work sitting on disk (canonical
-			// review of #194 at b23a8ae). So the inherited candidate is measured
-			// first, before anything here can fail.
-			if inherited, ok, err := candidate.Load(e.Repo.Root, task.TaskID); err == nil && ok {
-				e.noteInheritedCandidate(task.TaskID, observeCandidate(ctx, inherited.Worktree, inherited.BaseSHA))
-			} else {
-				e.noteCandidateWorkUnmeasured(task.TaskID)
-			}
+			e.openResumedReceipt(ctx, task.TaskID)
 		}
 		// The refusal routing state is reconstructed from the durable
 		// PlanAttemptID-bound refusals before any architect turn; no grant or
@@ -9727,15 +10138,20 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			return
 		}
 		if len(task.AwaitingAuthority) != 0 {
-			e.resumeAuthority(ctx, task)
-			return
-		}
-		// NO PLAN, NO IMPLEMENTATION TO RESUME. Everything below this point
-		// restores a bound plan and hands a candidate back to an implementer,
-		// and a task that never had a plan has neither. It is owed the architect
-		// turn instead -- whether a provider blocked that turn or the process
-		// simply died before it produced one.
-		if !task.Planned {
+			if !e.resumeAuthority(ctx, task) {
+				return
+			}
+			// Answered inside an owed production_scope refusal's architect
+			// turn: the planned resume below owns the continuation, and its
+			// receipt.
+			e.openResumedReceipt(ctx, task.TaskID)
+		} else if !task.Planned {
+			// NO PLAN, NO IMPLEMENTATION TO RESUME. Everything below this
+			// point restores a bound plan and hands a candidate back to an
+			// implementer, and a task that never had a plan has neither. It
+			// is owed the architect turn instead -- whether a provider
+			// blocked that turn or the process simply died before it
+			// produced one.
 			e.resumeUnplannedArchitecture(ctx, task)
 			return
 		}
@@ -9913,16 +10329,35 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			}
 			// An owed plan-admission refusal -- first occurrence or parked
 			// repeat -- is owed an architect turn too, never implementer work
-			// under the older plan its replacement was meant to supersede.
-			if r, refused := e.owedPlanAdmissionRefusal(task.TaskID); !owed && refused {
-				why, owed = "plan attempt "+short12(r.PlanAttemptID)+" was refused at admission (refusal "+
-					short12(r.RefusalID)+") and no admitted plan has replaced it: "+r.Reason, true
+			// under the older plan its replacement was meant to supersede. An
+			// owed production_scope refusal is read whatever else is owed: a
+			// blocked or non-converged architect turn retried over it is still
+			// that refusal's turn, answered through its guarded owner.
+			var owedScope *planAttemptRefusal
+			if r, refused := e.owedPlanAdmissionRefusal(task.TaskID); refused {
+				if !owed {
+					why, owed = "plan attempt "+short12(r.PlanAttemptID)+" was refused at admission (refusal "+
+						short12(r.RefusalID)+") and no admitted plan has replaced it: "+r.Reason, true
+				}
+				if r.Class == refusalProductionScope {
+					owedScope = &r
+				}
 			}
 			if owed {
 				e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 					"resuming the same task at the architect re-plan it is owed: "+why, nil))
-				revised, err := e.resolveArchitectureForRevision(ctx, sc, start, task.TaskID, task.Task,
-					replanPrompt(task.Task, plan, why, task.Review), why)
+				prompt := replanPrompt(task.Task, plan, why, task.Review)
+				var revised architectureDecision
+				var err error
+				if owedScope != nil {
+					// An owed production_scope refusal is answered through its
+					// one guarded revision owner: the refused attempt itself is
+					// refused before it is routed.
+					revised, err = e.resolveProductionScopeRevision(ctx, sc, start, task.TaskID, task.Task, prompt, why,
+						*owedScope, errors.New(owedScope.Reason))
+				} else {
+					revised, err = e.resolveArchitectureForRevision(ctx, sc, start, task.TaskID, task.Task, prompt, why)
+				}
 				if err != nil {
 					fail(err)
 					return
@@ -9973,6 +10408,23 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		e.implement(ctx, sc, start, task.TaskID, &tc, plan, carried, fail)
 	}()
 	return task.TaskID
+}
+
+// openResumedReceipt opens the receipt a planned resume owns, before anything
+// can end the invocation.
+func (e *Engine) openResumedReceipt(ctx context.Context, taskID string) {
+	e.beginReceipt(taskID)
+	// The receipt opens with candidate_state NONE, a positive claim. A
+	// resumed task may already hold a retained candidate, and a failure
+	// before implement measures it -- a refused restoration included --
+	// would record "no candidate" beside work sitting on disk (canonical
+	// review of #194 at b23a8ae). So the inherited candidate is measured
+	// first, before anything here can fail.
+	if inherited, ok, err := candidate.Load(e.Repo.Root, taskID); err == nil && ok {
+		e.noteInheritedCandidate(taskID, observeCandidate(ctx, inherited.Worktree, inherited.BaseSHA))
+	} else {
+		e.noteCandidateWorkUnmeasured(taskID)
+	}
 }
 
 // applyPlanScope is the one mapping from a plan to the scope a candidate is
