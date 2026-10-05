@@ -12,6 +12,7 @@ import (
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/sensei"
+	"github.com/globulario/sensei-code/internal/session"
 )
 
 // The positive control for the gate.
@@ -94,7 +95,11 @@ func newGateHarness(t *testing.T, policy roles.Policy, mode roles.Session, decis
 	events, cancel := bus.Subscribe(512)
 	t.Cleanup(cancel)
 
-	e := &Engine{Repo: repo, SessionID: "session-1", Bus: bus}
+	store, err := session.New(repo.Root, "session-1")
+	if err != nil {
+		t.Fatalf("create durable session store: %v", err)
+	}
+	e := &Engine{Repo: repo, SessionID: "session-1", Bus: bus, Store: store}
 	e.recordObjective("task-1", Objective{Text: "task", Provenance: SubmittedUnattended})
 	e.Config.Permissions = config.Permissions{
 		ReadRepository: true, WriteCandidates: true, CreateWorktrees: true,
@@ -115,6 +120,12 @@ func newGateHarness(t *testing.T, policy roles.Policy, mode roles.Session, decis
 	tc := &taskContext{
 		Task: "print a number from main", Mode: ModeModify,
 		Files: []string{"main.go"}, Identity: candidateIdentityWithBase(base),
+	}
+	// 70B1 fixture migration: a replayable PlanAttempt needs the same durable
+	// task-created continuity root production gives it. Write exactly one root
+	// before any plan-attempt event, without inventing a second workflow owner.
+	if err := store.AppendDurable(event.New(e.SessionID, "task-1", event.SourceUser, event.TaskCreated, tc.Task, nil)); err != nil {
+		t.Fatalf("record task creation root: %v", err)
 	}
 	// FIXTURE MIGRATION (DF-39, ruling 115): the candidate loop inspects
 	// production scope against the operative plan attempt, so the harness
