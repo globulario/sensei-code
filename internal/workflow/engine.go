@@ -2679,52 +2679,97 @@ func (e *Engine) restorePlanAttempt(task session.Interrupted, world string) erro
 	if recorded == "" {
 		return nil
 	}
-	refuse := func(detail string) error {
-		return &RestorationRefusal{TaskID: task.TaskID, Subject: restorationSubjectPlanAttempt,
-			Instrument: RestorationInstrumentRecord, Binding: RestorationPlanAttemptUnbound, Detail: detail}
+	a, err := verifyPlanAttempt(task.TaskID, task.Task, world, session.PlanTransition{
+		PlanAttemptID:         recorded,
+		PlanRecord:            task.PlanRecord,
+		PlanAttemptStart:      task.PlanAttemptStart,
+		PlanAttemptStartFirst: task.PlanAttemptStartFirst,
+	})
+	if err != nil {
+		return err
 	}
+
+	e.mu.Lock()
+	// Operative now, so the grant restorers can check their records against
+	// it. It owns grant state only once those records are verified.
+	t := e.planAttemptsOf(task.TaskID)
+	t.pending, t.operative = a, a
+	e.mu.Unlock()
+	return nil
+}
+
+// verifyPlanAttempt is the Objective-64 semantic owner for a recorded
+// PlanProposed transition. It verifies the complete plan identity and its
+// prerequisite start without installing anything.
+//
+// Checkpoint replay calls this same function rather than reducing plan
+// continuation to string equality. restorePlanAttempt uses it too, so live
+// restoration and replay cannot drift into two meanings of "operative".
+func verifyPlanAttempt(taskID, objective, world string, tr session.PlanTransition) (planAttempt, error) {
+	recorded := strings.TrimSpace(tr.PlanAttemptID)
+	world = strings.TrimSpace(world)
+	refuse := func(detail string) (planAttempt, error) {
+		return planAttempt{}, &RestorationRefusal{
+			TaskID:     taskID,
+			Subject:    restorationSubjectPlanAttempt,
+			Instrument: RestorationInstrumentRecord,
+			Binding:    RestorationPlanAttemptUnbound,
+			Detail:     detail,
+		}
+	}
+	if recorded == "" {
+		return refuse("the operative plan record names no plan attempt")
+	}
+
 	var rec proposedPlan
-	if err := decodeExactly(task.PlanRecord, &rec); err != nil {
+	if err := decodeExactly(tr.PlanRecord, &rec); err != nil {
 		return refuse("the operative plan record does not decode as the plan contract: " + err.Error())
 	}
 	if rec.PlanAttemptID != recorded {
 		return refuse(fmt.Sprintf("the operative plan record names attempt %s, not %s", short12(rec.PlanAttemptID), short12(recorded)))
 	}
-	id, err := planAttemptID(task.TaskID, task.Task, strings.TrimSpace(world), PlanSource(rec.PlanSource), rec.PlanDigest, rec.architectureDecision)
+
+	id, err := planAttemptID(taskID, objective, world, PlanSource(rec.PlanSource), rec.PlanDigest, rec.architectureDecision)
 	if err != nil {
 		return refuse(err.Error())
 	}
 	if id != recorded {
-		return refuse(fmt.Sprintf("the recorded plan does not reproduce its plan attempt identity at the candidate's pinned base %s: "+
-			"recorded %s, recomputed %s", shortWorldID(world), short12(recorded), short12(id)))
+		return refuse(fmt.Sprintf(
+			"the recorded plan does not reproduce its plan attempt identity at the candidate's pinned base %s: recorded %s, recomputed %s",
+			shortWorldID(world), short12(recorded), short12(id),
+		))
 	}
-	// THE PREREQUISITE. Authority bound to an attempt whose start was never
-	// recorded, or was recorded only after that authority, is not admitted.
-	if len(task.PlanAttemptStart) == 0 {
+
+	if len(tr.PlanAttemptStart) == 0 {
 		return refuse(fmt.Sprintf("plan attempt %s holds operative authority but no record shows it was started", short12(recorded)))
 	}
-	if !task.PlanAttemptStartFirst {
+	if !tr.PlanAttemptStartFirst {
 		return refuse(fmt.Sprintf("plan attempt %s was recorded as started only after the authority it must precede", short12(recorded)))
 	}
+
 	var start planAttempt
-	if err := decodeExactly(task.PlanAttemptStart, &start); err != nil {
+	if err := decodeExactly(tr.PlanAttemptStart, &start); err != nil {
 		return refuse("the plan attempt start record does not decode as the attempt contract: " + err.Error())
 	}
 	startPlan, _ := json.Marshal(start.Plan)
 	operativePlan, _ := json.Marshal(rec.architectureDecision)
-	if start.ID != recorded || start.TaskID != task.TaskID || start.World != strings.TrimSpace(world) ||
-		start.PlanSource != PlanSource(rec.PlanSource) || start.PlanDigest != rec.PlanDigest || !bytes.Equal(startPlan, operativePlan) {
+	if start.ID != recorded ||
+		start.TaskID != taskID ||
+		start.World != world ||
+		start.PlanSource != PlanSource(rec.PlanSource) ||
+		start.PlanDigest != rec.PlanDigest ||
+		!bytes.Equal(startPlan, operativePlan) {
 		return refuse(fmt.Sprintf("the start record of plan attempt %s does not describe the operative plan it precedes", short12(recorded)))
 	}
-	a := planAttempt{ID: id, TaskID: task.TaskID, World: strings.TrimSpace(world), PlanSource: PlanSource(rec.PlanSource),
-		PlanDigest: rec.PlanDigest, Plan: rec.architectureDecision}
-	e.mu.Lock()
-	// Operative now, so the grant restorers can check their records against
-	// it; it owns grant state only once they have verified that state.
-	t := e.planAttemptsOf(task.TaskID)
-	t.pending, t.operative = a, a
-	e.mu.Unlock()
-	return nil
+
+	return planAttempt{
+		ID:         id,
+		TaskID:     taskID,
+		World:      world,
+		PlanSource: PlanSource(rec.PlanSource),
+		PlanDigest: rec.PlanDigest,
+		Plan:       rec.architectureDecision,
+	}, nil
 }
 
 // decodeExactly decodes one JSON value into v, refusing an unknown field and
