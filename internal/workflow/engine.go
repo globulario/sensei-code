@@ -3092,12 +3092,14 @@ func (e *Engine) retainReturnedResponses(ctx context.Context, taskID string, cyc
 	responses, _, conflicted := obligation.responsesFor(fresh)
 	candidate := gitx.Repo{Root: workspace}
 	var moved map[string]bool
+	in := accountInputs{Responses: fresh, Base: tc.Identity.BaseSHA, Settled: settledInputsOf(settled)}
 	if capture, err := candidate.CandidateCapture(ctx, tc.Identity.BaseSHA, tc.Files); err == nil {
+		in.CandidateTree = capture.Tree
 		moved, _ = movedPathsSince(ctx, candidate, tc.Identity.BaseSHA, open.CandidateTree, capture.Diff)
 	}
-	judging := obligation.judging(conflicted)
+	judging := obligation.judgedBy(settled, conflicted)
 	account := accountForFindings(judging, responses, moved, validation.Bundle{}, nil)
-	obligation.absorb(judging, account, responses, settled)
+	obligation.absorb(judging, account, responses, settled, in)
 	e.saveCycleCompletion(obligation)
 }
 
@@ -3683,7 +3685,14 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				account := accountForFindings(outstanding, responses, moved, evidence, readBack)
 				var lapsed []string
 				if obligation != nil {
-					lapsed = obligation.absorb(outstanding, account, responses, settled)
+					lapsed = obligation.absorb(outstanding, account, responses, settled, accountInputs{
+						Responses: fresh, Base: tc.Identity.BaseSHA, CandidateTree: capture.Tree,
+						Evidence: &evidenceInputs{
+							Candidate: retainedCandidate(tc.Identity.BaseSHA, evidence),
+							Records:   readBack,
+						},
+						Settled: settledInputsOf(settled),
+					})
 					e.saveCycleCompletion(obligation)
 				}
 				// The settled invocation's open structured operations, read
