@@ -8599,12 +8599,26 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 		}
 		var incomplete *ImplementerIncomplete
 		if errors.As(err, &incomplete) {
-			// IMPLEMENTER_INCOMPLETE. The cycle's incomplete-invocation
-			// allowance is spent, so no further implementer is invoked for it:
-			// not this worker, and not the next one by handoff. The candidate
-			// is kept and the run ends with the typed state.
+			// IMPLEMENTER_INCOMPLETE is a durable terminal claim. The exhausted
+			// cycle must be replayed, persisted, read back and COMMITTED before
+			// the outer failed terminal may state that the bounded obligation is
+			// exhausted. A persistence failure leaves the task unterminated and
+			// reports only that typed failure; it must not turn volatile state
+			// into a resumability or exhaustion claim.
 			state.OpenFindings(openFindings(review, audit, err))
 			_ = state.Save(e.Repo.Root)
+			cycle, live := e.liveCycleCompletion(taskID)
+			if !live || !cycle.Exhausted() {
+				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+					"IMPLEMENTER_INCOMPLETE terminal refused because no exhausted live cycle is available to checkpoint",
+					map[string]any{"state": ImplementerIncompleteState, "checkpoint_status": string(checkpointExhausted)}))
+				return
+			}
+			if persistErr := e.commitObligation(context.WithoutCancel(ctx), cycle, checkpointExhausted); persistErr != nil {
+				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+					persistErr.Error(), persistErr))
+				return
+			}
 			fail(err)
 			return
 		}
@@ -8640,6 +8654,18 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			if incomplete := e.handOffCycle(taskID, e.implementerRemains(taskID, e.Config.Implementors[position:], continuing)); incomplete != nil {
 				state.OpenFindings(openFindings(review, audit, incomplete))
 				_ = state.Save(e.Repo.Root)
+				cycle, live := e.liveCycleCompletion(taskID)
+				if !live || !cycle.Exhausted() {
+					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+						"IMPLEMENTER_INCOMPLETE handoff terminal refused because no exhausted live cycle is available to checkpoint",
+						map[string]any{"state": ImplementerIncompleteState, "checkpoint_status": string(checkpointExhausted)}))
+					return
+				}
+				if persistErr := e.commitObligation(context.WithoutCancel(ctx), cycle, checkpointExhausted); persistErr != nil {
+					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+						persistErr.Error(), persistErr))
+					return
+				}
 				fail(incomplete)
 				return
 			}
