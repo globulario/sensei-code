@@ -323,6 +323,27 @@ func (e *Engine) commitObligation(ctx context.Context, c *cycleCompletion, statu
 	return err
 }
 
+// checkpointExhaustionBeforeTerminal is the single DF-41B1 choke point for
+// advertising IMPLEMENTER_INCOMPLETE. Every route that reaches the bounded
+// exhaustion state calls here; only a replay-valid COMMITTED exhausted
+// checkpoint authorizes the outer terminal. Failure is observable but leaves
+// the task unterminated, so volatile state is never promoted into durable truth.
+func (e *Engine) checkpointExhaustionBeforeTerminal(ctx context.Context, taskID string) bool {
+	cycle, live := e.liveCycleCompletion(taskID)
+	if !live || !cycle.Exhausted() {
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			"IMPLEMENTER_INCOMPLETE terminal refused because no exhausted live cycle is available to checkpoint",
+			map[string]any{"state": ImplementerIncompleteState, "checkpoint_status": string(checkpointExhausted)}))
+		return false
+	}
+	if persistErr := e.commitObligation(ctx, cycle, checkpointExhausted); persistErr != nil {
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			persistErr.Error(), persistErr))
+		return false
+	}
+	return true
+}
+
 // commitCheckpoint is the only publication transaction. Nothing is resumable
 // merely because PREPARED or payload bytes exist.
 func (e *Engine) commitCheckpoint(ctx context.Context, subject checkpointSubject) (session.Checkpoint, error) {
