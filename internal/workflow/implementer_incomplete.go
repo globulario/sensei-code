@@ -74,14 +74,23 @@ type cycleCompletion struct {
 	// Continuations are the PlanAttempt transitions this obligation was
 	// explicitly carried across, as "from->to".
 	Continuations []string
+	// Review and EstablishedUnder are the canonical inputs from which this
+	// obligation was created. Journal holds the canonical inputs of each owner
+	// call that subsequently changed it. They are inputs for replay, never a
+	// second interpretation of the obligation.
+	Review           openReview
+	EstablishedUnder string
+	Journal          []cycleStep
 }
 
 func newCycleCompletion(taskID, planAttemptID string, cycle int, open openReview) *cycleCompletion {
+	open.Findings = append([]roles.Finding(nil), open.Findings...)
 	return &cycleCompletion{
 		TaskID: taskID, PlanAttemptID: planAttemptID, Cycle: cycle,
 		ReviewAttempt: open.Attempt, CandidateDigest: open.CandidateDigest, CandidateTree: open.CandidateTree,
 		Findings: append([]roles.Finding(nil), outstandingFindings(open)...),
 		Retained: map[string]findingResponse{}, Why: map[string]string{},
+		Review: open, EstablishedUnder: planAttemptID,
 	}
 }
 
@@ -121,6 +130,8 @@ func (c *cycleCompletion) clone() *cycleCompletion {
 	out := *c
 	out.Findings = append([]roles.Finding(nil), c.Findings...)
 	out.Continuations = append([]string(nil), c.Continuations...)
+	out.Review.Findings = append([]roles.Finding(nil), c.Review.Findings...)
+	out.Journal = cloneCycleSteps(c.Journal)
 	out.Retained = make(map[string]findingResponse, len(c.Retained))
 	for k, v := range c.Retained {
 		out.Retained[k] = v
@@ -219,7 +230,9 @@ func (c *cycleCompletion) judging(conflicted []string) []roles.Finding {
 // showed no longer apply.
 //
 // It is fact-only: it selects no route, changes no liveness and counts nothing.
-func (c *cycleCompletion) absorb(judging []roles.Finding, account findingAccount, judged []findingResponse, settled settledInvocation) (lapsed []string) {
+func (c *cycleCompletion) absorb(judging []roles.Finding, account findingAccount, judged []findingResponse, settled settledInvocation, in accountInputs) (lapsed []string) {
+	in = cloneAccountInputs(in)
+	c.Journal = append(c.Journal, cycleStep{Account: &in})
 	open := map[string]string{}
 	for _, o := range account.Open {
 		open[strings.TrimSpace(o.ID)] = o.Why
@@ -318,6 +331,7 @@ const (
 // that spends the allowance leaves the cycle not live: no further invocation
 // may be selected for it.
 func (c *cycleCompletion) transition(route cycleRoute) (counted bool) {
+	c.Journal = append(c.Journal, cycleStep{Route: route})
 	c.Route = route
 	switch route {
 	case routeIncompleteRetry, routeErrorHandoff:
@@ -562,8 +576,7 @@ func (e *Engine) continueCycleCompletion(taskID, from string) bool {
 		return false
 	}
 	if to != from {
-		c.Continuations = append(c.Continuations, from+"->"+to)
-		c.PlanAttemptID = to
+		c.rebind(to)
 	}
 	return true
 }
