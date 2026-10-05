@@ -295,3 +295,71 @@ func TestDF41B1FailedSuccessorLeavesPriorCheckpointStanding(t *testing.T) {
 		t.Fatalf("prior checkpoint stopped verifying: %s", why)
 	}
 }
+
+func TestDF41B1BlockedTerminalFollowsCommittedCheckpoint(t *testing.T) {
+	r, _, blockedErr := liveCheckpointRig(t)
+	e := r.h.engine
+
+	if !e.blockExternally("task-1", blockedErr) {
+		t.Fatalf("live provider block was not classified as external: %v", blockedErr)
+	}
+	cp, capsule, ok := committedCheckpoint(t, e, "task-1")
+	if !ok || capsule.Status != checkpointBlocked {
+		t.Fatalf("external block did not commit a blocked checkpoint first: checkpoint=%+v capsule=%+v", cp, capsule)
+	}
+	if why := e.verifyCheckpoint(context.Background(), cp.CheckpointRecord); why != "" {
+		t.Fatalf("blocked checkpoint is not replay-valid: %s", why)
+	}
+
+	events, err := e.Store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	committedAt, blockedAt := -1, -1
+	for i, ev := range events {
+		switch ev.Kind {
+		case event.CheckpointCommitted:
+			committedAt = i
+		case event.WorkflowBlockedExternal:
+			blockedAt = i
+		}
+	}
+	if committedAt < 0 || blockedAt < 0 || committedAt >= blockedAt {
+		t.Fatalf("resumable external block was advertised before checkpoint commit: committed=%d blocked=%d", committedAt, blockedAt)
+	}
+}
+
+func TestDF41B1BlockedTerminalIsWithheldWhenCheckpointPersistenceFails(t *testing.T) {
+	r, _, blockedErr := liveCheckpointRig(t)
+	e := r.h.engine
+	calls := failCheckpointWrites(t, -1)
+
+	if !e.blockExternally("task-1", blockedErr) {
+		t.Fatalf("live provider block was not classified as external: %v", blockedErr)
+	}
+	if *calls != maxCheckpointPersistAttempts {
+		t.Fatalf("checkpoint persistence was not bounded: calls=%d", *calls)
+	}
+	events, err := e.Store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ev := range events {
+		if ev.Kind == event.WorkflowBlockedExternal {
+			t.Fatalf("uncommitted obligation was advertised as resumable: %+v", ev)
+		}
+		if ev.Kind == event.CheckpointCommitted {
+			t.Fatalf("failed checkpoint write produced a committed checkpoint: %+v", ev)
+		}
+	}
+	foundTyped := false
+	for _, ev := range events {
+		if ev.Kind == event.Status && strings.Contains(ev.Summary, IncompleteObligationPersistenceFailedState) {
+			foundTyped = true
+		}
+	}
+	if !foundTyped {
+		t.Fatal("checkpoint persistence failure was not emitted as typed observable state")
+	}
+}
+
