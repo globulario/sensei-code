@@ -46,13 +46,17 @@ ones:
 
 1. **Call briefing before editing high-risk files.** Run `sensei briefing --file <path>`
    before modifying any file listed in `docs/awareness/high_risk_files.yaml`.
-   Claude Code hooks enforce this automatically.
+   Nothing enforces this. The only hook `.claude/settings.json` registers is
+   `push-briefing.sh`, a PreToolUse hook on Edit|Write|MultiEdit. It hands you a
+   compact briefing when one is available, never blocks, and fails open and
+   silent. `enforce-briefing.sh` and `record-briefing.sh` are in `.claude/hooks/`
+   but are not registered.
 
 2. **Respect forbidden fixes.** The briefing output lists patterns that look
-   correct but are known-broken. Do not use them. A PreToolUse hook
-   (`edit-check-guard.sh`) also runs your proposed content through
-   `sensei edit-check` and blocks an edit that introduces a forbidden-fix shape;
-   if that fires, revise rather than force it through.
+   correct but are known-broken. Do not use them. `edit-check-guard.sh`
+   (which runs proposed content through `sensei edit-check`) is in
+   `.claude/hooks/` but is NOT registered, so no hook blocks a forbidden-fix
+   shape. You can run `sensei edit-check` yourself.
 
 3. **Run required tests.** The briefing output lists tests that must pass
    when touching protected files. Run them before committing.
@@ -99,5 +103,10 @@ fix is forbidden, and which invariant/failure_mode it connects to. Vague notes
 are rejected. If the contract is unknown, use `--kind contract_unknown` with a
 `--proposed-contract` or `--revision-request`.
 
-The `Stop` hook (`sensei feedback-check`) reminds you if a session fixed a durable
-error class but added no graph feedback.
+No `Stop` hook is registered. `feedback-reminder.sh` (`sensei feedback-check`) is
+in `.claude/hooks/` but is not registered, so nothing reminds you when a session
+fixed a durable error class but added no graph feedback.
+
+Hook registration is a convenience, not the enforcement boundary. Required
+context for a governed operation is to be delivered at the provider-independent
+operation boundary (objective 73, DF-47).
