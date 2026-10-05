@@ -238,6 +238,13 @@ const (
 	// bound to its PlanAttemptID. A refused attempt never becomes operative,
 	// and its refusal never attaches to any other attempt.
 	PlanAttemptRefused Kind = "plan.attempt.refused"
+	// CheckpointPrepared records one incomplete-obligation checkpoint the
+	// engine is about to persist. It carries framing identity only; it does not
+	// establish that the checkpoint's semantic state is valid.
+	CheckpointPrepared Kind = "checkpoint.prepared"
+	// CheckpointCommitted records the matching prepared checkpoint after its
+	// payload has been persisted, read back and replay-validated by workflow.
+	CheckpointCommitted Kind = "checkpoint.committed"
 )
 
 // Terminality is what a governed run's ending ends: the INVOCATION only, or
