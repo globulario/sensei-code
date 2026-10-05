@@ -114,6 +114,7 @@ func TestDF41B1TransactionCommitsOnlyOwnerReplayedState(t *testing.T) {
 	r, c, _ := liveCheckpointRig(t)
 	e := r.h.engine
 	subject := e.obligationSubject(c, checkpointLive)
+	subject.Objective = r.h.tc.Task
 
 	replayed, err := e.replayCheckpoint(context.Background(), subject.capsule(""))
 	if err != nil {
@@ -225,6 +226,7 @@ func TestDF41B1StrictReadbackRejectsTrailingData(t *testing.T) {
 	r, c, _ := liveCheckpointRig(t)
 	e := r.h.engine
 	subject := e.obligationSubject(c, checkpointLive)
+	subject.Objective = r.h.tc.Task
 	k := subject.capsule("")
 	replayed, err := e.replayCheckpoint(context.Background(), k)
 	if err != nil {
