@@ -650,7 +650,7 @@ func (e *Engine) emit(ev event.Event) {
 // resumed from one; there the event is published as emit publishes it.
 func (e *Engine) emitDurable(ev event.Event) error {
 	if e.Store != nil {
-		if err := e.Store.Append(ev); err != nil {
+		if err := e.Store.AppendDurable(ev); err != nil {
 			return fmt.Errorf("the %s record could not be written durably: %w", ev.Kind, err)
 		}
 	}
