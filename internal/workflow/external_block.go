@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -184,6 +185,21 @@ func (e *Engine) blockExternally(taskID string, err error) bool {
 	if !ok {
 		return false
 	}
+
+	// A blocked external turn is resumable state. When it interrupts a live
+	// implementer-completion obligation, that obligation must cross the durable
+	// checkpoint boundary before the outer block advertises that Resume can
+	// continue it. If persistence fails, keep the task unterminated: the typed
+	// failure is observable, but no resumability claim is made for in-memory
+	// state that did not commit.
+	if cycle, live := e.liveCycleCompletion(taskID); live {
+		if persistErr := e.commitObligation(context.Background(), cycle, checkpointBlocked); persistErr != nil {
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				persistErr.Error(), persistErr))
+			return true
+		}
+	}
+
 	e.noteExternalBlock(taskID, b)
 	e.emitRunTerminal(taskID, event.WorkflowBlockedExternal, event.SourceSystem,
 		runreceipt.OutcomeBlockedExternal, e.candidateStateFor(taskID),
