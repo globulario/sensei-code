@@ -726,13 +726,7 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			p.Interrupted.TestEditRecord = p.testEdits[p.PlanAttemptID]
 			if id := p.PlanAttemptID; id != "" {
 				if start, ok := p.starts[id]; ok {
-					first := p.startAt[id] < p.proposedAt
-					if g, ok := p.prospectiveAt[id]; ok && g < p.startAt[id] {
-						first = false
-					}
-					if g, ok := p.testEditsAt[id]; ok && g < p.startAt[id] {
-						first = false
-					}
+					first := startPrecedes(id, p.startAt[id], p.proposedAt, p.prospectiveAt, p.testEditsAt)
 					p.Interrupted.PlanAttemptStart, p.Interrupted.PlanAttemptStartFirst = start, first
 				}
 			}
@@ -743,6 +737,69 @@ func FindInterrupted(events []event.Event) []Interrupted {
 				}
 			}
 			out = append(out, p.Interrupted)
+		}
+	}
+	return out
+}
+
+// startPrecedes is the one session projection of whether a plan attempt's
+// first durable start precedes the operative PlanProposed and both selected
+// grant records for that attempt.
+func startPrecedes(id string, startAt, proposedAt int, prospectiveAt, testEditsAt map[string]int) bool {
+	first := startAt < proposedAt
+	if grantAt, ok := prospectiveAt[id]; ok && grantAt < startAt {
+		first = false
+	}
+	if grantAt, ok := testEditsAt[id]; ok && grantAt < startAt {
+		first = false
+	}
+	return first
+}
+
+// PlanTransition carries one PlanProposed together with the raw prerequisite
+// facts the Objective-64 workflow owner already uses to verify it. Session
+// storage deliberately does not decide whether the transition was valid.
+type PlanTransition struct {
+	PlanAttemptID         string
+	PlanRecord            json.RawMessage
+	PlanAttemptStart      json.RawMessage
+	PlanAttemptStartFirst bool
+}
+
+// PlanTransitions returns every PlanProposed for taskID in record order, each
+// with exactly the first-start and ordering facts FindInterrupted would expose
+// if history ended at that transition.
+func PlanTransitions(events []event.Event, taskID string) []PlanTransition {
+	starts := map[string]json.RawMessage{}
+	startAt := map[string]int{}
+	prospectiveAt := map[string]int{}
+	testEditsAt := map[string]int{}
+	var out []PlanTransition
+
+	for at, e := range events {
+		if e.TaskID != taskID {
+			continue
+		}
+		switch e.Kind {
+		case event.PlanAttemptStarted:
+			if id := planAttemptOf(e.Payload); id != "" {
+				if _, seen := starts[id]; !seen {
+					starts[id] = e.Payload
+					startAt[id] = at
+				}
+			}
+		case event.ProspectiveGranted:
+			prospectiveAt[planAttemptOf(e.Payload)] = at
+		case event.TestEditGranted:
+			testEditsAt[planAttemptOf(e.Payload)] = at
+		case event.PlanProposed:
+			id := planAttemptOf(e.Payload)
+			tr := PlanTransition{PlanAttemptID: id, PlanRecord: e.Payload}
+			if start, ok := starts[id]; ok && id != "" {
+				tr.PlanAttemptStart = start
+				tr.PlanAttemptStartFirst = startPrecedes(id, startAt[id], at, prospectiveAt, testEditsAt)
+			}
+			out = append(out, tr)
 		}
 	}
 	return out
