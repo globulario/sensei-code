@@ -13049,6 +13049,18 @@ code_symbols:
     file: internal/event/event.go
     symbol: ChangeReported
     kind: const
+  - id: internal/event/event.go:CheckpointCommitted
+    namespace: structural.scip
+    language: go
+    file: internal/event/event.go
+    symbol: CheckpointCommitted
+    kind: const
+  - id: internal/event/event.go:CheckpointPrepared
+    namespace: structural.scip
+    language: go
+    file: internal/event/event.go
+    symbol: CheckpointPrepared
+    kind: const
   - id: internal/event/event.go:ContextConsulted
     namespace: structural.scip
     language: go
@@ -35873,6 +35885,12 @@ code_symbols:
     file: internal/session/awaitingreview_test.go
     symbol: verdictEvent
     kind: function
+  - id: internal/session/interrupted_test.go:TestACheckpointPayloadIsWrittenOnceAndReadBackExactly
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestACheckpointPayloadIsWrittenOnceAndReadBackExactly
+    kind: function
   - id: internal/session/interrupted_test.go:TestACreatedTaskWithNoObjectiveIsFoundAndClassifiedUnusable
     namespace: structural.scip
     language: go
@@ -35921,6 +35939,42 @@ code_symbols:
     file: internal/session/interrupted_test.go
     symbol: TestAnsweredAuthorityIsNoLongerPending
     kind: function
+  - id: internal/session/interrupted_test.go:TestB1W13ACheckpointIsBoundedAtItsOwnPreparedRecord
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestB1W13ACheckpointIsBoundedAtItsOwnPreparedRecord
+    kind: function
+  - id: internal/session/interrupted_test.go:TestB1W13APreparedCommittedPairMustProveItsOwnership
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestB1W13APreparedCommittedPairMustProveItsOwnership
+    kind: function
+  - id: internal/session/interrupted_test.go:TestB1W14TheCheckpointProjectionPreservesSourceAndSession
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestB1W14TheCheckpointProjectionPreservesSourceAndSession
+    kind: function
+  - id: internal/session/interrupted_test.go:TestB1W15ACheckpointRecordIsAppendedDurably
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestB1W15ACheckpointRecordIsAppendedDurably
+    kind: function
+  - id: internal/session/interrupted_test.go:TestB1W5AFifthCheckpointStatusIsRefused
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestB1W5AFifthCheckpointStatusIsRefused
+    kind: function
+  - id: internal/session/interrupted_test.go:TestB1W6TheCheckpointDecoderRequiresEOFAfterOneValue
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestB1W6TheCheckpointDecoderRequiresEOFAfterOneValue
+    kind: function
   - id: internal/session/interrupted_test.go:TestDeferredAuthorityIsResumableAndCarriesItsQuestion
     namespace: structural.scip
     language: go
@@ -35957,17 +36011,53 @@ code_symbols:
     file: internal/session/interrupted_test.go
     symbol: TestStoppedTaskRemainsResumable
     kind: function
+  - id: internal/session/interrupted_test.go:boundCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: boundCheckpoint
+    kind: function
+  - id: internal/session/interrupted_test.go:checkpointEvent
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: checkpointEvent
+    kind: function
+  - id: internal/session/interrupted_test.go:ckptA
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: ckptA
+    kind: const
+  - id: internal/session/interrupted_test.go:ckptB
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: ckptB
+    kind: const
   - id: internal/session/interrupted_test.go:ev
     namespace: structural.scip
     language: go
     file: internal/session/interrupted_test.go
     symbol: ev
     kind: function
+  - id: internal/session/interrupted_test.go:liveCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: liveCheckpoint
+    kind: function
   - id: internal/session/interrupted_test.go:pev
     namespace: structural.scip
     language: go
     file: internal/session/interrupted_test.go
     symbol: pev
+    kind: function
+  - id: internal/session/interrupted_test.go:replaceOnce
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: replaceOnce
     kind: function
   - id: internal/session/large_event_test.go:TestAPreservedCandidateStaysResumableAcrossALargeEvent
     namespace: structural.scip
@@ -36059,6 +36149,234 @@ code_symbols:
     file: internal/session/store.go
     symbol: Active
     kind: type
+  - id: internal/session/store.go:Checkpoint.CheckpointID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Checkpoint.CheckpointID
+    kind: var
+  - id: internal/session/store.go:Checkpoint.Inputs
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Checkpoint.Inputs
+    kind: var
+  - id: internal/session/store.go:Checkpoint.PlanAttemptID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Checkpoint.PlanAttemptID
+    kind: var
+  - id: internal/session/store.go:Checkpoint.PreviousCheckpointID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Checkpoint.PreviousCheckpointID
+    kind: var
+  - id: internal/session/store.go:Checkpoint.Retirement
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Checkpoint.Retirement
+    kind: var
+  - id: internal/session/store.go:Checkpoint.Status
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Checkpoint.Status
+    kind: var
+  - id: internal/session/store.go:Checkpoint.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Checkpoint.TaskID
+    kind: var
+  - id: internal/session/store.go:Checkpoint.Version
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Checkpoint.Version
+    kind: var
+  - id: internal/session/store.go:Checkpoint.checkFraming
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Checkpoint.checkFraming
+    kind: method
+  - id: internal/session/store.go:CheckpointBinding.CheckpointID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointBinding.CheckpointID
+    kind: var
+  - id: internal/session/store.go:CheckpointBinding.PayloadDigest
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointBinding.PayloadDigest
+    kind: var
+  - id: internal/session/store.go:CheckpointBinding.PlanAttemptID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointBinding.PlanAttemptID
+    kind: var
+  - id: internal/session/store.go:CheckpointBinding.PreviousCheckpointID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointBinding.PreviousCheckpointID
+    kind: var
+  - id: internal/session/store.go:CheckpointBinding.ReplayDigest
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointBinding.ReplayDigest
+    kind: var
+  - id: internal/session/store.go:CheckpointBinding.Retirement
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointBinding.Retirement
+    kind: var
+  - id: internal/session/store.go:CheckpointBinding.Status
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointBinding.Status
+    kind: var
+  - id: internal/session/store.go:CheckpointBinding.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointBinding.TaskID
+    kind: var
+  - id: internal/session/store.go:CheckpointBinding~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointBinding
+    kind: type
+  - id: internal/session/store.go:CheckpointBlocked
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointBlocked
+    kind: const
+  - id: internal/session/store.go:CheckpointExhausted
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointExhausted
+    kind: const
+  - id: internal/session/store.go:CheckpointLive
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointLive
+    kind: const
+  - id: internal/session/store.go:CheckpointRecord.Binding
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointRecord.Binding
+    kind: var
+  - id: internal/session/store.go:CheckpointRecord.Kind
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointRecord.Kind
+    kind: var
+  - id: internal/session/store.go:CheckpointRecord.Malformed
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointRecord.Malformed
+    kind: var
+  - id: internal/session/store.go:CheckpointRecord.SessionID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointRecord.SessionID
+    kind: var
+  - id: internal/session/store.go:CheckpointRecord.Source
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointRecord.Source
+    kind: var
+  - id: internal/session/store.go:CheckpointRecord.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointRecord.TaskID
+    kind: var
+  - id: internal/session/store.go:CheckpointRecord.owns
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointRecord.owns
+    kind: method
+  - id: internal/session/store.go:CheckpointRecords
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointRecords
+    kind: function
+  - id: internal/session/store.go:CheckpointRecord~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointRecord
+    kind: type
+  - id: internal/session/store.go:CheckpointRetired
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointRetired
+    kind: const
+  - id: internal/session/store.go:CheckpointStatus.Valid
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointStatus.Valid
+    kind: method
+  - id: internal/session/store.go:CheckpointStatus~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointStatus
+    kind: type
+  - id: internal/session/store.go:CheckpointVersion
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CheckpointVersion
+    kind: const
+  - id: internal/session/store.go:Checkpoint~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Checkpoint
+    kind: type
+  - id: internal/session/store.go:CommittedCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CommittedCheckpoint
+    kind: function
+  - id: internal/session/store.go:DecodeCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: DecodeCheckpoint
+    kind: function
+  - id: internal/session/store.go:DecodeExactlyOne
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: DecodeExactlyOne
+    kind: function
   - id: internal/session/store.go:Discovery.Active
     namespace: structural.scip
     language: go
@@ -36083,6 +36401,12 @@ code_symbols:
     file: internal/session/store.go
     symbol: Discovery
     kind: type
+  - id: internal/session/store.go:EncodeCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: EncodeCheckpoint
+    kind: function
   - id: internal/session/store.go:FindActive
     namespace: structural.scip
     language: go
@@ -36281,17 +36605,89 @@ code_symbols:
     file: internal/session/store.go
     symbol: PlanAdmissionContinuationArchitectTurn
     kind: const
+  - id: internal/session/store.go:PreparedAt
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: PreparedAt
+    kind: function
+  - id: internal/session/store.go:RetiredCompleted
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: RetiredCompleted
+    kind: const
+  - id: internal/session/store.go:RetiredReplacedCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: RetiredReplacedCheckpoint
+    kind: const
+  - id: internal/session/store.go:RetiredSupersededPlanAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: RetiredSupersededPlanAttempt
+    kind: const
+  - id: internal/session/store.go:RetirementReason.Valid
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: RetirementReason.Valid
+    kind: method
+  - id: internal/session/store.go:RetirementReason~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: RetirementReason
+    kind: type
   - id: internal/session/store.go:Store.Append
     namespace: structural.scip
     language: go
     file: internal/session/store.go
     symbol: Store.Append
     kind: method
+  - id: internal/session/store.go:Store.AppendDurable
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Store.AppendDurable
+    kind: method
+  - id: internal/session/store.go:Store.CommittedCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Store.CommittedCheckpoint
+    kind: method
   - id: internal/session/store.go:Store.Load
     namespace: structural.scip
     language: go
     file: internal/session/store.go
     symbol: Store.Load
+    kind: method
+  - id: internal/session/store.go:Store.ReadCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Store.ReadCheckpoint
+    kind: method
+  - id: internal/session/store.go:Store.ReadRecord
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Store.ReadRecord
+    kind: method
+  - id: internal/session/store.go:Store.WriteCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Store.WriteCheckpoint
+    kind: method
+  - id: internal/session/store.go:Store.checkpointDir
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Store.checkpointDir
     kind: method
   - id: internal/session/store.go:Store.mu
     namespace: structural.scip
@@ -36364,6 +36760,18 @@ code_symbols:
     language: go
     file: internal/session/store.go
     symbol: refusalOf
+    kind: function
+  - id: internal/session/store.go:syncDir
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: syncDir
+    kind: function
+  - id: internal/session/store.go:validCheckpointID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: validCheckpointID
     kind: function
   - id: internal/setup/checks.go:DecodeToolNames
     namespace: structural.scip
@@ -43607,6 +44015,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.bindGraphDomainOnly
     kind: method
+  - id: internal/workflow/engine.go:Engine.checkpointAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.checkpointAttempt
+    kind: method
   - id: internal/workflow/engine.go:Engine.closePlanAdmission
     namespace: structural.scip
     language: go
@@ -43619,6 +44033,18 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.closures
     kind: var
+  - id: internal/workflow/engine.go:Engine.commitCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.commitCheckpoint
+    kind: method
+  - id: internal/workflow/engine.go:Engine.committedCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.committedCheckpoint
+    kind: method
   - id: internal/workflow/engine.go:Engine.completions
     namespace: structural.scip
     language: go
@@ -44057,6 +44483,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.reinstateOperativePlanAttempt
     kind: method
+  - id: internal/workflow/engine.go:Engine.replaySourcesOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.replaySourcesOf
+    kind: method
   - id: internal/workflow/engine.go:Engine.reportAdvisory
     namespace: structural.scip
     language: go
@@ -44362,6 +44794,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.validate
+    kind: method
+  - id: internal/workflow/engine.go:Engine.verifiedCommittedCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.verifiedCommittedCheckpoint
     kind: method
   - id: internal/workflow/engine.go:Engine.windowFrom
     namespace: structural.scip
@@ -44741,6 +45179,42 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: changedPaths
     kind: function
+  - id: internal/workflow/engine.go:checkpointCommit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: checkpointCommit
+    kind: const
+  - id: internal/workflow/engine.go:checkpointIO
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: checkpointIO
+    kind: var
+  - id: internal/workflow/engine.go:checkpointLoad
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: checkpointLoad
+    kind: const
+  - id: internal/workflow/engine.go:checkpointPrepare
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: checkpointPrepare
+    kind: const
+  - id: internal/workflow/engine.go:checkpointRead
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: checkpointRead
+    kind: const
+  - id: internal/workflow/engine.go:checkpointWrite
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: checkpointWrite
+    kind: const
   - id: internal/workflow/engine.go:checksOf
     namespace: structural.scip
     language: go
@@ -44891,6 +45365,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: disputeEscalationPrompt
     kind: function
+  - id: internal/workflow/engine.go:do
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: do
+    kind: var
   - id: internal/workflow/engine.go:errArchitectSilent
     namespace: structural.scip
     language: go
@@ -44926,6 +45406,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: errStoppedByHumanAuthority
+    kind: var
+  - id: internal/workflow/engine.go:error
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: error
     kind: var
   - id: internal/workflow/engine.go:escalationPrompt
     namespace: structural.scip
@@ -45149,6 +45635,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: isReviewLifecycleFault
     kind: function
+  - id: internal/workflow/engine.go:maxCheckpointAttempts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: maxCheckpointAttempts
+    kind: const
   - id: internal/workflow/engine.go:maxResolutionRounds
     namespace: structural.scip
     language: go
@@ -45299,6 +45791,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: oneLine
     kind: function
+  - id: internal/workflow/engine.go:op
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: op
+    kind: var
   - id: internal/workflow/engine.go:openFinding.Class
     namespace: structural.scip
     language: go
@@ -45485,6 +45983,42 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: planAttempt.World
     kind: var
+  - id: internal/workflow/engine.go:planAttempt.binding
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAttempt.binding
+    kind: method
+  - id: internal/workflow/engine.go:planAttempt.objective
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAttempt.objective
+    kind: var
+  - id: internal/workflow/engine.go:planAttemptBinding.Attempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAttemptBinding.Attempt
+    kind: var
+  - id: internal/workflow/engine.go:planAttemptBinding.Objective
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAttemptBinding.Objective
+    kind: var
+  - id: internal/workflow/engine.go:planAttemptBinding.verify
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAttemptBinding.verify
+    kind: method
+  - id: internal/workflow/engine.go:planAttemptBinding~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAttemptBinding
+    kind: type
   - id: internal/workflow/engine.go:planAttemptFrom
     namespace: structural.scip
     language: go
@@ -45557,6 +46091,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: planAttemptKey
     kind: type
+  - id: internal/workflow/engine.go:planAttemptNamed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: planAttemptNamed
+    kind: function
   - id: internal/workflow/engine.go:planAttemptRefusal.Class
     namespace: structural.scip
     language: go
@@ -45731,6 +46271,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: publishedRecipe
     kind: function
+  - id: internal/workflow/engine.go:readBackRetained
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: readBackRetained
+    kind: function
   - id: internal/workflow/engine.go:refusalAuthorityDeclined
     namespace: structural.scip
     language: go
@@ -45767,6 +46313,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: renderScope
     kind: function
+  - id: internal/workflow/engine.go:replaySources.atPrepared
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: replaySources.atPrepared
+    kind: method
   - id: internal/workflow/engine.go:repoHead.Head
     namespace: structural.scip
     language: go
@@ -45851,6 +46403,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: retainedOutcome
     kind: function
+  - id: internal/workflow/engine.go:retainedRecords
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: retainedRecords
+    kind: function
   - id: internal/workflow/engine.go:reviewDecision.Decision
     namespace: structural.scip
     language: go
@@ -45934,6 +46492,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: sameGraphGeneration
+    kind: function
+  - id: internal/workflow/engine.go:samePlanAttemptBinding
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: samePlanAttemptBinding
     kind: function
   - id: internal/workflow/engine.go:scopeSummary
     namespace: structural.scip
@@ -46061,6 +46625,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: settledInvocation.TransportFailed
     kind: var
+  - id: internal/workflow/engine.go:settledInvocation.observation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: settledInvocation.observation
+    kind: method
   - id: internal/workflow/engine.go:settledInvocation~type
     namespace: structural.scip
     language: go
@@ -46126,6 +46696,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: sourceFor
+    kind: function
+  - id: internal/workflow/engine.go:startedOperativeAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: startedOperativeAttempt
     kind: function
   - id: internal/workflow/engine.go:stopped
     namespace: structural.scip
@@ -46403,6 +46979,18 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: validationPermits
     kind: function
+  - id: internal/workflow/engine.go:verifyCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: verifyCheckpoint
+    kind: function
+  - id: internal/workflow/engine.go:verifyPlanAttemptTransitions
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: verifyPlanAttemptTransitions
+    kind: function
   - id: internal/workflow/engine.go:waitingReview.BaseSHA
     namespace: structural.scip
     language: go
@@ -46588,6 +47176,150 @@ code_symbols:
     language: go
     file: internal/workflow/engine_test.go
     symbol: TestArchitectureOptionsRoundTrip
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1CP1ForeignOrMisattributedTransitionsDoNotReplay
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1CP1ForeignOrMisattributedTransitionsDoNotReplay
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W10AResponseCannotProveItsOwnChange
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W10AResponseCannotProveItsOwnChange
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W11AStringMatchedPlanAttemptContinuationDoesNotReplay
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W11AStringMatchedPlanAttemptContinuationDoesNotReplay
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W11ThePlanAttemptMustBeOperativeAtTheCheckpointBoundary
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W11ThePlanAttemptMustBeOperativeAtTheCheckpointBoundary
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W12LifecycleGenerationsAreReplayedThrough70A2
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W12LifecycleGenerationsAreReplayedThrough70A2
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W15ACheckpointIsEligibleOnlyAfterItsCommit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W15ACheckpointIsEligibleOnlyAfterItsCommit
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W15APayloadThatDoesNotReadBackIsNeverCommitted
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W15APayloadThatDoesNotReadBackIsNeverCommitted
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W16TwoFailedWritesThenOneCommittedCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W16TwoFailedWritesThenOneCommittedCheckpoint
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W17APersistenceFailureIsNeverHandedToAnotherImplementer
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W17APersistenceFailureIsNeverHandedToAnotherImplementer
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W17W18ThreeFailedWritesPreserveThePriorCheckpoint
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W17W18ThreeFailedWritesPreserveThePriorCheckpoint
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W19APriorCheckpointThatDoesNotVerifyIsUnknown
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W19APriorCheckpointThatDoesNotVerifyIsUnknown
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W19AReadThatFailsAfterASuccessfulOneIsUnknown
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W19AReadThatFailsAfterASuccessfulOneIsUnknown
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W19AnUnreadableStoreIsUnknownNotAbsent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W19AnUnreadableStoreIsUnknownNotAbsent
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W1ALiveCheckpointReplaysToTheLiveObligation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W1ALiveCheckpointReplaysToTheLiveObligation
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W21ANilStoreCannotProduceDurableState
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W21ANilStoreCannotProduceDurableState
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W22EveryLoadBearingInputMovesTheReplayDigest
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W22EveryLoadBearingInputMovesTheReplayDigest
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W2ABlockedCheckpointReplaysToTheObligationAndItsBlock
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W2ABlockedCheckpointReplaysToTheObligationAndItsBlock
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W3W20TheExhaustedCheckpointIsCommittedBeforeTheTypedState
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W3W20TheExhaustedCheckpointIsCommittedBeforeTheTypedState
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W3W7TheCycleOwnerAdmitsOnlyLiveSequences
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W3W7TheCycleOwnerAdmitsOnlyLiveSequences
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W4ARetiredCheckpointReplaysAsATombstone
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W4ARetiredCheckpointReplaysAsATombstone
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W5AFifthStatusIsRefusedBeforeCommitment
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W5AFifthStatusIsRefusedBeforeCommitment
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W7AnInputTheOwnerCannotConstructDoesNotReplay
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W7AnInputTheOwnerCannotConstructDoesNotReplay
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W8ACandidateThe70A4OwnerCannotConstructDoesNotReplay
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W8ACandidateThe70A4OwnerCannotConstructDoesNotReplay
+    kind: function
+  - id: internal/workflow/engine_test.go:TestB1W9EvidenceReplaysOnlyFromItsDurableRecord
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestB1W9EvidenceReplaysOnlyFromItsDurableRecord
     kind: function
   - id: internal/workflow/engine_test.go:TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting
     namespace: structural.scip
@@ -46805,11 +47537,83 @@ code_symbols:
     file: internal/workflow/engine_test.go
     symbol: callsIn
     kind: function
+  - id: internal/workflow/engine_test.go:canonicalAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: canonicalAttempt
+    kind: function
   - id: internal/workflow/engine_test.go:closureDecision
     namespace: structural.scip
     language: go
     file: internal/workflow/engine_test.go
     symbol: closureDecision
+    kind: function
+  - id: internal/workflow/engine_test.go:codeObligationFinding
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: codeObligationFinding
+    kind: function
+  - id: internal/workflow/engine_test.go:commitLive
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: commitLive
+    kind: function
+  - id: internal/workflow/engine_test.go:committedFixture.id
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: committedFixture.id
+    kind: var
+  - id: internal/workflow/engine_test.go:committedFixture.rep
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: committedFixture.rep
+    kind: var
+  - id: internal/workflow/engine_test.go:committedFixture.replay
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: committedFixture.replay
+    kind: var
+  - id: internal/workflow/engine_test.go:committedFixture.replayDigest
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: committedFixture.replayDigest
+    kind: var
+  - id: internal/workflow/engine_test.go:committedFixture.retirement
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: committedFixture.retirement
+    kind: var
+  - id: internal/workflow/engine_test.go:committedFixture.status
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: committedFixture.status
+    kind: var
+  - id: internal/workflow/engine_test.go:committedFixture~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: committedFixture
+    kind: type
+  - id: internal/workflow/engine_test.go:committedOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: committedOf
+    kind: function
+  - id: internal/workflow/engine_test.go:committedRecords
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: committedRecords
     kind: function
   - id: internal/workflow/engine_test.go:confinementRepo
     namespace: structural.scip
@@ -46834,6 +47638,42 @@ code_symbols:
     language: go
     file: internal/workflow/engine_test.go
     symbol: errIsNotNil
+    kind: function
+  - id: internal/workflow/engine_test.go:escalateAndContinue
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: escalateAndContinue
+    kind: function
+  - id: internal/workflow/engine_test.go:evidenceOn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: evidenceOn
+    kind: function
+  - id: internal/workflow/engine_test.go:failCheckpointIO
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: failCheckpointIO
+    kind: function
+  - id: internal/workflow/engine_test.go:fixtureCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: fixtureCandidate
+    kind: var
+  - id: internal/workflow/engine_test.go:fixtureEngine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: fixtureEngine
+    kind: function
+  - id: internal/workflow/engine_test.go:fixtureObligation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: fixtureObligation
     kind: function
   - id: internal/workflow/engine_test.go:funcDeclIn
     namespace: structural.scip
@@ -46865,11 +47705,41 @@ code_symbols:
     file: internal/workflow/engine_test.go
     symbol: max0
     kind: function
+  - id: internal/workflow/engine_test.go:mintedAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: mintedAttempt
+    kind: function
+  - id: internal/workflow/engine_test.go:obligationUnder
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: obligationUnder
+    kind: function
   - id: internal/workflow/engine_test.go:rawSource
     namespace: structural.scip
     language: go
     file: internal/workflow/engine_test.go
     symbol: rawSource
+    kind: function
+  - id: internal/workflow/engine_test.go:reconcile
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: reconcile
+    kind: function
+  - id: internal/workflow/engine_test.go:retainedIn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: retainedIn
+    kind: function
+  - id: internal/workflow/engine_test.go:retry
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: retry
     kind: function
   - id: internal/workflow/engine_test.go:returnsErr
     namespace: structural.scip
@@ -48035,6 +48905,18 @@ code_symbols:
     file: internal/workflow/graph_identity_test.go
     symbol: TestUnknownIdentityDoesNotBecomeAgreement
     kind: function
+  - id: internal/workflow/implementer_incomplete.go:Engine.checkpointBlocked
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: Engine.checkpointBlocked
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:Engine.checkpointCycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: Engine.checkpointCycle
+    kind: method
   - id: internal/workflow/implementer_incomplete.go:Engine.continueCycleCompletion
     namespace: structural.scip
     language: go
@@ -48047,6 +48929,12 @@ code_symbols:
     file: internal/workflow/implementer_incomplete.go
     symbol: Engine.establishCycleCompletion
     kind: method
+  - id: internal/workflow/implementer_incomplete.go:Engine.exhaustCycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: Engine.exhaustCycle
+    kind: method
   - id: internal/workflow/implementer_incomplete.go:Engine.handOffCycle
     namespace: structural.scip
     language: go
@@ -48058,6 +48946,12 @@ code_symbols:
     language: go
     file: internal/workflow/implementer_incomplete.go
     symbol: Engine.liveCycleCompletion
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:Engine.retireCycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: Engine.retireCycle
     kind: method
   - id: internal/workflow/implementer_incomplete.go:Engine.routeCycle
     namespace: structural.scip
@@ -48161,6 +49055,162 @@ code_symbols:
     file: internal/workflow/implementer_incomplete.go
     symbol: ImplementerIncomplete
     kind: type
+  - id: internal/workflow/implementer_incomplete.go:IncompleteObligationPersistenceFailedState
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: IncompleteObligationPersistenceFailedState
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:ObligationPersistenceFailed.Attempts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ObligationPersistenceFailed.Attempts
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ObligationPersistenceFailed.Cause
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ObligationPersistenceFailed.Cause
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ObligationPersistenceFailed.Cycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ObligationPersistenceFailed.Cycle
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ObligationPersistenceFailed.Error
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ObligationPersistenceFailed.Error
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:ObligationPersistenceFailed.PlanAttemptID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ObligationPersistenceFailed.PlanAttemptID
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ObligationPersistenceFailed.Prior
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ObligationPersistenceFailed.Prior
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ObligationPersistenceFailed.PriorCheckpointID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ObligationPersistenceFailed.PriorCheckpointID
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ObligationPersistenceFailed.State
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ObligationPersistenceFailed.State
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ObligationPersistenceFailed.Status
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ObligationPersistenceFailed.Status
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ObligationPersistenceFailed.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ObligationPersistenceFailed.TaskID
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:ObligationPersistenceFailed~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: ObligationPersistenceFailed
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:PriorCheckpointAbsent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: PriorCheckpointAbsent
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:PriorCheckpointKnown
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: PriorCheckpointKnown
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:PriorCheckpointUnknown
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: PriorCheckpointUnknown
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:PriorCheckpoint~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: PriorCheckpoint
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:Replay
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: Replay
+    kind: function
+  - id: internal/workflow/implementer_incomplete.go:completionState.Attempts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: completionState.Attempts
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:completionState.Continuations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: completionState.Continuations
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:completionState.Continuing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: completionState.Continuing
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:completionState.Findings
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: completionState.Findings
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:completionState.OpenOperations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: completionState.OpenOperations
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:completionState.Retained
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: completionState.Retained
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:completionState.Route
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: completionState.Route
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:completionState.Why
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: completionState.Why
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:completionState~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: completionState
+    kind: type
   - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Attempts
     namespace: structural.scip
     language: go
@@ -48178,6 +49228,12 @@ code_symbols:
     language: go
     file: internal/workflow/implementer_incomplete.go
     symbol: cycleCompletion.CandidateTree
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.CheckpointID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.CheckpointID
     kind: var
   - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Continuations
     namespace: structural.scip
@@ -48215,6 +49271,12 @@ code_symbols:
     file: internal/workflow/implementer_incomplete.go
     symbol: cycleCompletion.OpenOperations
     kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Origin
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.Origin
+    kind: var
   - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Owed
     namespace: structural.scip
     language: go
@@ -48251,6 +49313,12 @@ code_symbols:
     file: internal/workflow/implementer_incomplete.go
     symbol: cycleCompletion.Route
     kind: var
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.Steps
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.Steps
+    kind: var
   - id: internal/workflow/implementer_incomplete.go:cycleCompletion.TaskID
     namespace: structural.scip
     language: go
@@ -48268,6 +49336,12 @@ code_symbols:
     language: go
     file: internal/workflow/implementer_incomplete.go
     symbol: cycleCompletion.absorb
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.admit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.admit
     kind: method
   - id: internal/workflow/implementer_incomplete.go:cycleCompletion.answers
     namespace: structural.scip
@@ -48287,11 +49361,35 @@ code_symbols:
     file: internal/workflow/implementer_incomplete.go
     symbol: cycleCompletion.bindsCycle
     kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.capsule
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.capsule
+    kind: method
   - id: internal/workflow/implementer_incomplete.go:cycleCompletion.clone
     namespace: structural.scip
     language: go
     file: internal/workflow/implementer_incomplete.go
     symbol: cycleCompletion.clone
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.continueTo
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.continueTo
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.counts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.counts
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.durableStatus
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.durableStatus
     kind: method
   - id: internal/workflow/implementer_incomplete.go:cycleCompletion.incomplete
     namespace: structural.scip
@@ -48311,11 +49409,35 @@ code_symbols:
     file: internal/workflow/implementer_incomplete.go
     symbol: cycleCompletion.judging
     kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.obligation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.obligation
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.open
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.open
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.recordAccount
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.recordAccount
+    kind: method
   - id: internal/workflow/implementer_incomplete.go:cycleCompletion.responsesFor
     namespace: structural.scip
     language: go
     file: internal/workflow/implementer_incomplete.go
     symbol: cycleCompletion.responsesFor
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:cycleCompletion.retires
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleCompletion.retires
     kind: method
   - id: internal/workflow/implementer_incomplete.go:cycleCompletion.retryFeedback
     namespace: structural.scip
@@ -48335,11 +49457,41 @@ code_symbols:
     file: internal/workflow/implementer_incomplete.go
     symbol: cycleCompletion
     kind: type
+  - id: internal/workflow/implementer_incomplete.go:cycleRoute.valid
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: cycleRoute.valid
+    kind: method
   - id: internal/workflow/implementer_incomplete.go:cycleRoute~type
     namespace: structural.scip
     language: go
     file: internal/workflow/implementer_incomplete.go
     symbol: cycleRoute
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:errCheckpointUnconstructible
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: errCheckpointUnconstructible
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:judgeAll
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: judgeAll
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:judgeUnsettled
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: judgeUnsettled
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:judgingSet~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: judgingSet
     kind: type
   - id: internal/workflow/implementer_incomplete.go:maxIncompleteImplementerAttempts
     namespace: structural.scip
@@ -48347,6 +49499,36 @@ code_symbols:
     file: internal/workflow/implementer_incomplete.go
     symbol: maxIncompleteImplementerAttempts
     kind: const
+  - id: internal/workflow/implementer_incomplete.go:movedFacts.Measured
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: movedFacts.Measured
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:movedFacts.Paths
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: movedFacts.Paths
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:movedFacts.moved
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: movedFacts.moved
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:movedFactsOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: movedFactsOf
+    kind: function
+  - id: internal/workflow/implementer_incomplete.go:movedFacts~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: movedFacts
+    kind: type
   - id: internal/workflow/implementer_incomplete.go:newCycleCompletion
     namespace: structural.scip
     language: go
@@ -48365,6 +49547,264 @@ code_symbols:
     file: internal/workflow/implementer_incomplete.go
     symbol: openOperations
     kind: function
+  - id: internal/workflow/implementer_incomplete.go:replayInputs.Candidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayInputs.Candidate
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayInputs.Cycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayInputs.Cycle
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayInputs.Origin
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayInputs.Origin
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayInputs.Review
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayInputs.Review
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayInputs.Steps
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayInputs.Steps
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayInputs~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayInputs
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:replayReview.Attempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayReview.Attempt
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayReview.CandidateDigest
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayReview.CandidateDigest
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayReview.CandidateTree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayReview.CandidateTree
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayReview.Findings
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayReview.Findings
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayReview~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayReview
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:replaySources.Evidence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replaySources.Evidence
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replaySources.Record
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replaySources.Record
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replaySources.Session
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replaySources.Session
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replaySources~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replaySources
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:replayStep.Evidence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayStep.Evidence
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayStep.EvidenceCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayStep.EvidenceCandidate
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayStep.Judging
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayStep.Judging
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayStep.Kind
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayStep.Kind
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayStep.Moved
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayStep.Moved
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayStep.ReadBack
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayStep.ReadBack
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayStep.Route
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayStep.Route
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayStep.Settled
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayStep.Settled
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayStep.To
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayStep.To
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayStepKind~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayStepKind
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:replayStep~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayStep
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:replayed.Completion
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayed.Completion
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayed.Digest
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayed.Digest
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayed.Obligation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayed.Obligation
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayedObligation.Candidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayedObligation.Candidate
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayedObligation.CandidateDigest
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayedObligation.CandidateDigest
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayedObligation.CandidateTree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayedObligation.CandidateTree
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayedObligation.Completion
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayedObligation.Completion
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayedObligation.Cycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayedObligation.Cycle
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayedObligation.PlanAttemptID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayedObligation.PlanAttemptID
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayedObligation.Retirement
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayedObligation.Retirement
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayedObligation.ReviewAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayedObligation.ReviewAttempt
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayedObligation.Status
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayedObligation.Status
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayedObligation.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayedObligation.TaskID
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:replayedObligation.digest
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayedObligation.digest
+    kind: method
+  - id: internal/workflow/implementer_incomplete.go:replayedObligation~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayedObligation
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:replayed~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: replayed
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:retainedEvidenceReader~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: retainedEvidenceReader
+    kind: type
   - id: internal/workflow/implementer_incomplete.go:routeDiagnosis
     namespace: structural.scip
     language: go
@@ -48413,6 +49853,48 @@ code_symbols:
     file: internal/workflow/implementer_incomplete.go
     symbol: sameResponse
     kind: function
+  - id: internal/workflow/implementer_incomplete.go:settledInput.Cycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: settledInput.Cycle
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:settledInput.Invocation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: settledInput.Invocation
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:settledInput.Provider
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: settledInput.Provider
+    kind: var
+  - id: internal/workflow/implementer_incomplete.go:settledInput~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: settledInput
+    kind: type
+  - id: internal/workflow/implementer_incomplete.go:stepAccount
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: stepAccount
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:stepContinue
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: stepContinue
+    kind: const
+  - id: internal/workflow/implementer_incomplete.go:stepRoute
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete.go
+    symbol: stepRoute
+    kind: const
   - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W10BDiagnosesLeaveNoIncompleteContinuationForTheHandoff
     namespace: structural.scip
     language: go
@@ -52109,6 +53591,12 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: Engine.emitRunTerminal
     kind: method
+  - id: internal/workflow/receipt.go:Engine.measureCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: Engine.measureCandidate
+    kind: method
   - id: internal/workflow/receipt.go:Engine.noteCandidateCaptureFailed
     namespace: structural.scip
     language: go
@@ -52325,6 +53813,42 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: candidateDigestSource
     kind: const
+  - id: internal/workflow/receipt.go:candidateInput.Base
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateInput.Base
+    kind: var
+  - id: internal/workflow/receipt.go:candidateInput.Empty
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateInput.Empty
+    kind: var
+  - id: internal/workflow/receipt.go:candidateInput.Failure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateInput.Failure
+    kind: var
+  - id: internal/workflow/receipt.go:candidateInput.Tree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateInput.Tree
+    kind: var
+  - id: internal/workflow/receipt.go:candidateInput.What
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateInput.What
+    kind: var
+  - id: internal/workflow/receipt.go:candidateInput~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateInput
+    kind: type
   - id: internal/workflow/receipt.go:candidateObservation.candBase
     namespace: structural.scip
     language: go
@@ -52397,6 +53921,12 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: candidateObservation.established
     kind: method
+  - id: internal/workflow/receipt.go:candidateObservation.record
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.record
+    kind: method
   - id: internal/workflow/receipt.go:candidateObservation.unmeasured
     namespace: structural.scip
     language: go
@@ -52408,6 +53938,78 @@ code_symbols:
     language: go
     file: internal/workflow/receipt.go
     symbol: candidateObservation
+    kind: type
+  - id: internal/workflow/receipt.go:candidateRecord.Base
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRecord.Base
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRecord.CapturedTree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRecord.CapturedTree
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRecord.Certified
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRecord.Certified
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRecord.Commit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRecord.Commit
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRecord.Diff
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRecord.Diff
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRecord.DigestRelation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRecord.DigestRelation
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRecord.Parent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRecord.Parent
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRecord.Rendering
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRecord.Rendering
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRecord.State
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRecord.State
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRecord.Tree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRecord.Tree
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRecord.Unmeasured
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRecord.Unmeasured
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRecord~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRecord
     kind: type
   - id: internal/workflow/receipt.go:candidateRef
     namespace: structural.scip
@@ -52487,6 +54089,12 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: certifiedCandidate
     kind: function
+  - id: internal/workflow/receipt.go:checkpointCapture
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: checkpointCapture
+    kind: const
   - id: internal/workflow/receipt.go:ctx
     namespace: structural.scip
     language: go
@@ -52540,6 +54148,12 @@ code_symbols:
     language: go
     file: internal/workflow/receipt.go
     symbol: identityFromRef
+    kind: function
+  - id: internal/workflow/receipt.go:observedCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: observedCandidate
     kind: function
   - id: internal/workflow/receipt.go:openingCandidate
     namespace: structural.scip
@@ -53860,6 +55474,12 @@ code_symbols:
     language: go
     file: internal/workflow/reviewgate_test.go
     symbol: newGateHarness
+    kind: function
+  - id: internal/workflow/reviewgate_test.go:requireExhaustedCheckpointCommitted
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/reviewgate_test.go
+    symbol: requireExhaustedCheckpointCommitted
     kind: function
   - id: internal/workflow/reviewgate_test.go:requiresIndependentReview
     namespace: structural.scip
