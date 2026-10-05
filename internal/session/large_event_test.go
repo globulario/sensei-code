@@ -345,3 +345,245 @@ func TestLoadRefusesAnOversizedRecordItDidNotWrite(t *testing.T) {
 		t.Errorf("a refused load returned %d event(s); it must return nothing rather than a partial record", len(got))
 	}
 }
+
+
+// Checkpoint framing is intentionally tested in the session package. These
+// witnesses do not assert workflow meaning; they pin only strict bytes,
+// ownership and chain continuity.
+const (
+	checkpointTestTask    = "task-checkpoint"
+	checkpointTestSession = "session-checkpoint"
+)
+
+func checkpointTestID(c byte) string { return strings.Repeat(string(c), 64) }
+
+func checkpointTestRecord(id string) CheckpointRecord {
+	return CheckpointRecord{
+		TaskID:        checkpointTestTask,
+		PlanAttemptID: checkpointTestID('7'),
+		CheckpointID:  id,
+		PayloadDigest: checkpointTestID('d'),
+		ReplayDigest:  checkpointTestID('e'),
+	}
+}
+
+func checkpointTestEvent(kind event.Kind, rec CheckpointRecord) event.Event {
+	return event.New(checkpointTestSession, rec.TaskID, event.SourceSystem, kind, "checkpoint", rec)
+}
+
+func TestCheckpointStrictDecoderRequiresEOF(t *testing.T) {
+	type capsule struct {
+		Status string `json:"status"`
+	}
+	good := `{"status":"live"}`
+	for _, raw := range []string{good, good + "
+", good + " 	
+"} {
+		var got capsule
+		if err := DecodeStrict([]byte(raw), &got); err != nil || got.Status != "live" {
+			t.Fatalf("valid single value %q was refused: %+v %v", raw, got, err)
+		}
+	}
+	for _, raw := range []string{
+		good + "]",
+		good + "}",
+		good + `{"status":"live"}`,
+		good + " 1",
+		good + " null",
+		good + "garbage",
+		good + "
+ ",
+		good + "",
+		`{"status":"live","extra":1}`,
+		`{"status":"live"`,
+		"",
+	} {
+		var got capsule
+		if err := DecodeStrict([]byte(raw), &got); err == nil {
+			t.Errorf("strict decoder accepted %q", raw)
+		}
+	}
+
+	// Decoder.More is not an EOF predicate. It says false for the stray
+	// closing delimiter that DecodeStrict must reject above.
+	dec := json.NewDecoder(bytes.NewReader([]byte(good + "]")))
+	var got capsule
+	if err := dec.Decode(&got); err != nil || dec.More() {
+		t.Fatalf("premise changed: decode=%v more=%v", err, dec.More())
+	}
+}
+
+func TestCheckpointCommitRequiresOwnedCanonicalPair(t *testing.T) {
+	rec := checkpointTestRecord(checkpointTestID('a'))
+	prepared := checkpointTestEvent(event.CheckpointPrepared, rec)
+	committed := checkpointTestEvent(event.CheckpointCommitted, rec)
+
+	got, ok, err := LatestCommittedCheckpoint(
+		[]event.Event{prepared, committed},
+		checkpointTestSession,
+		checkpointTestTask,
+	)
+	if err != nil || !ok || got.CheckpointRecord != rec {
+		t.Fatalf("valid prepared/committed pair was not projected: %+v ok=%v err=%v", got, ok, err)
+	}
+	if got.Source != event.SourceSystem || got.SessionID != checkpointTestSession {
+		t.Fatalf("projection lost ownership: source=%q session=%q", got.Source, got.SessionID)
+	}
+
+	cases := map[string]func(*event.Event, *event.Event){
+		"foreign session": func(p, c *event.Event) {
+			p.SessionID, c.SessionID = "session-other", "session-other"
+		},
+		"non-system source": func(p, c *event.Event) {
+			p.Source, c.Source = event.SourceClaude, event.SourceClaude
+		},
+		"mismatched source": func(_ *event.Event, c *event.Event) {
+			c.Source = event.SourceClaude
+		},
+		"mismatched event task": func(_ *event.Event, c *event.Event) {
+			c.TaskID = "task-other"
+		},
+		"blank checkpoint": func(p, c *event.Event) {
+			r := rec
+			r.CheckpointID = ""
+			p.Payload, _ = json.Marshal(r)
+			c.Payload = p.Payload
+		},
+		"noncanonical plan attempt": func(p, c *event.Event) {
+			r := rec
+			r.PlanAttemptID = "attempt-a"
+			p.Payload, _ = json.Marshal(r)
+			c.Payload = p.Payload
+		},
+		"blank payload digest": func(p, c *event.Event) {
+			r := rec
+			r.PayloadDigest = ""
+			p.Payload, _ = json.Marshal(r)
+			c.Payload = p.Payload
+		},
+		"uppercase replay digest": func(p, c *event.Event) {
+			r := rec
+			r.ReplayDigest = "E" + strings.Repeat("e", 63)
+			p.Payload, _ = json.Marshal(r)
+			c.Payload = p.Payload
+		},
+		"fabricated first predecessor": func(p, c *event.Event) {
+			r := rec
+			r.PreviousCheckpointID = checkpointTestID('c')
+			p.Payload, _ = json.Marshal(r)
+			c.Payload = p.Payload
+		},
+		"committed before prepared": func(p, c *event.Event) {
+			*p, *c = *c, *p
+		},
+	}
+	for name, mutate := range cases {
+		p, cm := prepared, committed
+		mutate(&p, &cm)
+		if got, ok, err := LatestCommittedCheckpoint(
+			[]event.Event{p, cm},
+			checkpointTestSession,
+			checkpointTestTask,
+		); err != nil || ok {
+			t.Errorf("%s projected as committed: %+v ok=%v err=%v", name, got, ok, err)
+		}
+	}
+
+	if _, ok, err := LatestCommittedCheckpoint(
+		[]event.Event{prepared, committed},
+		"",
+		checkpointTestTask,
+	); err == nil || ok {
+		t.Fatalf("blank engine session answered as a projection: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestCheckpointCommitFollowsCommittedPredecessorChain(t *testing.T) {
+	a := checkpointTestRecord(checkpointTestID('a'))
+	b := checkpointTestRecord(checkpointTestID('b'))
+	b.PreviousCheckpointID = a.CheckpointID
+
+	history := []event.Event{
+		checkpointTestEvent(event.CheckpointPrepared, a),
+		checkpointTestEvent(event.CheckpointCommitted, a),
+		checkpointTestEvent(event.CheckpointPrepared, b),
+	}
+	got, ok, err := LatestCommittedCheckpoint(history, checkpointTestSession, checkpointTestTask)
+	if err != nil || !ok || got.CheckpointID != a.CheckpointID {
+		t.Fatalf("prepared successor displaced committed predecessor: %+v ok=%v err=%v", got, ok, err)
+	}
+
+	history = append(history, checkpointTestEvent(event.CheckpointCommitted, b))
+	got, ok, err = LatestCommittedCheckpoint(history, checkpointTestSession, checkpointTestTask)
+	if err != nil || !ok || got.CheckpointID != b.CheckpointID {
+		t.Fatalf("valid successor did not advance chain: %+v ok=%v err=%v", got, ok, err)
+	}
+
+	for name, previous := range map[string]string{
+		"skips predecessor":      "",
+		"uncommitted predecessor": checkpointTestID('c'),
+	} {
+		next := checkpointTestRecord(checkpointTestID('9'))
+		next.PreviousCheckpointID = previous
+		candidate := append(append([]event.Event{}, history...),
+			checkpointTestEvent(event.CheckpointPrepared, next),
+			checkpointTestEvent(event.CheckpointCommitted, next),
+		)
+		got, ok, err := LatestCommittedCheckpoint(candidate, checkpointTestSession, checkpointTestTask)
+		if err != nil || !ok || got.CheckpointID != b.CheckpointID {
+			t.Errorf("%s changed chain head: %+v ok=%v err=%v", name, got, ok, err)
+		}
+	}
+
+	bad := checkpointTestEvent(event.CheckpointCommitted, b)
+	bad.Payload = json.RawMessage(`{"task_id":"task-checkpoint"}]`)
+	if _, ok, err := LatestCommittedCheckpoint(append(history, bad), checkpointTestSession, checkpointTestTask); err == nil || ok {
+		t.Fatalf("malformed checkpoint record was treated as absence: ok=%v err=%v", ok, err)
+	}
+}
+
+func TestCheckpointPayloadIsAtomicStableAndBounded(t *testing.T) {
+	store, err := New(t.TempDir(), checkpointTestSession)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := checkpointTestID('a')
+	payload := []byte(`{"status":"exhausted"}`)
+	if err := store.WriteCheckpoint(id, payload); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err := store.ReadCheckpoint(id)
+	if err != nil || !bytes.Equal(got, payload) {
+		t.Fatalf("read back %q, %v; want exact payload", got, err)
+	}
+
+	// Identical publication is idempotent. Different bytes under the same
+	// identity are refused and leave the original payload untouched.
+	if err := store.WriteCheckpoint(id, payload); err != nil {
+		t.Fatalf("idempotent rewrite: %v", err)
+	}
+	if err := store.WriteCheckpoint(id, []byte(`{"status":"live"}`)); err == nil {
+		t.Fatal("same checkpoint identity accepted different bytes")
+	}
+	got, err = store.ReadCheckpoint(id)
+	if err != nil || !bytes.Equal(got, payload) {
+		t.Fatalf("refused overwrite changed stored payload: %q %v", got, err)
+	}
+
+	for _, invalid := range []string{"", "../events", checkpointTestID('A'), id + "/x"} {
+		if err := store.WriteCheckpoint(invalid, payload); err == nil {
+			t.Errorf("noncanonical checkpoint id %q was accepted", invalid)
+		}
+	}
+	if _, err := store.ReadCheckpoint(checkpointTestID('b')); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unwritten checkpoint did not report absence: %v", err)
+	}
+
+	var none *Store
+	if err := none.WriteCheckpoint(id, payload); !errors.Is(err, ErrNoStore) {
+		t.Fatalf("nil store accepted write: %v", err)
+	}
+	if _, err := none.ReadCheckpoint(id); !errors.Is(err, ErrNoStore) {
+		t.Fatalf("nil store accepted read: %v", err)
+	}
+}
