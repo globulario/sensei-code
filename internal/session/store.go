@@ -1004,10 +1004,9 @@ func DecodeStrict(raw []byte, v any) error {
 	if err := dec.Decode(v); err != nil {
 		return err
 	}
-	for i, b := range raw[dec.InputOffset():] {
-		switch b {
-		case ' ', '	', '
-', '':
+	for i, ch := range raw[dec.InputOffset():] {
+		switch ch {
+		case ' ', 0x09, 0x0a, 0x0d:
 		default:
 			return fmt.Errorf("the record holds %d trailing byte(s) after its value, starting at offset %d",
 				len(raw)-int(dec.InputOffset())-i, int(dec.InputOffset())+i)
@@ -1015,7 +1014,6 @@ func DecodeStrict(raw []byte, v any) error {
 	}
 	return nil
 }
-
 func validCheckpointID(id string) bool {
 	if len(id) != 64 {
 		return false
