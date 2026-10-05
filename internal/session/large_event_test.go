@@ -376,28 +376,31 @@ func TestCheckpointStrictDecoderRequiresEOF(t *testing.T) {
 		Status string `json:"status"`
 	}
 	good := `{"status":"live"}`
-	for _, raw := range []string{good, good + "
-", good + " 	
-"} {
+	valid := []string{
+		good,
+		good + string([]byte{0x0a}),
+		good + string([]byte{' ', 0x09, 0x0d, 0x0a}),
+	}
+	for _, raw := range valid {
 		var got capsule
 		if err := DecodeStrict([]byte(raw), &got); err != nil || got.Status != "live" {
 			t.Fatalf("valid single value %q was refused: %+v %v", raw, got, err)
 		}
 	}
-	for _, raw := range []string{
+	invalid := []string{
 		good + "]",
 		good + "}",
 		good + `{"status":"live"}`,
 		good + " 1",
 		good + " null",
 		good + "garbage",
-		good + "
- ",
-		good + "",
+		good + string([]byte{0x0a, 0x00}),
+		good + string([]byte{0x0b}),
 		`{"status":"live","extra":1}`,
 		`{"status":"live"`,
 		"",
-	} {
+	}
+	for _, raw := range invalid {
 		var got capsule
 		if err := DecodeStrict([]byte(raw), &got); err == nil {
 			t.Errorf("strict decoder accepted %q", raw)
@@ -408,11 +411,13 @@ func TestCheckpointStrictDecoderRequiresEOF(t *testing.T) {
 	// closing delimiter that DecodeStrict must reject above.
 	dec := json.NewDecoder(bytes.NewReader([]byte(good + "]")))
 	var got capsule
-	if err := dec.Decode(&got); err != nil || dec.More() {
-		t.Fatalf("premise changed: decode=%v more=%v", err, dec.More())
+	if err := dec.Decode(&got); err != nil {
+		t.Fatalf("premise decode failed: %v", err)
+	}
+	if dec.More() {
+		t.Fatal("premise changed: Decoder.More reports another value")
 	}
 }
-
 func TestCheckpointCommitRequiresOwnedCanonicalPair(t *testing.T) {
 	rec := checkpointTestRecord(checkpointTestID('a'))
 	prepared := checkpointTestEvent(event.CheckpointPrepared, rec)
