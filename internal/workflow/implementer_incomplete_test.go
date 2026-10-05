@@ -824,18 +824,79 @@ func TestDF41A3W14TheThirdIncompleteAttemptEndsTypedWithNoFourth(t *testing.T) {
 	if contains(events, event.HandoffCreated) || contains(events, event.WorkflowNotConverged) {
 		t.Fatalf("the exhausted cycle was handed off or reported not converged: %v", kinds(events))
 	}
+	cp, capsule, ok := committedCheckpoint(t, r.h.engine, "task-1")
+	if !ok || capsule.Status != checkpointExhausted {
+		t.Fatalf("IMPLEMENTER_INCOMPLETE reached its terminal without an exhausted committed checkpoint: checkpoint=%+v capsule=%+v", cp, capsule)
+	}
+	replayed, replayErr := r.h.engine.replayCheckpoint(context.Background(), capsule)
+	if replayErr != nil || replayed.Incomplete == nil || replayed.Incomplete.Attempts != 3 ||
+		!equalStrings(replayed.Incomplete.Owed, "f2") {
+		t.Fatalf("exhausted checkpoint does not replay the typed obligation: replay=%+v err=%v", replayed, replayErr)
+	}
+
 	terminateWith(t, r.h, failed)
 	var payload ImplementerIncomplete
-	for _, ev := range drainEvents(r.events) {
+	committedAt, failedAt := -1, -1
+	terminalEvents := drainEvents(r.events)
+	for i, ev := range terminalEvents {
+		if ev.Kind == event.CheckpointCommitted {
+			committedAt = i
+		}
 		if ev.Kind == event.WorkflowFailed {
+			failedAt = i
 			if err := json.Unmarshal(ev.Payload, &payload); err != nil {
 				t.Fatalf("the failed terminal does not carry the typed state: %v", err)
 			}
 		}
 	}
+	if committedAt < 0 || failedAt < 0 || committedAt >= failedAt {
+		t.Fatalf("IMPLEMENTER_INCOMPLETE terminal preceded its durable checkpoint: committed=%d failed=%d", committedAt, failedAt)
+	}
 	if payload.State != ImplementerIncompleteState || payload.Cycle != 2 || payload.Attempts != 3 ||
 		!equalStrings(payload.Owed, "f2") || payload.TaskID != "task-1" || payload.PlanAttemptID == "" {
 		t.Fatalf("the failed terminal's payload is not the typed IMPLEMENTER_INCOMPLETE state: %+v", payload)
+	}
+}
+
+
+
+func TestDF41B1W20ExhaustionTerminalIsWithheldWhenCheckpointPersistenceFails(t *testing.T) {
+	r := exhaustingRig(t, 2)
+	second := r.h.worker
+	second.Name = "gemini"
+	r.h.engine.Config.Implementors = []config.Agent{r.h.worker, second}
+	calls := failCheckpointWrites(t, -1)
+
+	failed, events := runImplement(r.h)
+	if failed != nil {
+		t.Fatalf("checkpoint persistence failure was converted into a workflow failure terminal: %v", failed)
+	}
+	if *calls != maxCheckpointPersistAttempts {
+		t.Fatalf("checkpoint persistence was not bounded at %d attempts: %d", maxCheckpointPersistAttempts, *calls)
+	}
+	if contains(events, event.WorkflowFailed) || contains(events, event.WorkflowBlockedExternal) ||
+		contains(events, event.WorkflowNotConverged) {
+		t.Fatalf("uncommitted exhausted obligation escaped through an outer terminal: %v", kinds(events))
+	}
+	if checkpointEventCount(t, r.h.engine, event.CheckpointCommitted) != 0 {
+		t.Fatal("failed exhausted checkpoint was nevertheless committed")
+	}
+	cycle := r.stored(t)
+	if !cycle.Exhausted() || cycle.Attempts != maxIncompleteImplementerAttempts {
+		t.Fatalf("persistence failure changed the live exhausted obligation: %+v", cycle)
+	}
+	stored, err := r.h.engine.Store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundTyped := false
+	for _, ev := range stored {
+		if ev.Kind == event.Status && strings.Contains(ev.Summary, IncompleteObligationPersistenceFailedState) {
+			foundTyped = true
+		}
+	}
+	if !foundTyped {
+		t.Fatal("exhausted checkpoint persistence failure was not emitted as typed observable state")
 	}
 }
 
