@@ -876,8 +876,19 @@ func (e *Engine) noteServingProducer(taskID string, pid int, launched bool) {
 // Outcome and CandidateState stay call-site parameters: centralising the
 // mechanism must not centralise the judgement, or a new terminal path inherits
 // an answer instead of deciding one.
+//
+// Material a live production_scope refusal left pending (DF-48) is disposed of
+// here, before anything of the terminal is emitted, so no exit can leave it
+// retained by accident. A disposition that cannot be recorded suppresses the
+// requested terminal and ends the run failed, naming that failure.
 func (e *Engine) emitRunTerminal(taskID string, kind event.Kind, source event.Source,
 	outcome runreceipt.Outcome, cand runreceipt.CandidateState, summary string, payload any) {
+	if err := e.settleRefusedMaterial(taskID, kind, source, outcome); err != nil {
+		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
+			runreceipt.OutcomeFailed, e.candidateStateFor(taskID),
+			"the "+string(kind)+" terminal was suppressed: "+err.Error(), nil)
+		return
+	}
 	e.emitReceipt(taskID, kind, outcome, cand)
 	e.emit(event.New(e.SessionID, taskID, source, kind, summary, payload))
 }

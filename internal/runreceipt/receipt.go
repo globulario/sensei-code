@@ -1012,12 +1012,17 @@ type PlanAdmissionRefusalClass string
 const (
 	PlanAdmissionProspective PlanAdmissionRefusalClass = "prospective_admission"
 	PlanAdmissionTestEdit    PlanAdmissionRefusalClass = "test_edit_admission"
+	// PlanAdmissionProductionScope (DF-48): a certified candidate modified
+	// existing production files its operative plan attempt, valid at the
+	// candidate's pinned world, does not name. It refuses that plan's scope,
+	// never the objective.
+	PlanAdmissionProductionScope PlanAdmissionRefusalClass = "production_scope"
 )
 
 // Valid reads membership by enumeration.
 func (c PlanAdmissionRefusalClass) Valid() bool {
 	switch c {
-	case PlanAdmissionProspective, PlanAdmissionTestEdit:
+	case PlanAdmissionProspective, PlanAdmissionTestEdit, PlanAdmissionProductionScope:
 		return true
 	}
 	return false
