@@ -21,6 +21,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"runtime/debug"
@@ -46,6 +47,10 @@ type receiptFacts struct {
 	// candidate field of a receipt is read from it, and it is only ever
 	// replaced or enriched as a whole (DF-41A4).
 	candidateObservation
+	// candidateInput is the canonical input of the last 70A4 transition that
+	// produced candidateObservation. It is kept so checkpoint replay can call
+	// that owner again instead of serializing the owner's conclusion.
+	candidateInput candidateReplay
 	// reviewedTree and the observation's capturedTree are DIFFERENT FACTS and
 	// were one field.
 	//
@@ -109,6 +114,7 @@ func freshFacts() *receiptFacts {
 		// Opening state. Nothing has been CREATED yet, so the candidate axis
 		// opens at NONE as a positive claim, with its absence recorded.
 		candidateObservation: openingCandidate(),
+		candidateInput:       candidateReplay{Kind: candidateOpening},
 		deferredQuestion:     notYet("no authority question was deferred"),
 		executionBudget:      notYet("no execution budget expired"),
 		externalBlock:        notYet("no role turn was blocked externally"),
@@ -272,9 +278,12 @@ func (e *Engine) noteCertifiedCandidate(taskID, base, digest, tree, baseTree str
 	e.withReceipt(taskID, func(f *receiptFacts) {
 		if tree != "" && tree == baseTree {
 			f.replaceCurrentCandidate(emptyCandidate(tree))
-			return
+		} else {
+			f.replaceCurrentCandidate(certifiedCandidate(base, digest, tree))
 		}
-		f.replaceCurrentCandidate(certifiedCandidate(base, digest, tree))
+		f.candidateInput = candidateReplay{
+			Kind: candidateCertified, Base: base, Digest: digest, Tree: tree, BaseTree: baseTree,
+		}
 	})
 }
 
@@ -282,11 +291,17 @@ func (e *Engine) noteCertifiedCandidate(taskID, base, digest, tree, baseTree str
 // capture was measured and then refused certification: a capture holding no
 // change is no current candidate, and one holding work is UNATTEMPTED.
 func (e *Engine) noteCaptureRefused(taskID, tree, baseTree string) {
-	if tree != "" && tree == baseTree {
-		e.withReceipt(taskID, func(f *receiptFacts) { f.replaceCurrentCandidate(emptyCandidate(tree)) })
-		return
-	}
-	e.noteCandidateUnattempted(taskID, tree)
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		prior := f.candBase
+		if tree != "" && tree == baseTree {
+			f.replaceCurrentCandidate(emptyCandidate(tree))
+		} else {
+			f.replaceCurrentCandidate(unattemptedCandidate(tree, prior))
+		}
+		f.candidateInput = candidateReplay{
+			Kind: candidateRefused, Tree: tree, BaseTree: baseTree, PriorBase: prior,
+		}
+	})
 }
 
 // noteCurrentCapture records, immediately, what a capture of the current
@@ -304,6 +319,7 @@ func (e *Engine) noteCurrentCapture(taskID, what, base, tree, diff string) {
 		if strings.TrimSpace(diff) == "" {
 			f.replaceCurrentCandidate(candidateWith(runreceipt.CandidateNone,
 				"no current candidate: "+what+" (tree "+tree+") holds no candidate change from the base"))
+			f.candidateInput = candidateReplay{Kind: candidateCaptured, What: what, Base: base, Tree: tree}
 			return
 		}
 		o := f.candidateObservation
@@ -316,6 +332,7 @@ func (e *Engine) noteCurrentCapture(taskID, what, base, tree, diff string) {
 		next.capturedTree = runreceipt.MeasuredValue(tree, "the canonical tree the capture froze")
 		next.candBase = strings.TrimSpace(base)
 		f.replaceCurrentCandidate(next)
+		f.candidateInput = candidateReplay{Kind: candidateCaptured, What: what, Base: base, Tree: tree}
 	})
 }
 
@@ -348,9 +365,11 @@ func (e *Engine) observeCurrentCandidate(ctx context.Context, taskID string, tc 
 func (e *Engine) noteCandidateCaptureFailed(taskID, what string, err error) {
 	why := what + " failed: " + err.Error()
 	e.withReceipt(taskID, func(f *receiptFacts) {
+		prior := f.candBase
 		next := candidateWith(runreceipt.CandidateUnknown, why)
-		next.candBase, next.unmeasured = f.candBase, why
+		next.candBase, next.unmeasured = prior, why
 		f.replaceCurrentCandidate(next)
+		f.candidateInput = candidateReplay{Kind: candidateCaptureFailed, What: what, Failure: err.Error(), PriorBase: prior}
 	})
 }
 
@@ -576,6 +595,7 @@ func (e *Engine) noteCandidateWorkUnmeasured(taskID string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
 		f.replaceCurrentCandidate(candidateWith(runreceipt.CandidateUnknown,
 			"the candidate worktree exists and its content has not been captured"))
+		f.candidateInput = candidateReplay{Kind: candidateWorkUnmeasured}
 	})
 }
 
@@ -619,14 +639,20 @@ func (e *Engine) noteInheritedCandidate(taskID string, seen observation) {
 // ref is read against the refused content and never in place of it.
 func (e *Engine) noteCandidateUnattempted(taskID, tree string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
-		next := candidateWith(runreceipt.CandidateUnattempted,
-			"the current candidate was refused certification, so no canonical identity is created for it")
-		if strings.TrimSpace(tree) != "" {
-			next.capturedTree = runreceipt.MeasuredValue(tree, "the canonical tree the refused capture froze")
-		}
-		next.candBase = f.candBase
-		f.replaceCurrentCandidate(next)
+		f.replaceCurrentCandidate(unattemptedCandidate(tree, f.candBase))
 	})
+}
+
+// unattemptedCandidate is the 70A4 observation produced when work was refused
+// certification.
+func unattemptedCandidate(tree, base string) candidateObservation {
+	next := candidateWith(runreceipt.CandidateUnattempted,
+		"the current candidate was refused certification, so no canonical identity is created for it")
+	if strings.TrimSpace(tree) != "" {
+		next.capturedTree = runreceipt.MeasuredValue(tree, "the canonical tree the refused capture froze")
+	}
+	next.candBase = base
+	return next
 }
 
 // noteCandidateRendering enriches the current observation with the canonical
@@ -1059,6 +1085,153 @@ func (o candidateObservation) established() bool {
 // the previous observation can outlive it.
 func (f *receiptFacts) replaceCurrentCandidate(next candidateObservation) {
 	f.candidateObservation = next
+	// A transition is checkpoint-replayable only when its owner records the
+	// canonical input immediately after replacement.
+	f.candidateInput = candidateReplay{Kind: candidateUnreplayable}
+}
+
+
+// candidateReplayKind names which 70A4 transition a replay input belongs to.
+// Membership is closed: an observation made by any other transition cannot be
+// advertised as checkpoint-replayable.
+type candidateReplayKind string
+
+const (
+	candidateUnrecorded      candidateReplayKind = "unrecorded"
+	candidateOpening         candidateReplayKind = "opening"
+	candidateWorkUnmeasured  candidateReplayKind = "work_unmeasured"
+	candidateCaptured        candidateReplayKind = "captured"
+	candidateCertified       candidateReplayKind = "certified"
+	candidateRefused         candidateReplayKind = "refused"
+	candidateCaptureFailed   candidateReplayKind = "capture_failed"
+	candidateUnreplayable    candidateReplayKind = "unreplayable"
+)
+
+// candidateReplay stores only a transition's canonical inputs.
+type candidateReplay struct {
+	Kind      candidateReplayKind `json:"kind"`
+	What      string              `json:"what,omitempty"`
+	Base      string              `json:"base,omitempty"`
+	Tree      string              `json:"tree,omitempty"`
+	BaseTree  string              `json:"base_tree,omitempty"`
+	Digest    string              `json:"digest,omitempty"`
+	Failure   string              `json:"failure,omitempty"`
+	PriorBase string              `json:"prior_base,omitempty"`
+}
+
+func unrecordedCandidate() candidateObservation {
+	return candidateWith(runreceipt.CandidateUnknown,
+		"no receipt record was open for this task, so nothing about its candidate was observed")
+}
+
+// currentCandidate returns the 70A4 fact and the owner input that produced it.
+// A task with no receipt is represented explicitly rather than mistaken for an
+// opening record.
+func (e *Engine) currentCandidate(taskID string) (candidateObservation, candidateReplay) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	f := e.receipts[taskID]
+	if f == nil {
+		return unrecordedCandidate(), candidateReplay{Kind: candidateUnrecorded}
+	}
+	return f.candidateObservation, f.candidateInput
+}
+
+func replayCandidateObservation(ctx context.Context, repo gitx.Repo, in candidateReplay) (candidateObservation, error) {
+	const task = "candidate-replay"
+	zero := func(kind candidateReplayKind) bool { return in == (candidateReplay{Kind: kind}) }
+	if in.Kind == candidateUnrecorded {
+		if !zero(candidateUnrecorded) {
+			return candidateObservation{}, errors.New("unrecorded candidate replay carries fields no unrecorded transition owns")
+		}
+		return unrecordedCandidate(), nil
+	}
+
+	scratch := &Engine{}
+	scratch.beginReceipt(task)
+	seedBase := func(base string) { scratch.withReceipt(task, func(f *receiptFacts) { f.candBase = base }) }
+	commitTree := func(base, expected string) error {
+		if strings.TrimSpace(base) == "" || strings.TrimSpace(expected) == "" {
+			return errors.New("candidate replay is missing the base or its measured tree")
+		}
+		measured, err := repo.CommitTreeOf(ctx, base)
+		if err != nil {
+			return fmt.Errorf("the base tree of %s cannot be read: %w", base, err)
+		}
+		if measured != expected {
+			return fmt.Errorf("recorded base tree %s is not the tree of base %s (%s)", expected, base, measured)
+		}
+		return nil
+	}
+
+	switch in.Kind {
+	case candidateOpening:
+		// freshFacts is the owner.
+	case candidateWorkUnmeasured:
+		scratch.noteCandidateWorkUnmeasured(task)
+	case candidateCaptured:
+		diff, err := repo.RenderCandidateDiff(ctx, in.Base, in.Tree)
+		if err != nil {
+			return candidateObservation{}, fmt.Errorf("captured tree %s cannot be rendered against %s: %w", in.Tree, in.Base, err)
+		}
+		scratch.noteCurrentCapture(task, in.What, in.Base, in.Tree, diff)
+	case candidateCertified:
+		if err := commitTree(in.Base, in.BaseTree); err != nil {
+			return candidateObservation{}, err
+		}
+		diff, err := repo.RenderCandidateDiff(ctx, in.Base, in.Tree)
+		if err != nil {
+			return candidateObservation{}, fmt.Errorf("certified tree %s cannot be rendered against %s: %w", in.Tree, in.Base, err)
+		}
+		if candidateRevision(diff) != in.Digest {
+			return candidateObservation{}, fmt.Errorf("certified digest %s is not the digest of tree %s rendered against %s", in.Digest, in.Tree, in.Base)
+		}
+		scratch.noteCertifiedCandidate(task, in.Base, in.Digest, in.Tree, in.BaseTree)
+	case candidateRefused:
+		if err := commitTree(in.PriorBase, in.BaseTree); err != nil {
+			return candidateObservation{}, err
+		}
+		seedBase(in.PriorBase)
+		scratch.noteCaptureRefused(task, in.Tree, in.BaseTree)
+	case candidateCaptureFailed:
+		if strings.TrimSpace(in.Failure) == "" {
+			return candidateObservation{}, errors.New("capture-failed replay has no failure")
+		}
+		seedBase(in.PriorBase)
+		scratch.noteCandidateCaptureFailed(task, in.What, errors.New(in.Failure))
+	default:
+		return candidateObservation{}, fmt.Errorf("candidate transition %q is not replayable by 70A4", in.Kind)
+	}
+
+	o, applied := scratch.currentCandidate(task)
+	if applied != in {
+		return candidateObservation{}, fmt.Errorf("70A4 did not reproduce the candidate transition input it was given: applied %+v, recorded %+v", applied, in)
+	}
+	return o, nil
+}
+
+// candidateSemantic is the complete semantic projection checkpoint replay
+// digests. It is produced only from a replayed 70A4 observation.
+type candidateSemantic struct {
+	State        runreceipt.CandidateState `json:"state"`
+	Commit       runreceipt.Value          `json:"commit"`
+	Tree         runreceipt.Value          `json:"tree"`
+	Parent       runreceipt.Value          `json:"parent"`
+	Diff         runreceipt.Value          `json:"diff"`
+	CapturedTree runreceipt.Value          `json:"captured_tree"`
+	Rendering    runreceipt.Value          `json:"rendering"`
+	Relation     runreceipt.DigestRelation `json:"digest_relation"`
+	Certified    bool                      `json:"certified"`
+	Base         string                    `json:"base"`
+	Unmeasured   string                    `json:"unmeasured"`
+}
+
+func (o candidateObservation) semantic() candidateSemantic {
+	return candidateSemantic{
+		State: o.candidateState, Commit: o.candCommit, Tree: o.candTree, Parent: o.candParent, Diff: o.candDiff,
+		CapturedTree: o.capturedTree, Rendering: o.candRendering, Relation: o.digestRelation,
+		Certified: o.certified, Base: o.candBase, Unmeasured: o.unmeasured,
+	}
 }
 
 // candidateRef is what the terminal read from the candidate branch ref, each
