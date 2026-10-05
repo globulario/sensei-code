@@ -8607,16 +8607,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			// into a resumability or exhaustion claim.
 			state.OpenFindings(openFindings(review, audit, err))
 			_ = state.Save(e.Repo.Root)
-			cycle, live := e.liveCycleCompletion(taskID)
-			if !live || !cycle.Exhausted() {
-				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
-					"IMPLEMENTER_INCOMPLETE terminal refused because no exhausted live cycle is available to checkpoint",
-					map[string]any{"state": ImplementerIncompleteState, "checkpoint_status": string(checkpointExhausted)}))
-				return
-			}
-			if persistErr := e.commitObligation(context.WithoutCancel(ctx), cycle, checkpointExhausted); persistErr != nil {
-				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
-					persistErr.Error(), persistErr))
+			if !e.checkpointExhaustionBeforeTerminal(context.WithoutCancel(ctx), taskID) {
 				return
 			}
 			fail(err)
@@ -8654,16 +8645,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			if incomplete := e.handOffCycle(taskID, e.implementerRemains(taskID, e.Config.Implementors[position:], continuing)); incomplete != nil {
 				state.OpenFindings(openFindings(review, audit, incomplete))
 				_ = state.Save(e.Repo.Root)
-				cycle, live := e.liveCycleCompletion(taskID)
-				if !live || !cycle.Exhausted() {
-					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
-						"IMPLEMENTER_INCOMPLETE handoff terminal refused because no exhausted live cycle is available to checkpoint",
-						map[string]any{"state": ImplementerIncompleteState, "checkpoint_status": string(checkpointExhausted)}))
-					return
-				}
-				if persistErr := e.commitObligation(context.WithoutCancel(ctx), cycle, checkpointExhausted); persistErr != nil {
-					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
-						persistErr.Error(), persistErr))
+				if !e.checkpointExhaustionBeforeTerminal(context.WithoutCancel(ctx), taskID) {
 					return
 				}
 				fail(incomplete)
