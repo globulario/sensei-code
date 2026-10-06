@@ -223,7 +223,9 @@ func TestW5ACommittedImportRecipeCoversALaterPinnedWorld(t *testing.T) {
 	if bare := routeAuthorityForAction(scoped, nil, plannedEdit(planned...)); !bare.ClosesGap() {
 		t.Fatalf("the specimen is not a knowledge gap: %+v", bare)
 	}
-	routed := routeAuthorityForAction(scoped, nil, Action{Stage: StageCandidateEdit, Files: planned, DerivedCoverage: c.coverage})
+	// conv/conv.go exists at the later pinned world (it was committed above), and a
+	// derivation settles only a file confirmed present.
+	routed := routeAuthorityForAction(scoped, nil, Action{Stage: StageCandidateEdit, Files: planned, Present: planned, DerivedCoverage: c.coverage})
 	if routed.ClosesGap() || !routed.Granted() {
 		t.Fatalf("ordinary routing did not accept the derived coverage: %+v", routed)
 	}

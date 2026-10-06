@@ -24,10 +24,11 @@ func TestADerivedFactClosesACoverageBlindSpotToo(t *testing.T) {
 		t.Fatalf("a coverage blind spot with no derivation did not route to bounded work: %+v", bare)
 	}
 
-	// A relevant derived anchor over exactly the planned file: the blind spot
-	// is spent and the edit is assessed like any other.
+	// A relevant derived anchor over exactly the planned file, which the pinned
+	// world confirms present: the blind spot is spent and the edit is assessed
+	// like any other. A derivation settles only a file confirmed to exist.
 	covered := routeAuthorityForAction(scoped, nil, Action{
-		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: lockAnchors(planned...)})
+		Stage: StageCandidateEdit, Files: planned, Present: planned, DerivedCoverage: lockAnchors(planned...)})
 	if covered.ClosesGap() {
 		t.Fatalf("a derived fact did not close the coverage blind spot: %+v", covered)
 	}
@@ -36,11 +37,11 @@ func TestADerivedFactClosesACoverageBlindSpotToo(t *testing.T) {
 	}
 
 	// Fail closed: an anchor of a family nobody has named as an answer
-	// resolves nothing, however true its proposition.
+	// resolves nothing, however true its proposition -- even over a present file.
 	foreign := []CoverageAnchor{{File: planned[0], Requirement: RequirementUnrecognised,
 		Describe: "semaphore/semaphore.go [layering]"}}
 	still := routeAuthorityForAction(scoped, nil, Action{
-		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: foreign})
+		Stage: StageCandidateEdit, Files: planned, Present: planned, DerivedCoverage: foreign})
 	if !still.ClosesGap() {
 		t.Fatalf("an unrecognised derivation family closed a coverage blind spot: %+v", still)
 	}
@@ -57,7 +58,7 @@ func TestClosingCoverageDoesNotSpendConsequenceSignals(t *testing.T) {
 	}, "APPROVAL_GATE_NONE")
 	scoped := scopedPreflight(t, body)
 	withCoverage := routeAuthorityForAction(scoped, nil, Action{
-		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: lockAnchors(planned...)})
+		Stage: StageCandidateEdit, Files: planned, Present: planned, DerivedCoverage: lockAnchors(planned...)})
 	if withCoverage.ClosesGap() {
 		t.Fatalf("the coverage half was not spent: %+v", withCoverage)
 	}

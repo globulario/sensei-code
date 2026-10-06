@@ -1474,3 +1474,175 @@ func renderProspectiveGrants(grants []prospectiveGrant) string {
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
+
+// prospectiveUnit is one canonical AUTHORITY UNIT of recorded prospective
+// authority: the set of planned creates whose admission predicate stands or
+// falls together (DF-30, rulings 79 and 80).
+//
+// The unit is the admission predicate's own grouping, never a per-file or a
+// plan-wide one. A go-existing-package or untraced go-regression-test
+// declaration is admitted on its own, so it is its own unit. A new-package
+// directory is admitted whole by newPackageGrants -- every declared file in it,
+// production and traced test alike -- so it is ONE unit, and one malformed,
+// missing, duplicate or mismatched member leaves every member unsettled. A
+// command directory whose grant binds a same-plan library edge depends on that
+// library's unit and is valid only while it is.
+type prospectiveUnit struct {
+	// Files are the unit's declared paths, canonical and sorted.
+	Files []string
+	// Requires are the declared paths of the library units this unit's
+	// validity depends on, canonical and sorted: a command unit stands only
+	// while the library it binds stands, so it settles only when those
+	// creates are confirmed absent too (settledByProspective).
+	Requires []string
+	// Valid reports that the recorded grant state for this unit passes the
+	// canonical predicate (matchGrantsToDeclarations) for exactly the current
+	// plan attempt, its pinned world and its declared files.
+	Valid bool
+	// Fault is why the unit is not valid, for a refusal to name.
+	Fault string
+}
+
+// prospectiveAuthorityUnits projects the RECORDED prospective grant state of
+// attempt into its canonical authority units. It derives nothing and mints
+// nothing: a unit is valid only when the record was written for exactly this
+// attempt at exactly its world, every unit file is a planned file of this plan,
+// a new-package unit holds every planned file in its directory, and the unit's
+// declarations and recorded grants -- with any library unit a command edge
+// depends on -- pass matchGrantsToDeclarations, the one declaration/grant rule
+// admission, restoration and inspection already read. A stale, mismatched,
+// malformed or merely declared surface is therefore an invalid unit, and an
+// invalid unit settles nothing. Failure of one unit never invalidates an
+// independent one.
+func prospectiveAuthorityUnits(attempt planAttempt, declared []ProspectiveSurface, planned []string, rec prospectiveRecord) []prospectiveUnit {
+	if len(declared) == 0 {
+		return nil
+	}
+	stale := ""
+	switch {
+	case strings.TrimSpace(attempt.ID) == "" || rec.PlanAttemptID != attempt.ID:
+		stale = "the recorded prospective authorization was not written for this plan attempt"
+	case strings.TrimSpace(attempt.World) == "" || strings.TrimSpace(rec.World) != strings.TrimSpace(attempt.World):
+		stale = "the recorded prospective authorization was not read at this plan attempt's pinned world"
+	}
+	isPlanned := map[string]bool{}
+	for _, p := range planned {
+		isPlanned[path.Clean(strings.TrimSpace(p))] = true
+	}
+	newDir := map[string]bool{}
+	for _, d := range declared {
+		if prospectiveRoles[d.Role].newPackage {
+			newDir[path.Dir(path.Clean(strings.TrimSpace(d.Path)))] = true
+		}
+	}
+	unitOf := func(f string) string {
+		if dir := path.Dir(f); newDir[dir] {
+			return "dir:" + dir
+		}
+		return "file:" + f
+	}
+	var keys []string
+	decls := map[string][]ProspectiveSurface{}
+	for _, d := range declared {
+		k := unitOf(path.Clean(strings.TrimSpace(d.Path)))
+		if _, ok := decls[k]; !ok {
+			keys = append(keys, k)
+		}
+		decls[k] = append(decls[k], d)
+	}
+	grants := map[string][]prospectiveGrant{}
+	for _, g := range rec.Grants {
+		k := unitOf(path.Clean(strings.TrimSpace(g.Anchor.File)))
+		grants[k] = append(grants[k], g)
+	}
+	// A command unit's library edge is the dependency it inherits validity
+	// from: the edge was admitted only because the library was granted whole.
+	// Each library unit is named once, however many command members bind it:
+	// several members sharing one edge depend on ONE library unit, and naming
+	// it per member would hand its declarations and grants to the predicate
+	// again as duplicates.
+	dependsOn := func(k string) []string {
+		seen := map[string]bool{}
+		var deps []string
+		for _, g := range grants[k] {
+			if g.Edge == nil {
+				continue
+			}
+			if dep := "dir:" + path.Clean(g.Edge.Library); !seen[dep] {
+				seen[dep] = true
+				deps = append(deps, dep)
+			}
+		}
+		sort.Strings(deps)
+		return deps
+	}
+	own := func(k string) string {
+		for _, d := range decls[k] {
+			if f := path.Clean(strings.TrimSpace(d.Path)); !isPlanned[f] {
+				return "declared prospective surface " + f + " is not a planned file of this plan"
+			}
+		}
+		if dir, ok := strings.CutPrefix(k, "dir:"); ok {
+			declaredHere := map[string]bool{}
+			for _, d := range decls[k] {
+				declaredHere[path.Clean(strings.TrimSpace(d.Path))] = true
+			}
+			for f := range isPlanned {
+				if path.Dir(f) == dir && !declaredHere[f] {
+					return "planned file " + f + " in new package " + dir + " is not declared, so the package is not admitted whole"
+				}
+			}
+		}
+		checkDecls := append([]ProspectiveSurface(nil), decls[k]...)
+		checkGrants := append([]prospectiveGrant(nil), grants[k]...)
+		for _, dep := range dependsOn(k) {
+			if dep == k {
+				continue
+			}
+			checkDecls = append(checkDecls, decls[dep]...)
+			checkGrants = append(checkGrants, grants[dep]...)
+		}
+		if err := matchGrantsToDeclarations(checkDecls, checkGrants); err != nil {
+			return err.Error()
+		}
+		return ""
+	}
+	faults := map[string]string{}
+	for _, k := range keys {
+		faults[k] = stale
+		if stale == "" {
+			faults[k] = own(k)
+		}
+	}
+	units := make([]prospectiveUnit, 0, len(keys))
+	for _, k := range keys {
+		fault := faults[k]
+		for _, dep := range dependsOn(k) {
+			if fault == "" && dep != k && faults[dep] != "" {
+				fault = "the library unit " + strings.TrimPrefix(dep, "dir:") + " this command depends on is not valid: " + faults[dep]
+			}
+			if _, declaredDep := decls[dep]; fault == "" && !declaredDep {
+				fault = "the library unit " + strings.TrimPrefix(dep, "dir:") + " this command depends on is not declared"
+			}
+		}
+		var files []string
+		for _, d := range decls[k] {
+			files = append(files, path.Clean(strings.TrimSpace(d.Path)))
+		}
+		sort.Strings(files)
+		var requires []string
+		seen := map[string]bool{}
+		for _, dep := range dependsOn(k) {
+			if dep == k || seen[dep] {
+				continue
+			}
+			seen[dep] = true
+			for _, d := range decls[dep] {
+				requires = append(requires, path.Clean(strings.TrimSpace(d.Path)))
+			}
+		}
+		sort.Strings(requires)
+		units = append(units, prospectiveUnit{Files: files, Requires: requires, Valid: fault == "", Fault: fault})
+	}
+	return units
+}

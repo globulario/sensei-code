@@ -286,8 +286,10 @@ func TestDerivedCoverageClosesAGapOnlyWhereItWasDerived(t *testing.T) {
 
 	// Derived coverage for exactly the planned file: the gap is closed, and the
 	// action is then assessed like any other.
+	// The pinned world confirms the file present: a derivation settles only a
+	// file that exists.
 	covered := routeAuthorityForAction(scoped, nil, Action{
-		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: lockAnchors(planned...)})
+		Stage: StageCandidateEdit, Files: planned, Present: planned, DerivedCoverage: lockAnchors(planned...)})
 	if covered.ClosesGap() {
 		t.Fatalf("a derived fact did not close the coverage gap: %+v", covered)
 	}
@@ -296,13 +298,17 @@ func TestDerivedCoverageClosesAGapOnlyWhereItWasDerived(t *testing.T) {
 	}
 
 	// Partial coverage is not coverage. A plan touching a file no derivation
-	// looked at is one Sensei cannot speak for.
+	// looked at is one Sensei cannot speak for, even when both files exist.
 	partial := routeAuthorityForAction(scoped, nil, Action{
 		Stage:           StageCandidateEdit,
 		Files:           []string{"internal/event/bus.go", "internal/event/unseen.go"},
+		Present:         []string{"internal/event/bus.go", "internal/event/unseen.go"},
 		DerivedCoverage: lockAnchors(planned...)})
 	if !partial.ClosesGap() {
 		t.Fatalf("partial derived coverage was accepted as coverage: %+v", partial)
+	}
+	if !sameFiles(partial.Gap.Scope, []string{"internal/event/unseen.go"}) {
+		t.Fatalf("partial coverage left the wrong file unresolved: %v", partial.Gap.Scope)
 	}
 
 	// An empty plan cannot be covered by anything.
@@ -836,27 +842,56 @@ func TestW6APlanWithNoProspectiveDeclarationsRoutesAsAtBase(t *testing.T) {
 		t.Fatalf("coverage differs from ordinary derived coverage: %+v vs %+v", out, base)
 	}
 
-	got := routeAuthorityForAction(scoped, nil, Action{Stage: StageCandidateEdit, Files: planned, DerivedCoverage: out})
-	if !got.ClosesGap() || got.Granted() {
+	// The pinned world, read as a real run reads it: the established library
+	// file is present, every file of the new package is absent.
+	creates := newLibPlanned()
+	action := func(units []prospectiveUnit) Action {
+		return Action{Stage: StageCandidateEdit, Files: planned, DerivedCoverage: out,
+			Present: []string{libS}, Absent: creates, Prospective: units}
+	}
+	// No declaration, so no authority unit: the undeclared creates stay
+	// unresolved on the bounded knowledge gap, and only they -- the present
+	// library file is settled by its own derivation.
+	got := routeAuthorityForAction(scoped, nil, action(prospectiveAuthorityUnits(df30Attempt(), nil, planned, prospectiveRecord{})))
+	if !got.ClosesGap() || got.Granted() || got.Route != RouteCloseGap || got.Basis != BasisLacksKnowledge {
 		t.Fatalf("an undeclared new package did not route to the bounded knowledge gap: %+v", got)
 	}
-	// The routing the base (dacf77b) produced for this plan, written out
-	// rather than recomputed by the candidate router: the condition is base
-	// authority.go's absent-coverage condition over this preflight.
-	const baseRoute, baseCondition, baseBasis = RouteCloseGap,
-		"graph coverage is absent for the planned files: 0 direct anchor(s) over 0 indexed file(s)", BasisLacksKnowledge
-	if got.Route != baseRoute || got.Condition != baseCondition || got.Basis != baseBasis {
-		t.Fatalf("routing moved for a plan with no declarations:\n got %s %q %v\nwant %s %q %v",
-			got.Route, got.Condition, got.Basis, baseRoute, baseCondition, baseBasis)
+	for _, f := range []string{newLibDir + "/answerer.go", newLibDir + "/config.go"} {
+		if !containsFile(got.Gap.Scope, f) || !strings.Contains(got.Condition, f) {
+			t.Fatalf("the undeclared create %s is not named by the gap: %+v", f, got)
+		}
+	}
+	if containsFile(got.Gap.Scope, libS) {
+		t.Fatalf("the derived library file was reintroduced into the gap: %v", got.Gap.Scope)
 	}
 
-	// Contrast: the same plan with its new package declared is covered in
-	// full and no longer routes to the gap.
-	grants, declared := coverPlannedAtWorld(t.Context(), prospectiveWorld, planned, newLibDeclarations(), anchors, world)
+	// Contrast: the same plan with its new package declared, granted and
+	// recorded for this plan attempt forms one valid authority unit, which
+	// settles its creates. The coverage stays the ordinary derived coverage of
+	// the existing file: no anchor is minted for a file that does not exist.
+	decl := newLibDeclarations()
+	grants, _ = coverPlannedAtWorld(t.Context(), prospectiveWorld, planned, decl, anchors, world)
 	if len(grants) != 3 {
 		t.Fatalf("premise: the declared package is granted, got %+v", grants)
 	}
-	if r := routeAuthorityForAction(scoped, nil, Action{Stage: StageCandidateEdit, Files: planned, DerivedCoverage: declared}); r.ClosesGap() {
-		t.Fatalf("a declared, admitted new package still routed to the gap: %+v", r)
+	rec := prospectiveRecord{PlanAttemptID: df30Attempt().ID, World: prospectiveWorld, Grants: grants}
+	if r := routeAuthorityForAction(scoped, nil, action(prospectiveAuthorityUnits(df30Attempt(), decl, planned, rec))); r.ClosesGap() {
+		t.Fatalf("a declared, recorded new package still routed to the gap: %+v", r)
 	}
+	// A record written for another plan attempt is not this unit's grant: the
+	// declared creates stay unresolved.
+	stale := rec
+	stale.PlanAttemptID = "pa-another-attempt"
+	if r := routeAuthorityForAction(scoped, nil, action(prospectiveAuthorityUnits(df30Attempt(), decl, planned, stale))); !r.ClosesGap() {
+		t.Fatalf("a grant recorded for another plan attempt settled the declared creates: %+v", r)
+	}
+}
+
+func containsFile(files []string, f string) bool {
+	for _, g := range files {
+		if g == f {
+			return true
+		}
+	}
+	return false
 }
