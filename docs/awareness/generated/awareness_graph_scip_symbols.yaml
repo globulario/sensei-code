@@ -33575,6 +33575,12 @@ code_symbols:
     file: internal/runreceipt/receipt.go
     symbol: Outcome
     kind: type
+  - id: internal/runreceipt/receipt.go:PlanAdmissionProductionScope
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PlanAdmissionProductionScope
+    kind: const
   - id: internal/runreceipt/receipt.go:PlanAdmissionProspective
     namespace: structural.scip
     language: go
@@ -43949,6 +43955,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.architects
     kind: var
+  - id: internal/workflow/engine.go:Engine.armRefusedMaterial
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.armRefusedMaterial
+    kind: method
   - id: internal/workflow/engine.go:Engine.askArchitect
     namespace: structural.scip
     language: go
@@ -44087,6 +44099,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.derivedCoverage
     kind: method
+  - id: internal/workflow/engine.go:Engine.disarmRefusedMaterial
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.disarmRefusedMaterial
+    kind: method
   - id: internal/workflow/engine.go:Engine.disposeIfEmpty
     namespace: structural.scip
     language: go
@@ -44153,6 +44171,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.graphs
     kind: var
+  - id: internal/workflow/engine.go:Engine.guardProposal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.guardProposal
+    kind: method
   - id: internal/workflow/engine.go:Engine.implement
     namespace: structural.scip
     language: go
@@ -44218,6 +44242,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.notePlanAttemptStarted
+    kind: method
+  - id: internal/workflow/engine.go:Engine.noteRefusedCandidateMaterial
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.noteRefusedCandidateMaterial
     kind: method
   - id: internal/workflow/engine.go:Engine.noteScopedPreflight
     namespace: structural.scip
@@ -44465,6 +44495,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.refusalRecorded
     kind: method
+  - id: internal/workflow/engine.go:Engine.refusalRecurs
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.refusalRecurs
+    kind: method
   - id: internal/workflow/engine.go:Engine.refuseCandidatePrecondition
     namespace: structural.scip
     language: go
@@ -44633,6 +44669,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.retainedIdentities
     kind: method
+  - id: internal/workflow/engine.go:Engine.returnProductionScopeRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.returnProductionScopeRefusal
+    kind: method
   - id: internal/workflow/engine.go:Engine.reviewAgent
     namespace: structural.scip
     language: go
@@ -44710,6 +44752,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.settleGapFor
+    kind: method
+  - id: internal/workflow/engine.go:Engine.settleRefusedMaterial
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.settleRefusedMaterial
     kind: method
   - id: internal/workflow/engine.go:Engine.settledInvocations
     namespace: structural.scip
@@ -44860,6 +44908,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: PlanAdmissionRefused.planAttemptRefusal
+    kind: var
+  - id: internal/workflow/engine.go:PlanAdmissionRefused.reproposed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: PlanAdmissionRefused.reproposed
     kind: var
   - id: internal/workflow/engine.go:PlanAdmissionRefused~type
     namespace: structural.scip
@@ -46193,6 +46247,102 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: probeNeeded
     kind: function
+  - id: internal/workflow/engine.go:productionScopeDeclaration.Candidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeDeclaration.Candidate
+    kind: var
+  - id: internal/workflow/engine.go:productionScopeDeclaration.OmittedPaths
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeDeclaration.OmittedPaths
+    kind: var
+  - id: internal/workflow/engine.go:productionScopeDeclaration~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeDeclaration
+    kind: type
+  - id: internal/workflow/engine.go:productionScopeRefusalOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeRefusalOf
+    kind: function
+  - id: internal/workflow/engine.go:productionScopeRefusalPrompt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeRefusalPrompt
+    kind: function
+  - id: internal/workflow/engine.go:productionScopeRefutation.Error
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeRefutation.Error
+    kind: method
+  - id: internal/workflow/engine.go:productionScopeRefutation.amendable
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeRefutation.amendable
+    kind: method
+  - id: internal/workflow/engine.go:productionScopeRefutation.attempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeRefutation.attempt
+    kind: var
+  - id: internal/workflow/engine.go:productionScopeRefutation.material
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeRefutation.material
+    kind: var
+  - id: internal/workflow/engine.go:productionScopeRefutation.paths
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeRefutation.paths
+    kind: var
+  - id: internal/workflow/engine.go:productionScopeRefutation.shape
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeRefutation.shape
+    kind: var
+  - id: internal/workflow/engine.go:productionScopeRefutation.text
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeRefutation.text
+    kind: var
+  - id: internal/workflow/engine.go:productionScopeRefutation.world
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeRefutation.world
+    kind: var
+  - id: internal/workflow/engine.go:productionScopeRefutation~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeRefutation
+    kind: type
+  - id: internal/workflow/engine.go:productionScopeReplanNote
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeReplanNote
+    kind: const
+  - id: internal/workflow/engine.go:productionScopeShape~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: productionScopeShape
+    kind: type
   - id: internal/workflow/engine.go:proposedPlan.Architect
     namespace: structural.scip
     language: go
@@ -46283,6 +46433,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: refusalAuthorityDeclined
     kind: const
+  - id: internal/workflow/engine.go:refusalProductionScope
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusalProductionScope
+    kind: const
   - id: internal/workflow/engine.go:refusalProspectiveAdmission
     namespace: structural.scip
     language: go
@@ -46307,6 +46463,108 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: refusePlanAdmission
     kind: function
+  - id: internal/workflow/engine.go:refuseProductionScope
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refuseProductionScope
+    kind: function
+  - id: internal/workflow/engine.go:refusedCandidateMaterial.BaseSHA
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedCandidateMaterial.BaseSHA
+    kind: var
+  - id: internal/workflow/engine.go:refusedCandidateMaterial.Revision
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedCandidateMaterial.Revision
+    kind: var
+  - id: internal/workflow/engine.go:refusedCandidateMaterial.Standing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedCandidateMaterial.Standing
+    kind: var
+  - id: internal/workflow/engine.go:refusedCandidateMaterial.Tree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedCandidateMaterial.Tree
+    kind: var
+  - id: internal/workflow/engine.go:refusedCandidateMaterial~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedCandidateMaterial
+    kind: type
+  - id: internal/workflow/engine.go:refusedCandidateStanding
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedCandidateStanding
+    kind: const
+  - id: internal/workflow/engine.go:refusedMaterialDisposition
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedMaterialDisposition
+    kind: function
+  - id: internal/workflow/engine.go:refusedMaterialEvidence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedMaterialEvidence
+    kind: function
+  - id: internal/workflow/engine.go:refusedProposal.attempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedProposal.attempt
+    kind: var
+  - id: internal/workflow/engine.go:refusedProposal.cause
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedProposal.cause
+    kind: var
+  - id: internal/workflow/engine.go:refusedProposal.refusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedProposal.refusal
+    kind: var
+  - id: internal/workflow/engine.go:refusedProposal~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedProposal
+    kind: type
+  - id: internal/workflow/engine.go:refusedScopeMaterial.evidence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedScopeMaterial.evidence
+    kind: var
+  - id: internal/workflow/engine.go:refusedScopeMaterial.identity
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedScopeMaterial.identity
+    kind: var
+  - id: internal/workflow/engine.go:refusedScopeMaterial.refusalID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedScopeMaterial.refusalID
+    kind: var
+  - id: internal/workflow/engine.go:refusedScopeMaterial~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: refusedScopeMaterial
+    kind: type
   - id: internal/workflow/engine.go:renderScope
     namespace: structural.scip
     language: go
@@ -46499,6 +46757,48 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: samePlanAttemptBinding
     kind: function
+  - id: internal/workflow/engine.go:scopeAttemptAtAnotherWorld
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: scopeAttemptAtAnotherWorld
+    kind: const
+  - id: internal/workflow/engine.go:scopeNoOperativeAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: scopeNoOperativeAttempt
+    kind: const
+  - id: internal/workflow/engine.go:scopeOmittedByOperativePlan
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: scopeOmittedByOperativePlan
+    kind: const
+  - id: internal/workflow/engine.go:scopeRefusalFailed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: scopeRefusalFailed
+    kind: const
+  - id: internal/workflow/engine.go:scopeRefusalOutcome~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: scopeRefusalOutcome
+    kind: type
+  - id: internal/workflow/engine.go:scopeRefusalReplanned
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: scopeRefusalReplanned
+    kind: const
+  - id: internal/workflow/engine.go:scopeRefusalStopped
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: scopeRefusalStopped
+    kind: const
   - id: internal/workflow/engine.go:scopeSummary
     namespace: structural.scip
     language: go
@@ -46913,6 +47213,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: taskPlanAttempts.pending
     kind: var
+  - id: internal/workflow/engine.go:taskPlanAttempts.proposalGuard
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: taskPlanAttempts.proposalGuard
+    kind: var
   - id: internal/workflow/engine.go:taskPlanAttempts.recordedEdits
     namespace: structural.scip
     language: go
@@ -46930,6 +47236,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: taskPlanAttempts.refused
+    kind: var
+  - id: internal/workflow/engine.go:taskPlanAttempts.refusedMaterial
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: taskPlanAttempts.refusedMaterial
     kind: var
   - id: internal/workflow/engine.go:taskPlanAttempts.restoredRefusals
     namespace: structural.scip
@@ -57965,6 +58277,48 @@ code_symbols:
     file: internal/workflow/testedit_test.go
     symbol: TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
     kind: function
+  - id: internal/workflow/testedit_test.go:TestDF48W1AnUnplannedExistingProductionEditReturnsATypedScopeRefusalToTheArchitect
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF48W1AnUnplannedExistingProductionEditReturnsATypedScopeRefusalToTheArchitect
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF48W2TheReplacementAttemptInheritsNoStandingFromTheRefusedCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF48W2TheReplacementAttemptInheritsNoStandingFromTheRefusedCandidate
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF48W3TheArchitectMayIncludeExcludeOrStop
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF48W3TheArchitectMayIncludeExcludeOrStop
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF48W3TheArchitectStopAfterAReviewedCycleCarriesNoEarlierStanding
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF48W3TheArchitectStopAfterAReviewedCycleCarriesNoEarlierStanding
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF48W4TheProductionScopeRefusalStaysStrict
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF48W4TheProductionScopeRefusalStaysStrict
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF48W5ALaterScopeRefusalOfAnyPathsConsumesTheOneReplan
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF48W5ALaterScopeRefusalOfAnyPathsConsumesTheOneReplan
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF48W6OnlyAnOmissionByAValidOperativeAttemptReturnsToTheArchitect
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF48W6OnlyAnOmissionByAValidOperativeAttemptReturnsToTheArchitect
+    kind: function
   - id: internal/workflow/testedit_test.go:TestDeclarationsOfOnePathThatDisagreeAreNotProjectedInEitherOrder
     namespace: structural.scip
     language: go
@@ -58235,6 +58589,252 @@ code_symbols:
     file: internal/workflow/testedit_test.go
     symbol: df39Scope
     kind: function
+  - id: internal/workflow/testedit_test.go:df48Disposition.$anon_bcef30d37357f3b4.AuditDetail
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Disposition.$anon_bcef30d37357f3b4.AuditDetail
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48Disposition.$anon_bcef30d37357f3b4.AuditVerdict
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Disposition.$anon_bcef30d37357f3b4.AuditVerdict
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48Disposition.$anon_bcef30d37357f3b4.BaseSHA
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Disposition.$anon_bcef30d37357f3b4.BaseSHA
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48Disposition.$anon_bcef30d37357f3b4.ChangedPaths
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Disposition.$anon_bcef30d37357f3b4.ChangedPaths
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48Disposition.$anon_bcef30d37357f3b4.DiffBytes
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Disposition.$anon_bcef30d37357f3b4.DiffBytes
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48Disposition.Disposition
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Disposition.Disposition
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48Disposition.Evidence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Disposition.Evidence
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48Disposition.Reason
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Disposition.Reason
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48DispositionOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48DispositionOf
+    kind: function
+  - id: internal/workflow/testedit_test.go:df48Disposition~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Disposition
+    kind: type
+  - id: internal/workflow/testedit_test.go:df48Drive
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Drive
+    kind: function
+  - id: internal/workflow/testedit_test.go:df48Exclude
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Exclude
+    kind: const
+  - id: internal/workflow/testedit_test.go:df48Include
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Include
+    kind: const
+  - id: internal/workflow/testedit_test.go:df48LaterEdit.Resolve
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48LaterEdit.Resolve
+    kind: method
+  - id: internal/workflow/testedit_test.go:df48LaterEdit.resolved
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48LaterEdit.resolved
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48LaterEdit.roles
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48LaterEdit.roles
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48LaterEdit.t
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48LaterEdit.t
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48LaterEdit.work
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48LaterEdit.work
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48LaterEdit~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48LaterEdit
+    kind: type
+  - id: internal/workflow/testedit_test.go:df48Narrow
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Narrow
+    kind: const
+  - id: internal/workflow/testedit_test.go:df48Other
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Other
+    kind: const
+  - id: internal/workflow/testedit_test.go:df48OtherSrc
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48OtherSrc
+    kind: const
+  - id: internal/workflow/testedit_test.go:df48RefusedMarker
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48RefusedMarker
+    kind: const
+  - id: internal/workflow/testedit_test.go:df48RequireDisposition
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48RequireDisposition
+    kind: function
+  - id: internal/workflow/testedit_test.go:df48RequireNoFormatterStanding
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48RequireNoFormatterStanding
+    kind: function
+  - id: internal/workflow/testedit_test.go:df48RequireRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48RequireRefusal
+    kind: function
+  - id: internal/workflow/testedit_test.go:df48RequireStoppedState
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48RequireStoppedState
+    kind: function
+  - id: internal/workflow/testedit_test.go:df48ResumeAfter
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48ResumeAfter
+    kind: function
+  - id: internal/workflow/testedit_test.go:df48Revise
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Revise
+    kind: const
+  - id: internal/workflow/testedit_test.go:df48Rig.architect
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Rig.architect
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48Rig.e
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Rig.e
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48Rig.events
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Rig.events
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48Rig.proposedAfter
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Rig.proposedAfter
+    kind: method
+  - id: internal/workflow/testedit_test.go:df48Rig.reviewedBetween
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Rig.reviewedBetween
+    kind: method
+  - id: internal/workflow/testedit_test.go:df48Rig.scopeRefusals
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Rig.scopeRefusals
+    kind: method
+  - id: internal/workflow/testedit_test.go:df48Rig.starts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Rig.starts
+    kind: method
+  - id: internal/workflow/testedit_test.go:df48Rig.world
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Rig.world
+    kind: var
+  - id: internal/workflow/testedit_test.go:df48Rig~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Rig
+    kind: type
+  - id: internal/workflow/testedit_test.go:df48Stop
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Stop
+    kind: const
+  - id: internal/workflow/testedit_test.go:df48Task
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df48Task
+    kind: const
+  - id: internal/workflow/testedit_test.go:indexOfKindAfter
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: indexOfKindAfter
+    kind: function
   - id: internal/workflow/testedit_test.go:inspectDiff
     namespace: structural.scip
     language: go
@@ -58324,6 +58924,12 @@ code_symbols:
     language: go
     file: internal/workflow/testedit_test.go
     symbol: rrSSrc
+    kind: const
+  - id: internal/workflow/testedit_test.go:runreceiptKnown
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: runreceiptKnown
     kind: const
   - id: internal/workflow/testedit_test.go:teAttemptAt
     namespace: structural.scip
