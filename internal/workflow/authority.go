@@ -696,18 +696,26 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 	// region's authority onto it (M25 §1: authority is not inherited from a
 	// neighbour). The per-file fact is engine-owned (Action.Unexamined); a
 	// file under an operational grant is not asked to be examined. The gap
-	// closes the way every coverage gap closes -- a recognised derivation
-	// over every architectural file -- and its identity is the unexamined
-	// files, so the closure budget is spent on them and not on the region.
+	// closes the way every coverage gap closes -- each file settled by its
+	// own authority unit, examination or recognised derivation
+	// (reconcileScope) -- and its identity is the unresolved files, so the
+	// closure budget is spent on them and not on the region.
 	if gap, open := unexaminedCoverageGap(action, spots); open {
 		return gap
 	}
+	var absentScope unexaminedDisposition
 	if coverageAbsent && len(action.Files) != 0 {
 		// Files holding an operational grant are not asked to be covered:
 		// they are authorised to be edited, which is a different thing, and
 		// the question put to the derivations is about the rest.
+		//
+		// The same authority-unit reconciliation every coverage gap takes
+		// (DF-30, RULING-174): a create the pinned world lacks, settled by
+		// its canonical prospective unit, has no history for the region's
+		// verdict to be about, and derivation is asked only of what remains.
 		if arch := action.architecturalFiles(); len(arch) != 0 {
-			if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, arch); closed {
+			absentScope = reconcileScope(arch, action, derivationUnder(spots, action.DerivedCoverage), false)
+			if !absentScope.Open() {
 				coverageAbsent = false
 			}
 		}
@@ -721,8 +729,8 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 		// two came apart: a preflight can answer EMPTY while publishing
 		// sufficient coverage, and it can answer OK while proving none.
 		return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
-			Condition: "graph coverage is absent for the planned files: " + scoped.Coverage.Diagnostic(),
-			Gap:       GapIdentity{Kind: "coverage-absent", Scope: action.Files}}
+			Condition: "graph coverage is absent for the planned files: " + scoped.Coverage.Diagnostic() + absentScope.createsNote(),
+			Gap:       GapIdentity{Kind: gapCoverageAbsent, Scope: absentScope.remaining(action.Files)}}
 	}
 
 	// An unclassified gate on a preflight that DOES hold coverage is a
@@ -783,12 +791,17 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 			// recurring one seam over (M2.2 had been wired into the other
 			// branch only). The identity below is what keeps its closure
 			// budget honest.
+			//
+			// Reconciled per authority unit like every coverage gap (DF-30):
+			// a create the pinned world lacks and its canonical prospective
+			// unit settles leaves the question, and only what remains is
+			// asked of the derivations.
 			arch := action.architecturalFiles()
-			if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, arch); len(arch) == 0 || !closed {
+			if d := reconcileScope(arch, action, derivationUnder(spots, action.DerivedCoverage), false); len(arch) == 0 || d.Open() {
 				return Routing{
 					Route:     RouteCloseGap,
-					Condition: "Sensei reported missing coverage in the planned region: " + strings.Join(spots.Coverage, ", "),
-					Gap:       GapIdentity{Kind: "coverage-blind-spot", Scope: arch},
+					Condition: "Sensei reported missing coverage in the planned region: " + strings.Join(spots.Coverage, ", ") + d.createsNote(),
+					Gap:       GapIdentity{Kind: gapCoverageBlindSpot, Scope: d.remaining(arch)},
 				}
 			}
 			spots.Coverage = nil
@@ -910,14 +923,223 @@ func consequenceSignalSuffix(spots blindSpotReading) string {
 	return " (consequence signals in the planned region: " + strings.Join(spots.Consequence, ", ") + ")"
 }
 
+// gapCoverageUnexamined is the kind of the gap unexamined planned files open;
+// gapCoverageAbsent and gapCoverageBlindSpot are the region coverage gaps.
+const (
+	gapCoverageUnexamined = "coverage-unexamined"
+	gapCoverageAbsent     = "coverage-absent"
+	gapCoverageBlindSpot  = "coverage-blind-spot"
+)
+
+// unexaminedDisposition is the ONE typed reading of a coverage-unexamined gap
+// (DF-30, rulings 79 and 80). Every routing branch that decides such a gap --
+// ordinary routing, the post-authorization re-check, re-evaluation of a stale
+// gap and exhausted-gap disposal -- reads it from reconcileCoverageScope, so
+// no branch can reach a different remaining Scope for the same state.
+//
+// Accounting is per file and settlement is by canonical unit: a file leaves
+// the gap only when its prospective authority unit holds for the attempt
+// being routed, when it is positively present at the pinned world and its
+// own per-file answer positively examined it, or when a recognised
+// derivation covers THAT file. Nothing is settled for a file because another
+// planned file holds authority, and nothing because data about it is missing:
+// a confirmed-absent create settles only by its prospective authority unit,
+// and a file of unknown presence is never settled by examination.
+type unexaminedDisposition struct {
+	// Unresolved is what the gap still asks about, in scope order.
+	Unresolved []string
+	// Absent is the part of Unresolved the pinned world provably lacks: an
+	// ungranted create, which no graph examination can ever cover.
+	Absent []string
+	// Settled, Examined and Derived are what left the gap, and by which
+	// mechanism.
+	Settled  []string
+	Examined []string
+	Derived  []string
+}
+
+// Open reports whether any file in the gap remains unresolved.
+func (d unexaminedDisposition) Open() bool { return len(d.Unresolved) != 0 }
+
+// remaining is files without those that left the gap: what a region gap
+// (coverage-absent, coverage-blind-spot) still asks about, in plan order.
+func (d unexaminedDisposition) remaining(files []string) []string {
+	left := map[string]bool{}
+	for _, list := range [][]string{d.Settled, d.Examined, d.Derived} {
+		for _, f := range list {
+			left[f] = true
+		}
+	}
+	var out []string
+	for _, f := range files {
+		if !left[cleanPlannedPath(f)] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// createsNote names the unresolved creates the pinned world lacks, with the
+// one route that can cover them, for a region gap's condition: no graph
+// examination or refresh can cover a file that does not exist.
+func (d unexaminedDisposition) createsNote() string {
+	if len(d.Absent) == 0 {
+		return ""
+	}
+	return "; absent at the pinned world with no prospective grant, so only prospective admission -- a declared prospective surface with a canonical grant -- can cover them: " +
+		strings.Join(d.Absent, ", ")
+}
+
+// routing is the coverage-unexamined gap over exactly the unresolved files.
+// An absent ungranted create is named with the route that can close it.
+func (d unexaminedDisposition) routing() Routing {
+	condition := "graph coverage is absent for planned file(s) the graph has not examined: " + strings.Join(d.Unresolved, ", ")
+	if len(d.Absent) != 0 {
+		condition += "; absent at the pinned world with no prospective grant, so only a declared prospective surface with a canonical grant can cover them: " +
+			strings.Join(d.Absent, ", ")
+	}
+	return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge, Condition: condition,
+		Gap: GapIdentity{Kind: gapCoverageUnexamined, Scope: d.Unresolved}}
+}
+
+// reconcileCoverageScope decides each file of a coverage-unexamined scope
+// against the authority the action carries. See unexaminedDisposition.
+//
+// Derivation is asked only of files still unresolved and present at the
+// pinned world: an absent file has no observable bytes, so any anchor over it
+// represents prospective authority, which settles only through
+// ProspectiveAuthority and is never re-read as a derived anchor. derive is
+// nil where the gap's requirement is not in hand (disposal): derivation was
+// decided by the router that raised the gap, and nothing is closed by it here.
+func reconcileCoverageScope(scope []string, action Action, derive func(file string) bool) unexaminedDisposition {
+	return reconcileScope(scope, action, derive, true)
+}
+
+// reconcileScope is reconcileCoverageScope with examination optional. A
+// coverage-absent or coverage-blind-spot gap is a question about the region
+// or a named requirement, which a per-file examination does not answer, so
+// those gaps are reconciled with byExamination false: only prospective
+// authority and derivation settle their files.
+//
+// Prospective authority settles a file only when the pinned world provably
+// lacks it: a grant beside a present file, or beside a file whose presence
+// was never established, is not a create's authority and settles nothing.
+func reconcileScope(scope []string, action Action, derive func(file string) bool, byExamination bool) unexaminedDisposition {
+	member := func(list []string) map[string]bool {
+		m := make(map[string]bool, len(list))
+		for _, f := range list {
+			m[cleanPlannedPath(f)] = true
+		}
+		return m
+	}
+	granted, examined, unexamined := member(action.ProspectiveAuthority), member(action.Examined), member(action.Unexamined)
+	present, absent := member(action.Present), member(action.Absent)
+	var d unexaminedDisposition
+	for _, raw := range scope {
+		f := cleanPlannedPath(raw)
+		switch {
+		case granted[f] && absent[f] && !present[f]:
+			d.Settled = append(d.Settled, f)
+		case byExamination && examined[f] && !unexamined[f] && present[f] && !absent[f]:
+			d.Examined = append(d.Examined, f)
+		case !absent[f] && derive != nil && derive(f):
+			d.Derived = append(d.Derived, f)
+		default:
+			d.Unresolved = append(d.Unresolved, f)
+			if absent[f] {
+				d.Absent = append(d.Absent, f)
+			}
+		}
+	}
+	return d
+}
+
+// derivationUnder is derivationClosesGap asked of one file, for the gap
+// requirement these blind spots name.
+func derivationUnder(spots blindSpotReading, anchors []CoverageAnchor) func(string) bool {
+	req := gapRequirement(spots.Coverage)
+	return func(f string) bool {
+		closed, _ := derivationClosesGap(req, anchors, []string{f})
+		return closed
+	}
+}
+
+// coverageGapReconciliation is what reconcileGap reached for one gap.
+type coverageGapReconciliation struct {
+	// Coverage reports a coverage gap kind; nothing else is reconciled here.
+	Coverage bool
+	// Open reports that some member of the gap's own question is unresolved.
+	Open bool
+	// Routing is the gap over what remains: unchanged when nothing left it.
+	Routing Routing
+	// Disposition is the per-file reading the routing was built from.
+	Disposition unexaminedDisposition
+}
+
+// reconcileGap is the ONE reconciliation of an observed coverage gap over its
+// own Scope (DF-30, rulings 79 and 80): coverage-unexamined, coverage-absent
+// and coverage-blind-spot alike. Re-evaluation and exhausted-gap disposal read
+// it, and the router builds those gaps with the same reconcileScope, so no
+// site reaches a different remaining Scope for the same state.
+//
+// A coverage-unexamined gap is a per-file question: every member is asked,
+// and examination settles a positively present file. A region gap
+// (coverage-absent, coverage-blind-spot) asks only about its members outside
+// an operational grant, as the router does, and examination does not answer
+// it; a region gap with no such member stays open, as the router keeps it.
+// derive may be nil (disposal): nothing then closes by derivation here.
+func reconcileGap(prior Routing, action Action, derive func(string) bool) coverageGapReconciliation {
+	switch prior.Gap.Kind {
+	case gapCoverageUnexamined:
+		d := reconcileScope(prior.Gap.Scope, action, derive, true)
+		r := coverageGapReconciliation{Coverage: true, Open: d.Open(), Routing: prior, Disposition: d}
+		if d.Open() && len(d.Unresolved) != len(prior.Gap.Scope) {
+			r.Routing = d.routing()
+			r.Routing.Gap.Subject, r.Routing.Gap.World = prior.Gap.Subject, prior.Gap.World
+		}
+		return r
+	case gapCoverageAbsent, gapCoverageBlindSpot:
+		operational := map[string]bool{}
+		for _, f := range action.OperationalAuthority {
+			operational[cleanPlannedPath(f)] = true
+		}
+		var question []string
+		for _, f := range prior.Gap.Scope {
+			if !operational[cleanPlannedPath(f)] {
+				question = append(question, f)
+			}
+		}
+		d := reconcileScope(question, action, derive, false)
+		r := coverageGapReconciliation{Coverage: true, Open: len(question) == 0 || d.Open(), Routing: prior, Disposition: d}
+		if remaining := d.remaining(prior.Gap.Scope); r.Open && len(remaining) != len(prior.Gap.Scope) {
+			r.Routing.Gap.Scope = remaining
+		}
+		return r
+	}
+	return coverageGapReconciliation{Open: true, Routing: prior}
+}
+
+// reevaluateGap re-decides a previously observed gap from the authority the
+// current action carries, so a stale pre-grant result cannot survive a state
+// transition (ruling 79 C). A coverage gap is re-decided by reconcileGap; its
+// identity is kept unless files left it, and it is reported closed only when
+// every member of its question settled. Any other gap is returned as it was.
+func reevaluateGap(prior Routing, action Action, spots blindSpotReading) (Routing, bool) {
+	r := reconcileGap(prior, action, derivationUnder(spots, action.DerivedCoverage))
+	if !r.Open {
+		return Routing{}, false
+	}
+	return r.Routing, true
+}
+
 // unexaminedCoverageGap is the coverage gap the unexamined planned files open,
-// and whether it is open: closed only by a recognised derivation over every
-// architectural file. Asked by the router after the consequence checks, and
+// and whether it is open: decided per file by reconcileCoverageScope, so it is
+// closed when every unexamined file is settled by its own authority unit,
+// examination or derivation. Asked by the router after the consequence checks, and
 // asked AGAIN by the engine once a human has authorised a consequence -- the
 // gate is answered first, and the answer is about the consequence, not about
 // coverage, so a file the graph never examined is not admitted by it.
 func unexaminedCoverageGap(action Action, spots blindSpotReading) (Routing, bool) {
-	unexamined := action.unexaminedArchitecturalFiles()
 	// PRODUCTION SOURCE BLOCKS FIRST, because it is the stronger claim: a file a
 	// derivation could cover and does not is a different and heavier absence than a test
 	// whose neighbour is missing from the plan.
@@ -926,12 +1148,8 @@ func unexaminedCoverageGap(action Action, spots blindSpotReading) (Routing, bool
 	// only handled the empty case, and a plan whose production gap was closed by a
 	// derivation would then have carried an ungranted test out silently -- the same
 	// silence this slice exists to end, one branch over.
-	if len(unexamined) != 0 {
-		if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, action.architecturalFiles()); !closed {
-			return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
-				Condition: "graph coverage is absent for planned file(s) the graph has not examined: " + strings.Join(unexamined, ", "),
-				Gap:       GapIdentity{Kind: "coverage-unexamined", Scope: unexamined}}, true
-		}
+	if d := reconcileCoverageScope(action.unexaminedArchitecturalFiles(), action, derivationUnder(spots, action.DerivedCoverage)); d.Open() {
+		return d.routing(), true
 	}
 	if r, open := ungrantedTestGovernanceGap(action); open {
 		return r, true
@@ -1142,32 +1360,175 @@ func looksLikeRevision(s string) bool {
 }
 
 func (e *Engine) disposeUnclosedGap(taskID, domain string, routing Routing, action Action) (Routing, error) {
+	return e.reportDisposition(taskID, disposeGap(routing, action, e.Repo.Root, domain))
+}
+
+// reportDisposition states a knowledge limit the canonical disposition
+// reached, and returns the disposition as the route and error its caller acts on.
+func (e *Engine) reportDisposition(taskID string, d gapDisposition) (Routing, error) {
+	if d.Outcome == gapClosed {
+		return d.Routing, fmt.Errorf("the router reported a %s gap open that the recorded authority settles: %s",
+			d.Routing.Gap.Kind, d.Routing.Condition)
+	}
+	if d.Limit != nil {
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			"knowledge-limited: "+d.Summary+"; this is not a decision a human can supply. "+
+				"closes: "+d.Routing.Closes, d.Routing))
+		return d.Routing, d.Limit
+	}
+	return d.Routing, nil
+}
+
+// gapOutcome is the kind of disposition an exhausted gap reaches.
+type gapOutcome int
+
+const (
+	// gapEscalated: a person is asked whether to proceed with the gap open --
+	// a reasoning-owned gap, or a coverage gap the plan no longer names any
+	// unresolved member of. The gap is not settled by it.
+	gapEscalated gapOutcome = iota
+	// gapLimited: no actor reachable from a governed run can close it.
+	gapLimited
+	// gapClosed: every member of the gap is positively settled. The router
+	// that raised it disagrees with the recorded authority, so the run stops
+	// rather than escalating or limiting a question that is answered.
+	gapClosed
+)
+
+// gapDisposition is what an exhausted gap becomes: a knowledge limit carrying
+// its remedy, the routing the human is asked about, or a closed gap. One
+// value for every exhausted-gap site, so none converts a gap by hand.
+type gapDisposition struct {
+	Outcome gapOutcome
+	Routing Routing
+	// Limit is set when no actor reachable from a governed run can close it.
+	Limit *knowledgeLimitError
+	// Summary says what is missing, in the words the remedy addresses.
+	Summary string
+}
+
+// disposeGap is the canonical exhausted-gap disposition. A coverage-unexamined
+// gap is first re-decided by reconcileCoverageScope over its own Scope, and
+// every member stays unresolved until a positive governed mechanism settles
+// it: a file is never dropped from the gap because the action omits it or
+// carries no probe data about it.
+//
+// The plan's file list decides only the outcome, never the Scope: while the
+// plan still names an unresolved member, the gap is a knowledge limit over
+// every unresolved member; a plan that names none of them no longer depends
+// on the gap (the architect narrowed onto other material), and the gap -- its
+// Scope intact -- is an ordinary escalation.
+func disposeGap(routing Routing, action Action, root, domain string) gapDisposition {
 	// WHAT IS MISSING DEPENDS ON THE GAP'S TYPE. Reading the unexamined architectural
 	// files for every out-of-band gap was right while there was one such gap; a
 	// test-governance gap is about test artifacts, which are deliberately NOT in that
 	// set, so it would have found nothing missing and fallen through to an ordinary
 	// human escalation — asking a person to supply evidence no person can supply.
-	missing := action.unexaminedArchitecturalFiles()
+	var missing, absent []string
+	dependsOn := true
 	switch routing.Gap.Kind {
+	case gapCoverageAbsent, gapCoverageBlindSpot:
+		// Reasoning-owned, so an ordinary escalation below; but over what the
+		// recorded authority leaves of it, and never over a settled question.
+		r := reconcileGap(routing, action, nil)
+		if !r.Open {
+			return gapDisposition{Outcome: gapClosed, Routing: routing}
+		}
+		routing = r.Routing
+	case gapCoverageUnexamined:
+		r := reconcileGap(routing, action, nil)
+		if !r.Open {
+			return gapDisposition{Outcome: gapClosed, Routing: routing}
+		}
+		d := r.Disposition
+		missing, absent = d.Unresolved, d.Absent
+		routing.Condition, routing.Gap.Scope = r.Routing.Condition, r.Routing.Gap.Scope
+		planned := map[string]bool{}
+		for _, f := range action.Files {
+			planned[cleanPlannedPath(f)] = true
+		}
+		dependsOn = false
+		for _, f := range d.Unresolved {
+			dependsOn = dependsOn || planned[f]
+		}
 	case gapTestGovernanceUnestablished, gapDocumentGovernanceUnestablished, gapUnsupportedArtifact:
 		missing = routing.Gap.Scope
 	}
 	// Coverage the plan no longer depends on is not a limit: the architect
-	// narrowed onto examined material, which is the legitimate escape, and the
-	// remaining stop is an ordinary escalation.
-	if closureOwnerFor(routing.Gap.Kind) == closureOwnerOutOfBand && len(missing) > 0 {
+	// narrowed onto other material, which is the legitimate escape, and the
+	// remaining stop is an ordinary escalation over the same, unsettled gap.
+	if closureOwnerFor(routing.Gap.Kind) == closureOwnerOutOfBand && len(missing) > 0 && dependsOn {
 		routing.Basis = BasisLacksKnowledge
-		routing.Closes = remedyForGap(routing.Gap, e.Repo.Root, domain)
-		limit := &knowledgeLimitError{Condition: routing.Condition, Missing: missing, Closes: routing.Closes}
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-			"knowledge-limited: no actor reachable from a governed run can examine "+
-				strings.Join(missing, ", ")+"; this is not a decision a human can supply. "+
-				"closes: "+routing.Closes, routing))
-		return routing, limit
+		summary := "no actor reachable from a governed run can examine " + strings.Join(missing, ", ")
+		if routing.Gap.Kind == gapCoverageUnexamined {
+			routing.Closes = unexaminedRemedy(missing, absent, root, domain)
+			summary = unexaminedSummary(missing, absent)
+		} else {
+			routing.Closes = remedyForGap(routing.Gap, root, domain)
+		}
+		return gapDisposition{Outcome: gapLimited, Routing: routing, Summary: summary,
+			Limit: &knowledgeLimitError{Condition: routing.Condition, Missing: missing, Closes: routing.Closes}}
 	}
 	routing.Route = RouteHuman
 	routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
-	return routing, nil
+	return gapDisposition{Outcome: gapEscalated, Routing: routing}
+}
+
+// unexaminedRemedy splits a coverage-unexamined limit by what can close each
+// file: graph examination for a file present at the pinned world, and only
+// prospective admission for one the world lacks. A refresh of a file that
+// does not exist cannot succeed, so it is never offered for one.
+func unexaminedRemedy(missing, absent []string, root, domain string) string {
+	isAbsent := map[string]bool{}
+	for _, f := range absent {
+		isAbsent[f] = true
+	}
+	var present []string
+	for _, f := range missing {
+		if !isAbsent[f] {
+			present = append(present, f)
+		}
+	}
+	var parts []string
+	if len(present) != 0 {
+		parts = append(parts, knowledgeLimitRemedy(root, domain, present))
+	}
+	if len(absent) != 0 {
+		parts = append(parts, prospectiveAdmissionRemedy(absent))
+	}
+	return strings.Join(parts, "\n")
+}
+
+// unexaminedSummary names what a coverage-unexamined limit lacks, per file kind.
+func unexaminedSummary(missing, absent []string) string {
+	isAbsent := map[string]bool{}
+	for _, f := range absent {
+		isAbsent[f] = true
+	}
+	var present []string
+	for _, f := range missing {
+		if !isAbsent[f] {
+			present = append(present, f)
+		}
+	}
+	var parts []string
+	if len(present) != 0 {
+		parts = append(parts, "no actor reachable from a governed run can examine "+strings.Join(present, ", "))
+	}
+	if len(absent) != 0 {
+		parts = append(parts, "planned create(s) absent at the pinned world hold no prospective grant: "+strings.Join(absent, ", "))
+	}
+	return strings.Join(parts, "; ")
+}
+
+// prospectiveAdmissionRemedy is the one route that can cover a planned create:
+// a declared prospective surface whose canonical grant is derived at the
+// pinned world. It is named, not performed.
+func prospectiveAdmissionRemedy(absent []string) string {
+	return "prospective admission of " + strings.Join(absent, ", ") +
+		": each is absent at the pinned world, so no graph operation can cover it; close it by declaring it " +
+		"among the plan's prospective_surfaces with a role and a covered covering surface from which the canonical " +
+		"prospective grant is derived for the plan attempt, or by removing it from the plan."
 }
 
 // knowledgeLimitError reports a bounded knowledge gap that NO actor reachable

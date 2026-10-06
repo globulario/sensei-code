@@ -201,11 +201,76 @@ type prospectiveEdge struct {
 // It is the ONE declaration/grant rule. Plan admission (routePlan, through
 // reconcileProspectiveGrants), restoration (restoreProspectiveGrants) and
 // candidate inspection (inspectProspectiveGrants) all read it, so the grant
-// set that admits a plan is the grant set that would resume and inspect it.
+// set that admits a plan is the grant set that would resume and inspect it;
+// and routing's projection (settledProspectiveFiles) reads the same
+// validateProspectiveGrants value it is, per authority unit.
 // Every fault names the declaration it is about and why no canonical grant
 // stands for it; every declaration is judged, so a plan with one ungranted
 // declaration beside a granted one is refused naming only the ungranted one.
 func matchGrantsToDeclarations(declared []ProspectiveSurface, grants []prospectiveGrant) error {
+	return validateProspectiveGrants(declared, grants).err()
+}
+
+// prospectiveValidation is the typed result of the ONE declaration/grant rule
+// (DF-30, rulings 79 and 80). matchGrantsToDeclarations reads it plan-wide --
+// any fault refuses admission, restoration and inspection -- and
+// settledProspectiveFiles reads the same value per AUTHORITY UNIT, so routing
+// cannot settle a unit the other consumers would refuse, nor refuse one they
+// would admit: there is no second validator to drift.
+//
+// Every fault is attributed to the unit it is about:
+//
+//   - a directory a new-package role is declared in is ONE unit, production
+//     and traced tests together, because newPackageGrants admits it whole; a
+//     grant naming that directory without a declaration spoils it too;
+//   - a command unit's library edge inherits the library unit: an invalid
+//     library spoils the command, and a command directory whose grants bind
+//     two libraries (oneEdgePerCommand) is spoiled;
+//   - every other declaration (go-existing-package, an ordinary
+//     go-regression-test) is its own unit, decided independently.
+//
+// A fault outside every unit -- a grant for an undeclared path in no
+// new-package directory -- refuses the record plan-wide and settles nothing
+// for that path, and revokes no independent unit.
+type prospectiveValidation struct {
+	// faults are the declaration and record faults, in the order the rule
+	// reports them.
+	faults []error
+	// edge is oneEdgePerCommand over the whole record, reported only when no
+	// other fault stands.
+	edge error
+	// paths are the declared paths, once each, in declaration order, and
+	// unitOf the authority unit each belongs to.
+	paths  []string
+	unitOf map[string]string
+	// spoiled are the units at least one fault is attributed to.
+	spoiled map[string]bool
+}
+
+// err is the plan-wide reading: every fault, or nil when the record is
+// exactly the authorization for the declarations.
+func (v prospectiveValidation) err() error {
+	if len(v.faults) != 0 {
+		return errors.Join(v.faults...)
+	}
+	return v.edge
+}
+
+// settled is the per-unit reading: the declared paths whose whole unit holds,
+// in declaration order.
+func (v prospectiveValidation) settled() []string {
+	var out []string
+	for _, f := range v.paths {
+		if !v.spoiled[v.unitOf[f]] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// validateProspectiveGrants judges every declaration against the recorded
+// grants and attributes each fault to its authority unit.
+func validateProspectiveGrants(declared []ProspectiveSurface, grants []prospectiveGrant) prospectiveValidation {
 	byPath := map[string]prospectiveGrant{}
 	count := map[string]int{}
 	for _, g := range grants {
@@ -215,17 +280,37 @@ func matchGrantsToDeclarations(declared []ProspectiveSurface, grants []prospecti
 			byPath[f] = g
 		}
 	}
-	var faults []error
+	newDir := map[string]bool{}
+	for _, d := range declared {
+		if prospectiveRoles[d.Role].newPackage {
+			newDir[path.Dir(path.Clean(strings.TrimSpace(d.Path)))] = true
+		}
+	}
+	unit := func(f string) string {
+		if newDir[path.Dir(f)] {
+			return "dir:" + path.Dir(f)
+		}
+		return "file:" + f
+	}
+	v := prospectiveValidation{unitOf: map[string]string{}, spoiled: map[string]bool{}}
+	fault := func(u string, err error) {
+		v.faults = append(v.faults, err)
+		if u != "" {
+			v.spoiled[u] = true
+		}
+	}
 	seen := map[string]bool{}
 	for _, d := range declared {
 		f := path.Clean(strings.TrimSpace(d.Path))
 		if seen[f] {
-			faults = append(faults, fmt.Errorf("declared prospective surface %s is declared more than once, so no one grant can be its canonical authorization", f))
+			fault(unit(f), fmt.Errorf("declared prospective surface %s is declared more than once, so no one grant can be its canonical authorization", f))
 			continue
 		}
 		seen[f] = true
+		v.paths = append(v.paths, f)
+		v.unitOf[f] = unit(f)
 		if err := grantFault(f, d, count[f], byPath, declared); err != nil {
-			faults = append(faults, err)
+			fault(unit(f), err)
 		}
 	}
 	extras := make([]string, 0, len(byPath))
@@ -236,12 +321,43 @@ func matchGrantsToDeclarations(declared []ProspectiveSurface, grants []prospecti
 	}
 	sort.Strings(extras)
 	for _, f := range extras {
-		faults = append(faults, fmt.Errorf("the recorded prospective authorization holds a grant for %s, which no declaration names", f))
+		u := ""
+		if newDir[path.Dir(f)] {
+			u = unit(f)
+		}
+		fault(u, fmt.Errorf("the recorded prospective authorization holds a grant for %s, which no declaration names", f))
 	}
-	if len(faults) != 0 {
-		return errors.Join(faults...)
+	v.edge = oneEdgePerCommand(grants)
+	byUnit := map[string][]prospectiveGrant{}
+	for _, g := range grants {
+		f := path.Clean(strings.TrimSpace(g.Anchor.File))
+		byUnit[unit(f)] = append(byUnit[unit(f)], g)
 	}
-	return oneEdgePerCommand(grants)
+	for u, gs := range byUnit {
+		if oneEdgePerCommand(gs) != nil {
+			v.spoiled[u] = true
+		}
+	}
+	// Inheritance last, once every unit's own faults are known: a command
+	// holds only while the library unit its edge names holds.
+	for u, gs := range byUnit {
+		for _, g := range gs {
+			if g.Edge != nil && v.spoiled["dir:"+path.Clean(g.Edge.Library)] {
+				v.spoiled[u] = true
+			}
+		}
+	}
+	return v
+}
+
+// settledProspectiveFiles is the canonical prospective authority projection:
+// the declared creates whose whole authority unit holds under these recorded
+// grants, in declaration order. It is validateProspectiveGrants read per
+// unit, the same value matchGrantsToDeclarations reads plan-wide. Nothing is
+// inferred: a declaration with no fault-free recorded grant settles nothing,
+// and a failed unit revokes nothing outside itself.
+func settledProspectiveFiles(declared []ProspectiveSurface, grants []prospectiveGrant) []string {
+	return validateProspectiveGrants(declared, grants).settled()
 }
 
 // grantFault is matchGrantsToDeclarations for one declaration f, given how

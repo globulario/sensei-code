@@ -136,6 +136,27 @@ type Action struct {
 	// region's authority onto it (M25 §1). A file under an operational grant
 	// is not asked to be examined and is ignored here by the router.
 	Unexamined []string
+	// Examined are the probed planned files whose own per-file answer proved
+	// coverage. Engine-owned and set only where the probes ran: a file absent
+	// from BOTH lists was never asked about, and omission is not settlement.
+	Examined []string
+	// ProspectiveAuthority are the planned CREATEs whose canonical prospective
+	// authority unit (settledProspectiveFiles) holds under the grant record
+	// written for the plan attempt being routed, at its pinned world. Engine-
+	// owned; a declaration alone, a stale or another attempt's record, or a
+	// malformed unit never reaches it. It settles a create's coverage-unexamined
+	// question and is never represented as a derived anchor.
+	ProspectiveAuthority []string
+	// Absent are planned files the pinned world's tree provably lacks
+	// (confirmedMissing). Engine-owned. No graph examination or refresh can
+	// cover such a file; only prospective admission can.
+	Absent []string
+	// Present are planned files the pinned world's tree positively holds.
+	// Engine-owned. With Absent it makes presence tri-state: a file in
+	// neither list is of unknown presence, and examination settles only a
+	// file positively present -- a create the world lacks has no history for
+	// a graph to have examined.
+	Present []string
 }
 
 // unexaminedArchitecturalFiles are the planned files the graph has not

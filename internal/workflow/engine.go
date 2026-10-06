@@ -490,6 +490,45 @@ func (e *Engine) settleGapFor(taskID string, gap GapIdentity, outcome authority.
 	tr.settle(gap, outcome, owner, tr.answerScope.epoch)
 }
 
+// reconcileOpenGaps is the ledger transition that re-decides every identity
+// open for this task at this world from the authority action carries
+// (reevaluateGap), and then returns the first identity still open, as openGap
+// would. An identity whose question every member of which settled is retired
+// (no longer observed); one some members left is retired and the narrowed
+// identity observed in its place, owned by the attempt that raised the prior
+// one -- so openGap can never again return the superseded Scope.
+//
+// The ledger is reconstructed from the session record on restart, and a
+// deferred question restores the identity it was asked about. That restored
+// identity is reconciled here again, from the durable grant record, before
+// any consumer reads it: the transition is re-derived, not remembered.
+func (e *Engine) reconcileOpenGaps(taskID, world string, action Action, spots blindSpotReading) (AuthorityResolution, bool) {
+	tr := e.gapResolutions(taskID)
+	pending := e.pendingPlanAttempt(taskID).ID
+	e.mu.Lock()
+	for _, key := range append([]string(nil), tr.order...) {
+		r := tr.byKey[key]
+		if !tr.view(key, pending).Open() || r.Gap.World != world {
+			continue
+		}
+		current, still := reevaluateGap(r.Routing, action, spots)
+		if still && current.Gap.Key() == key {
+			continue
+		}
+		r.Observed = false
+		if !still {
+			continue
+		}
+		next := tr.entry(current.Gap)
+		next.Routing, next.Observed = current, true
+		if owner := tr.observedBy[key]; owner != "" {
+			tr.observe(current.Gap.Key(), owner)
+		}
+	}
+	e.mu.Unlock()
+	return e.openGap(taskID, world)
+}
+
 // openGap returns the first identity open for this task at this world.
 func (e *Engine) openGap(taskID, world string) (AuthorityResolution, bool) {
 	tr := e.gapResolutions(taskID)
@@ -5855,9 +5894,13 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 									"the knowledge gap did not close; escalating with it open: "+gap.Condition, nil))
 								e.recordClosureQuestion(taskID, gap.Condition, d, start, architect.Label, rounds.count())
 							}
-							stillOpen := gap
-							stillOpen.Route = RouteHuman
-							stillOpen.Condition = "a bounded knowledge gap was not closed by investigation: " + gap.Condition
+							// The canonical disposition every exhausted gap takes,
+							// never a hand-made human route: an out-of-band gap is
+							// a knowledge limit with its remedy here too.
+							stillOpen, limited := e.reportDisposition(taskID, disposeGap(gap, action, e.Repo.Root, start.Domain()))
+							if limited != nil {
+								return architectureDecision{}, limited
+							}
 							authorized, asked := e.gapSettlement(taskID, stillOpen)
 							if !asked {
 								authorized, asked = e.applyAnsweredCondition(taskID, stillOpen.Condition, d.Files...)
@@ -5950,7 +5993,11 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 				// answer one question oppositely (task-1790513596091085059).
 				// While an identity is open for this task and world, the gap's
 				// own question stands; with none open the shortcut is unchanged.
-				if open, ok := e.openGap(taskID, strings.TrimSpace(e.governedBase(taskID))); ok {
+				// Every open identity is first re-decided from the authority
+				// this routing carries (ruling 79 C): a stale pre-grant
+				// observation is retired in the ledger, never merely skipped.
+				open, ok := e.reconcileOpenGaps(taskID, strings.TrimSpace(e.governedBase(taskID)), action, readBlindSpots(scoped.BlindSpots))
+				if ok {
 					e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 						"architect asked to escalate while a bounded knowledge gap is open for this task; certifying a "+
 							"differently shaped plan does not settle it, so the gap's own question stands: "+open.Routing.Condition,
@@ -7120,6 +7167,17 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		return Routing{}, sensei.PreflightDecision{}, Action{}, err
 	}
 	action.OperationalAuthority = operationalFiles(e.testEditGrants(taskID))
+	// PROSPECTIVE AUTHORITY, CONSUMED NOT INFERRED (DF-30). Only what the grant
+	// record written for THIS attempt, at its pinned world, establishes under
+	// the canonical unit predicate reaches the router; and which planned files
+	// the pinned world lacks, so an unresolved create is never sent to a graph
+	// examination that cannot cover it.
+	action.ProspectiveAuthority = e.recordedProspectiveAuthority(taskID, d.ProspectiveSurfaces)
+	present, absent, err := e.presenceAtWorld(ctx, taskID, action.architecturalFiles())
+	if err != nil {
+		return Routing{}, sensei.PreflightDecision{}, Action{}, err
+	}
+	action.Present, action.Absent = present, absent
 	// RECORDED AUTHORITY BEFORE ARCHITECT PROSE. A premise that only claims a
 	// grant recorded above for this attempt is unestablished is contradicted by
 	// the record, and is not read as a knowledge gap.
@@ -7158,6 +7216,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		// which world a grant built from it is bound to.
 		authored := authoredEvidence{World: e.coverageWorld(taskID), ByFile: prod}
 		action.Unexamined = unexamined
+		action.Examined = examinedOf(action.probeSet(), unexamined)
 		action.DocumentEvidence = docs
 		// AUTHORED PRODUCTION GOVERNANCE arrives only now, because the per-file probe is
 		// deliberately gated on the router wanting to grant -- probing a plan that will
@@ -7444,6 +7503,66 @@ func afterAuthorization(routing Routing, authorized bool, action Action, spots b
 	return routing
 }
 
+// examinedOf is the probed files whose own answer proved coverage: every
+// probed file the probes did not report unexamined.
+func examinedOf(probed, unexamined []string) []string {
+	un := map[string]bool{}
+	for _, f := range unexamined {
+		un[cleanPlannedPath(f)] = true
+	}
+	var out []string
+	for _, f := range probed {
+		if c := cleanPlannedPath(f); !un[c] {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// recordedProspectiveAuthority is the canonical prospective authority the
+// router may consume for the attempt being routed: settledProspectiveFiles
+// over the grant record written for exactly that attempt, at exactly its
+// pinned world. No attempt, no pinned world, or a record bound to anything
+// else establishes nothing.
+func (e *Engine) recordedProspectiveAuthority(taskID string, declared []ProspectiveSurface) []string {
+	attempt := e.pendingPlanAttempt(taskID)
+	world := strings.TrimSpace(attempt.World)
+	if attempt.ID == "" || world == "" || len(declared) == 0 {
+		return nil
+	}
+	rec, _ := e.recordedGrants(taskID, attempt.ID)
+	if rec.PlanAttemptID != attempt.ID || strings.TrimSpace(rec.World) != world || world != strings.TrimSpace(e.governedBase(taskID)) {
+		return nil
+	}
+	return settledProspectiveFiles(declared, rec.Grants)
+}
+
+// presenceAtWorld classifies each file against the pinned world's tree:
+// present when its bytes read, absent when the tree provably lacks it
+// (confirmedMissing). Any other read failure is returned, so routing fails
+// closed rather than collapsing an unclassified read into either answer. With
+// no pinned world nothing is classified and both lists are empty: presence is
+// unknown, and settles nothing that requires it.
+func (e *Engine) presenceAtWorld(ctx context.Context, taskID string, files []string) (present, absent []string, err error) {
+	world := strings.TrimSpace(e.governedBase(taskID))
+	if world == "" {
+		return nil, nil, nil
+	}
+	read := gitShowAt(e.Repo.Root)
+	for _, f := range files {
+		_, rerr := read(ctx, world, f)
+		switch {
+		case rerr == nil:
+			present = append(present, cleanPlannedPath(f))
+		case confirmedMissing(rerr):
+			absent = append(absent, cleanPlannedPath(f))
+		default:
+			return nil, nil, fmt.Errorf("classifying planned file %s at the pinned world: %w", f, rerr)
+		}
+	}
+	return present, absent, nil
+}
+
 // sameGraphGeneration reports that two preflight answers name the same graph
 // build and source commit, both present. Absent identity fails closed.
 func sameGraphGeneration(a, b sensei.Authority) bool {
@@ -7485,6 +7604,7 @@ func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart
 		return Routing{}, false, err
 	}
 	action.Unexamined = unexamined
+	action.Examined = examinedOf(action.probeSet(), unexamined)
 	action.DocumentEvidence = docs
 	after := afterAuthorization(routing, true, action, readBlindSpots(scoped.BlindSpots))
 	// The same gap identity routePlan would have built: completed with the

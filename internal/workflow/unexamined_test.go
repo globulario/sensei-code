@@ -18,8 +18,9 @@ package workflow
 // The fact that repairs it is per file and engine-owned: Action.Unexamined
 // lists the planned architectural files a per-file preflight found unexamined
 // (no anchor, not indexed). The router treats those files as a coverage gap,
-// which the existing derived-coverage relation may close only by covering
-// EVERY architectural file -- the same rule the cold path already applies.
+// decided per file (DF-30): each unexamined file leaves it only by its own
+// canonical prospective authority unit or by a recognised derivation over
+// THAT file, never by authority some other planned file holds.
 
 import (
 	"errors"
@@ -74,8 +75,9 @@ func TestAnUnexaminedPlannedFileIsNotCoveredByItsNeighbour(t *testing.T) {
 	}
 }
 
-// The gap an unexamined file opens closes the way every coverage gap closes:
-// a recognised derivation over EVERY architectural file, never over some.
+// The gap an unexamined file opens closes by a recognised derivation over the
+// unexamined file itself. It never closes on the neighbour's derivation, and
+// -- since DF-30 -- the examined neighbour is not required to acquire one.
 func TestAnUnexaminedPlannedFileIsCoveredOnlyByADerivationOverIt(t *testing.T) {
 	scoped := scopedPreflight(t, neighbourCovered)
 	anchored, unexamined := "internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"
@@ -87,11 +89,16 @@ func TestAnUnexaminedPlannedFileIsCoveredOnlyByADerivationOverIt(t *testing.T) {
 	if !closed.Granted() {
 		t.Fatalf("a derivation over every planned file must close the gap the unexamined file opened: %+v", closed)
 	}
+	own := routeAuthorityForAction(scoped, nil, Action{
+		Stage: StageCandidateEdit, Files: planned, Unexamined: []string{unexamined},
+		DerivedCoverage: lockAnchors(unexamined)})
+	if !own.Granted() {
+		t.Fatalf("a derivation over the unexamined file closes its gap; the examined neighbour is not asked for one: %+v", own)
+	}
 
 	for name, anchors := range map[string][]CoverageAnchor{
-		"a derivation over the neighbour only":      lockAnchors(anchored),
-		"an unrecognised family over both":          layeringAnchors(planned...),
-		"a derivation over the unexamined one only": lockAnchors(unexamined),
+		"a derivation over the neighbour only": lockAnchors(anchored),
+		"an unrecognised family over both":     layeringAnchors(planned...),
 	} {
 		t.Run(name, func(t *testing.T) {
 			got := routeAuthorityForAction(scoped, nil, Action{
@@ -525,5 +532,703 @@ func TestFullyIndexedRegionDoesNotHidePerFileInsufficiency(t *testing.T) {
 	}
 	if err != nil || len(got) != 1 || got[0] != b {
 		t.Fatalf("a file publishing sufficient=false was hidden by the region's indexed count: unexamined=%v err=%v", got, err)
+	}
+}
+
+// --- DF-30: coverage-unexamined is per file, settled by canonical authority unit ---
+
+// run7Planned is objective 49 run 7's planned set (2026-10-02, base 1b308d5):
+// two record-lock creates granted from store.go, store.go itself, a test, and
+// existing command files no derivation anchors.
+func run7Planned() []string {
+	return []string{"cmd/sensei-code/resume.go", "cmd/sensei-code/main.go", "cmd/sensei-code/commands.go",
+		existingS, existingUnix, existingWindows, "internal/session/repair_test.go"}
+}
+
+// run7Action is the action routing built for that plan: canonical grants for
+// the pair, derived at the pinned world through coverPlannedAtWorld, with the
+// prospective authority projected from them by the canonical unit predicate.
+func run7Action(t *testing.T, decl []ProspectiveSurface, grants []prospectiveGrant) Action {
+	t.Helper()
+	_, out := existingGrants(t, existingPlanned(), existingDeclarations(), existingWorld())
+	return Action{Stage: StageCandidateEdit, Files: run7Planned(),
+		DerivedCoverage:      append(out, lockAnchors("cmd/sensei-code/resume.go")...),
+		Unexamined:           []string{existingUnix, existingWindows},
+		Absent:               []string{existingUnix, existingWindows},
+		ProspectiveAuthority: settledProspectiveFiles(decl, grants)}
+}
+
+func sameFiles(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// W1 (measured shape). Granted creates covered by store.go, beside planned
+// existing files that carry no derived anchor, route past coverage-unexamined
+// through the production router. At base this routed to close a gap that
+// could never close: every architectural file was asked for an anchor.
+func TestDF30W1GrantedCreatesRoutePastCoverageUnexamined(t *testing.T) {
+	scoped := scopedPreflight(t, neighbourCovered)
+	grants, _ := existingGrants(t, existingPlanned(), existingDeclarations(), existingWorld())
+	a := run7Action(t, existingDeclarations(), grants)
+	if !sameFiles(a.ProspectiveAuthority, []string{existingUnix, existingWindows}) {
+		t.Fatalf("premise: the canonical projection must settle the granted pair: %v", a.ProspectiveAuthority)
+	}
+	if got := routeAuthorityForAction(scoped, nil, a); !got.Granted() {
+		t.Fatalf("granted creates beside unanchored existing files did not route past coverage-unexamined: %+v", got)
+	}
+	// The specimen is live: without the recorded authority the same plan opens
+	// the gap for exactly the two creates, and their prospective anchors do not
+	// close it (no anchor stands in for prospective authority).
+	a.ProspectiveAuthority = nil
+	got := routeAuthorityForAction(scoped, nil, a)
+	if !got.ClosesGap() || got.Gap.Kind != gapCoverageUnexamined || !sameFiles(got.Gap.Scope, []string{existingUnix, existingWindows}) {
+		t.Fatalf("without recorded authority the creates must hold the gap, and only they: %+v", got)
+	}
+}
+
+// W2. A declared create without a matching recorded grant keeps the gap open
+// for exactly that create; a mismatched grant settles nothing either, and no
+// settled file is reintroduced.
+func TestDF30W2ADeclaredButUngrantedCreateKeepsOnlyItsOwnGap(t *testing.T) {
+	scoped := scopedPreflight(t, neighbourCovered)
+	grants, _ := existingGrants(t, existingPlanned(), existingDeclarations(), existingWorld())
+	var unixOnly []prospectiveGrant
+	for _, g := range grants {
+		if g.Anchor.File == existingUnix {
+			unixOnly = append(unixOnly, g)
+		}
+	}
+	mismatched := existingDeclarations()
+	mismatched[1].Dependencies = append(mismatched[1].Dependencies, "strings")
+	for name, c := range map[string]struct {
+		decl   []ProspectiveSurface
+		grants []prospectiveGrant
+	}{
+		"declared, no recorded grant":          {existingDeclarations(), unixOnly},
+		"grant issued for another declaration": {mismatched, grants},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := routeAuthorityForAction(scoped, nil, run7Action(t, c.decl, c.grants))
+			if !got.ClosesGap() || !sameFiles(got.Gap.Scope, []string{existingWindows}) {
+				t.Fatalf("the gap must stay open for exactly the ungranted create: %+v", got)
+			}
+		})
+	}
+}
+
+// W3. A present file the graph never examined, with no other authority, still
+// requires its own derivation; a present file positively examined is not asked
+// for an anchor because another file is unexamined.
+func TestDF30W3AnUnexaminedPresentFileStillNeedsItsDerivation(t *testing.T) {
+	scoped := scopedPreflight(t, neighbourCovered)
+	grants, _ := existingGrants(t, existingPlanned(), existingDeclarations(), existingWorld())
+	a := run7Action(t, existingDeclarations(), grants)
+	const present = "cmd/sensei-code/commands.go"
+	a.Unexamined = append(a.Unexamined, present)
+	got := routeAuthorityForAction(scoped, nil, a)
+	if !got.ClosesGap() || !sameFiles(got.Gap.Scope, []string{present}) {
+		t.Fatalf("an unexamined present file with no authority must hold the gap alone: %+v", got)
+	}
+	if strings.Contains(got.Condition, "no prospective grant") {
+		t.Fatalf("a present file was sent to prospective admission: %q", got.Condition)
+	}
+	a.DerivedCoverage = append(a.DerivedCoverage, lockAnchors(present)...)
+	if got := routeAuthorityForAction(scoped, nil, a); !got.Granted() {
+		t.Fatalf("its own recognised derivation must close it, with main.go still unanchored: %+v", got)
+	}
+}
+
+// W4. No limit names import --refresh or graph examination for a granted
+// create; an ungranted absent create is sent to prospective admission.
+func TestDF30W4NoRefreshIsPrescribedForACreate(t *testing.T) {
+	grants, _ := existingGrants(t, existingPlanned(), existingDeclarations(), existingWorld())
+	const present = "cmd/sensei-code/commands.go"
+	a := run7Action(t, existingDeclarations(), grants[:1])
+	granted, ungranted := grants[0].Anchor.File, existingWindows
+	if granted == ungranted {
+		granted, ungranted = existingWindows, existingUnix
+	}
+	a.Unexamined = append(a.Unexamined, present)
+	gap, open := unexaminedCoverageGap(a, blindSpotReading{})
+	if !open {
+		t.Fatal("premise: an ungranted create and an unexamined present file open the gap")
+	}
+	d := disposeGap(gap, a, "/repo", "github.com/globulario/sensei-code")
+	if d.Limit == nil {
+		t.Fatalf("the exhausted gap must be a knowledge limit: %+v", d.Routing)
+	}
+	for _, text := range []string{gap.Condition, d.Routing.Closes, d.Summary, d.Limit.Error()} {
+		if strings.Contains(text, granted) {
+			t.Fatalf("a granted create is named by the gap: %q", text)
+		}
+	}
+	refresh := d.Routing.Closes[:strings.Index(d.Routing.Closes, "prospective admission")]
+	if !strings.Contains(refresh, "import --refresh") || !strings.Contains(refresh, present) || strings.Contains(refresh, ungranted) {
+		t.Fatalf("graph examination must be offered for the present file only: %q", d.Routing.Closes)
+	}
+	if !strings.Contains(d.Routing.Closes, "prospective admission of "+ungranted) || !strings.Contains(gap.Condition, "no prospective grant") {
+		t.Fatalf("the ungranted create is not sent to prospective admission: %q / %q", gap.Condition, d.Routing.Closes)
+	}
+	// Absent alone: no refresh at all.
+	only := run7Action(t, existingDeclarations(), nil)
+	only.ProspectiveAuthority = []string{granted}
+	g, _ := unexaminedCoverageGap(only, blindSpotReading{})
+	if d := disposeGap(g, only, "/repo", ""); d.Limit == nil || strings.Contains(d.Routing.Closes, "import --refresh") ||
+		strings.Contains(d.Routing.Closes, "graph examination") || strings.Contains(d.Summary, "examine") {
+		t.Fatalf("an ungranted create alone was told to close by graph examination: %+v", d)
+	}
+}
+
+// W5 (cut point). A gap over an absent create; during the closure round the
+// matching grant is recorded through the production recorder; the SAME gap is
+// re-evaluated from that record and the granted file leaves it before any
+// further decision. When it was the last file, the run proceeds.
+func TestDF30W5AGrantRecordedDuringClosureSettlesTheSameGap(t *testing.T) {
+	e, _ := attemptEngine(t)
+	const task = "task-df30-w5"
+	id := candidateIdentityFor(prospectiveWorld)
+	id.TaskID = task
+	if err := id.Save(e.Repo.Root); err != nil {
+		t.Fatal(err)
+	}
+	decl := existingDeclarations()
+	d := attemptPlan("record locks", run7Planned()...)
+	d.ProspectiveSurfaces = decl
+	a, err := e.beginPlanAttempt(task, attemptObjective, d)
+	if err != nil || a.World != prospectiveWorld {
+		t.Fatalf("premise: the attempt binds the pinned world: %+v %v", a, err)
+	}
+	if err := e.recordProspectiveGrants(task, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: a.World}); err != nil {
+		t.Fatal(err)
+	}
+	scoped := scopedPreflight(t, neighbourCovered)
+	spots := readBlindSpots(scoped.BlindSpots)
+	action := run7Action(t, decl, nil)
+	action.ProspectiveAuthority = e.recordedProspectiveAuthority(task, decl)
+	prior := routeAuthorityForAction(scoped, nil, action)
+	if !prior.ClosesGap() || !sameFiles(prior.Gap.Scope, []string{existingUnix, existingWindows}) {
+		t.Fatalf("premise: the gap opens over both creates: %+v", prior)
+	}
+	grants, _ := existingGrants(t, existingPlanned(), decl, existingWorld())
+	record := func(world string, gs []prospectiveGrant) []string {
+		t.Helper()
+		if err := e.recordProspectiveGrants(task, "prospective authority recorded", prospectiveRecord{PlanAttemptID: a.ID, World: world, Grants: gs}); err != nil {
+			t.Fatal(err)
+		}
+		return e.recordedProspectiveAuthority(task, decl)
+	}
+	// A record at another world settles nothing.
+	if got := record("another world", grants); len(got) != 0 {
+		t.Fatalf("a grant recorded at another world settled %v", got)
+	}
+	var unixOnly []prospectiveGrant
+	for _, g := range grants {
+		if g.Anchor.File == existingUnix {
+			unixOnly = append(unixOnly, g)
+		}
+	}
+	action.ProspectiveAuthority = record(a.World, unixOnly)
+	still, open := reevaluateGap(prior, action, spots)
+	if !open || !sameFiles(still.Gap.Scope, []string{existingWindows}) || still.Gap.World != prior.Gap.World {
+		t.Fatalf("re-evaluation must leave exactly the ungranted create in the same gap: %+v", still)
+	}
+	action.ProspectiveAuthority = record(a.World, grants)
+	if r, open := reevaluateGap(prior, action, spots); open {
+		t.Fatalf("the last file settled and the stale gap survived: %+v", r)
+	}
+	if got := routeAuthorityForAction(scoped, nil, action); !got.Granted() {
+		t.Fatalf("with every file settled the run must proceed: %+v", got)
+	}
+	// A record belongs to its attempt: the next attempt holds none of it.
+	other := d
+	other.Plan = "another plan"
+	if _, err := e.beginPlanAttempt(task, attemptObjective, other); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.recordedProspectiveAuthority(task, decl); len(got) != 0 {
+		t.Fatalf("another attempt's record settled %v", got)
+	}
+}
+
+// W6 (control). Prospective authority settles only the create it names: it is
+// not laundered onto an unexamined neighbour, which still opens the gap the
+// existing invariant demands.
+func TestDF30W6AGrantDoesNotCoverItsNeighbour(t *testing.T) {
+	scoped := scopedPreflight(t, neighbourCovered)
+	anchored, unexamined := "internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"
+	got := routeAuthorityForAction(scoped, nil, Action{Stage: StageCandidateEdit, Files: []string{anchored, unexamined},
+		Unexamined: []string{unexamined}, ProspectiveAuthority: []string{anchored}})
+	if !got.ClosesGap() || !sameFiles(got.Gap.Scope, []string{unexamined}) {
+		t.Fatalf("authority over one file covered another: %+v", got)
+	}
+}
+
+// W7 (control). Two unresolved files, one granted: re-evaluation closes only it.
+func TestDF30W7SettlementIsNeitherAllOrNothingNorPlanWide(t *testing.T) {
+	grants, _ := existingGrants(t, existingPlanned(), existingDeclarations(), existingWorld())
+	prior, _ := unexaminedCoverageGap(run7Action(t, existingDeclarations(), nil), blindSpotReading{})
+	for _, g := range grants {
+		other := existingUnix
+		if g.Anchor.File == existingUnix {
+			other = existingWindows
+		}
+		r, open := reevaluateGap(prior, run7Action(t, existingDeclarations(), []prospectiveGrant{g}), blindSpotReading{})
+		if !open || !sameFiles(r.Gap.Scope, []string{other}) {
+			t.Fatalf("granting %s must leave exactly %s: %+v", g.Anchor.File, other, r)
+		}
+	}
+}
+
+// W8 (atomic unit). One malformed production grant in a new-package directory
+// leaves the whole directory unsettled; an unrelated existing-package create
+// in the same plan stays settled.
+func TestDF30W8ANewPackageDirectorySettlesWhole(t *testing.T) {
+	lib := prospectiveFor(t, newLibPlanned(), newLibDeclarations(), newPackageAnchors(), newPackageWorld())
+	existing, _ := existingGrants(t, existingPlanned(), existingDeclarations(), existingWorld())
+	decl := append(newLibDeclarations(), existingDeclarations()...)
+	if got := settledProspectiveFiles(decl, append(append([]prospectiveGrant(nil), lib...), existing...)); len(got) != 5 {
+		t.Fatalf("premise: every valid unit settles: %v", got)
+	}
+	for name, tamper := range map[string]func([]prospectiveGrant) []prospectiveGrant{
+		"a production grant malformed": func(gs []prospectiveGrant) []prospectiveGrant {
+			for i := range gs {
+				if gs[i].Anchor.File == newLibDir+"/config.go" {
+					gs[i].Facts.Imports = nil
+				}
+			}
+			return gs
+		},
+		"a production grant missing": func(gs []prospectiveGrant) []prospectiveGrant {
+			var out []prospectiveGrant
+			for _, g := range gs {
+				if g.Anchor.File != newLibDir+"/config.go" {
+					out = append(out, g)
+				}
+			}
+			return out
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			bad := tamper(append([]prospectiveGrant(nil), lib...))
+			got := settledProspectiveFiles(decl, append(bad, existing...))
+			if !sameFiles(got, []string{existingUnix, existingWindows}) {
+				t.Fatalf("the new-package unit must settle nothing and the independent creates stay settled: %v", got)
+			}
+		})
+	}
+}
+
+// W8 (inherited grouping). A command's library edge inherits the library
+// unit: a malformed library grant leaves the command unsettled even though the
+// command's own record still names declared, granted library files.
+func TestDF30W8ACommandEdgeInheritsItsLibraryUnit(t *testing.T) {
+	grants := prospectiveFor(t, edgePlanned(), edgeDeclarations(), newPackageAnchors(), newPackageWorld())
+	if g, ok := commandGrant(grants); !ok || g.Edge == nil {
+		t.Fatalf("premise: the command is granted its library edge: %+v", grants)
+	}
+	if got := settledProspectiveFiles(edgeDeclarations(), grants); len(got) != len(edgeDeclarations()) {
+		t.Fatalf("premise: every valid unit settles: %v", got)
+	}
+	for i := range grants {
+		if grants[i].Anchor.File == newLibDir+"/config.go" {
+			grants[i].Facts.Imports = nil
+		}
+	}
+	if got := settledProspectiveFiles(edgeDeclarations(), grants); len(got) != 0 {
+		t.Fatalf("a command settled over a library unit that does not hold: %v", got)
+	}
+}
+
+// W9 (independent units). Two existing-package creates, one malformed: each is
+// decided alone.
+func TestDF30W9IndependentCreatesSettleIndependently(t *testing.T) {
+	grants, _ := existingGrants(t, existingPlanned(), existingDeclarations(), existingWorld())
+	for i := range grants {
+		if grants[i].Anchor.File == existingWindows {
+			grants[i].Existing = nil
+		}
+	}
+	if got := settledProspectiveFiles(existingDeclarations(), grants); !sameFiles(got, []string{existingUnix}) {
+		t.Fatalf("a malformed create revoked or joined its independent neighbour: %v", got)
+	}
+}
+
+// W10 (unprobed action). An Action carrying neither Examined nor Unexamined
+// data settles nothing by omission; one exact grant leaves exactly the other.
+// Examination settles only a file positively present at the pinned world: a
+// confirmed-absent create cannot have been examined, and a file of unknown
+// presence is not settled by it. Exhausted-gap disposal reads the same way: a
+// fresh Action that omits a gap file does not remove it from the gap.
+func TestDF30W10OmissionIsNotSettlement(t *testing.T) {
+	prior, _ := unexaminedCoverageGap(run7Action(t, existingDeclarations(), nil), blindSpotReading{})
+	unprobed := Action{Stage: StageCandidateEdit, Files: run7Planned(), Absent: []string{existingUnix, existingWindows}}
+	if r, open := reevaluateGap(prior, unprobed, blindSpotReading{}); !open || !sameFiles(r.Gap.Scope, prior.Gap.Scope) {
+		t.Fatalf("missing probe data settled a file: %+v", r)
+	}
+	absentExamined := unprobed
+	absentExamined.Examined = []string{existingUnix}
+	if r, open := reevaluateGap(prior, absentExamined, blindSpotReading{}); !open || !sameFiles(r.Gap.Scope, prior.Gap.Scope) {
+		t.Fatalf("an examination claimed for a create the pinned world lacks settled it: %+v", r)
+	}
+	unknown := Action{Stage: StageCandidateEdit, Files: run7Planned(), Examined: []string{existingUnix}}
+	if r, open := reevaluateGap(prior, unknown, blindSpotReading{}); !open || !sameFiles(r.Gap.Scope, prior.Gap.Scope) {
+		t.Fatalf("an examination of a file of unknown presence settled it: %+v", r)
+	}
+	presentExamined := Action{Stage: StageCandidateEdit, Files: run7Planned(),
+		Present: []string{existingUnix}, Absent: []string{existingWindows}, Examined: []string{existingUnix}}
+	if r, open := reevaluateGap(prior, presentExamined, blindSpotReading{}); !open || !sameFiles(r.Gap.Scope, []string{existingWindows}) {
+		t.Fatalf("a positive examination of a present file must settle exactly its file: %+v", r)
+	}
+	grants, _ := existingGrants(t, existingPlanned(), existingDeclarations(), existingWorld())
+	for _, g := range grants {
+		if g.Anchor.File != existingWindows {
+			continue
+		}
+		unprobed.ProspectiveAuthority = settledProspectiveFiles(existingDeclarations(), []prospectiveGrant{g})
+	}
+	if r, open := reevaluateGap(prior, unprobed, blindSpotReading{}); !open || !sameFiles(r.Gap.Scope, []string{existingUnix}) {
+		t.Fatalf("one exact grant must leave exactly the other file: %+v", r)
+	}
+
+	// Omission from a fresh Action's file list settles nothing at disposal.
+	partial := Action{Stage: StageCandidateEdit, Files: []string{existingS, existingWindows}}
+	d := disposeGap(prior, partial, "/repo", "")
+	if d.Outcome != gapLimited || d.Limit == nil || !sameFiles(d.Routing.Gap.Scope, prior.Gap.Scope) || !sameFiles(d.Limit.Missing, prior.Gap.Scope) {
+		t.Fatalf("a gap file omitted from the fresh Action left the exhausted gap: %+v", d)
+	}
+	withdrawn := disposeGap(prior, Action{Stage: StageCandidateEdit, Files: []string{existingS}}, "/repo", "")
+	if withdrawn.Outcome != gapEscalated || withdrawn.Limit != nil || !sameFiles(withdrawn.Routing.Gap.Scope, prior.Gap.Scope) {
+		t.Fatalf("a plan naming no gap member must escalate the same, unsettled gap: %+v", withdrawn)
+	}
+	settled := unprobed
+	settled.ProspectiveAuthority = []string{existingUnix, existingWindows}
+	if c := disposeGap(prior, settled, "/repo", ""); c.Outcome != gapClosed || c.Limit != nil || c.Routing.RequiresHuman() {
+		t.Fatalf("a fully settled gap was escalated or limited by hand: %+v", c)
+	}
+}
+
+// W11 (routing parity). The same unresolved state through proceed, escalate
+// after human authorization, re-evaluation and exhausted-gap disposal yields
+// the same typed disposition and the same remaining Scope; and no exhausted
+// site converts a gap to a human route by hand.
+func TestDF30W11EveryPathReachesTheSameDisposition(t *testing.T) {
+	gated := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
+		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":1},`+
+		`"change_risk":{"blast_radius":"BLAST_RADIUS_CLUSTER","approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"},`+
+		identifiedAuthority+`}`)
+	scoped := scopedPreflight(t, neighbourCovered)
+	grants, _ := existingGrants(t, existingPlanned(), existingDeclarations(), existingWorld())
+	var unixOnly []prospectiveGrant
+	for _, g := range grants {
+		if g.Anchor.File == existingUnix {
+			unixOnly = append(unixOnly, g)
+		}
+	}
+	a := run7Action(t, existingDeclarations(), unixOnly)
+	a.Unexamined = append(a.Unexamined, "cmd/sensei-code/main.go")
+	want := []string{"cmd/sensei-code/main.go", existingWindows}
+	if d := reconcileCoverageScope(a.unexaminedArchitecturalFiles(), a, derivationUnder(readBlindSpots(scoped.BlindSpots), a.DerivedCoverage)); !sameFiles(d.Unresolved, want) {
+		t.Fatalf("premise: the reconciliation leaves the unexamined file and the ungranted create: %+v", d)
+	}
+	proceed := routeAuthorityForAction(scoped, nil, a)
+	human := routeAuthorityForAction(gated, nil, a)
+	if !human.RequiresHuman() {
+		t.Fatalf("premise: the gate is asked first: %+v", human)
+	}
+	authorized := afterAuthorization(human, true, a, readBlindSpots(gated.BlindSpots))
+	reevaluated, _ := reevaluateGap(proceed, a, readBlindSpots(scoped.BlindSpots))
+	exhausted := disposeGap(proceed, a, "/repo", "")
+	if exhausted.Limit == nil {
+		t.Fatalf("an exhausted coverage-unexamined gap is a knowledge limit: %+v", exhausted.Routing)
+	}
+	scope := proceed.Gap.Scope
+	for name, got := range map[string][]string{
+		"post-authorization": authorized.Gap.Scope,
+		"re-evaluation":      reevaluated.Gap.Scope,
+		"exhausted":          exhausted.Routing.Gap.Scope,
+		"limit":              exhausted.Limit.Missing,
+	} {
+		if !sameFiles(got, scope) {
+			t.Fatalf("%s reached Scope %v, proceed reached %v", name, got, scope)
+		}
+	}
+	if authorized.Gap.Kind != proceed.Gap.Kind || authorized.Condition != proceed.Condition {
+		t.Fatalf("post-authorization reached a different disposition: %+v vs %+v", authorized, proceed)
+	}
+	// A fresh Action that omits every probe datum and one gap file reaches
+	// the same disposition and Scope: omission is not settlement.
+	omitted := Action{Stage: StageCandidateEdit, Files: []string{"cmd/sensei-code/main.go"},
+		ProspectiveAuthority: a.ProspectiveAuthority, Absent: []string{existingUnix, existingWindows}}
+	if o := disposeGap(proceed, omitted, "/repo", ""); o.Outcome != exhausted.Outcome ||
+		!sameFiles(o.Routing.Gap.Scope, scope) || o.Limit == nil || !sameFiles(o.Limit.Missing, scope) {
+		t.Fatalf("an Action omitting a gap file reached a different disposition: %+v", o)
+	}
+	src := rawSource(t, "internal/workflow/engine.go")
+	if strings.Contains(src, "stillOpen.Route = RouteHuman") || strings.Count(src, "disposeGap(gap, action,") != 1 {
+		t.Fatal("the post-authorization exhausted gap does not take the canonical disposition")
+	}
+}
+
+// regionUncovered is a classified, authoritative answer whose region coverage
+// is not proven: the router's coverage-absent branch.
+const regionUncovered = `{"status":"PREFLIGHT_STATUS_EMPTY",` +
+	`"coverage":{"sufficient":false,"direct_anchor_count":0,"file_count":1,"indexed_file_count":0},` +
+	`"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},` +
+	identifiedAuthority + `}`
+
+// regionBlindSpot is a proven region that reports a coverage blind spot: the
+// router's coverage-blind-spot branch.
+const regionBlindSpot = `{"status":"PREFLIGHT_STATUS_OK",` +
+	`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":1},` +
+	`"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},` +
+	`"blind_spots":["coverage_insufficient: no direct anchors"],` +
+	identifiedAuthority + `}`
+
+// createOnly is the RULING-174 specimen: one create the pinned world lacks,
+// granted from store.go, which the plan does not itself name.
+func createOnly(t *testing.T, grant bool) Action {
+	t.Helper()
+	decl := existingDeclarations()[:1]
+	grants, out := existingGrants(t, []string{existingUnix}, decl, existingWorld())
+	a := Action{Stage: StageCandidateEdit, Files: []string{existingUnix}, DerivedCoverage: out, Absent: []string{existingUnix}}
+	if grant {
+		a.ProspectiveAuthority = settledProspectiveFiles(decl, grants)
+	}
+	return a
+}
+
+// W1 (region gaps, RULING-174). The same create, granted and absent, is not
+// held by the coverage-absent or coverage-blind-spot branch either: both
+// reconcile per authority unit before derivation. Without the grant both keep
+// it, naming prospective admission and never a graph refresh; a present file
+// beside it still needs its own derivation.
+func TestDF30W1AGrantedCreateClosesRegionCoverageGaps(t *testing.T) {
+	for name, c := range map[string]struct {
+		body, kind string
+	}{
+		"coverage-absent":     {regionUncovered, gapCoverageAbsent},
+		"coverage-blind-spot": {regionBlindSpot, gapCoverageBlindSpot},
+	} {
+		t.Run(name, func(t *testing.T) {
+			scoped := scopedPreflight(t, c.body)
+			granted := createOnly(t, true)
+			if !sameFiles(granted.ProspectiveAuthority, []string{existingUnix}) {
+				t.Fatalf("premise: the canonical projection settles the create: %v", granted.ProspectiveAuthority)
+			}
+			if got := routeAuthorityForAction(scoped, nil, granted); !got.Granted() {
+				t.Fatalf("a granted absent create was held by the %s branch: %+v", c.kind, got)
+			}
+			ungranted := createOnly(t, false)
+			got := routeAuthorityForAction(scoped, nil, ungranted)
+			if !got.ClosesGap() || got.Gap.Kind != c.kind || !sameFiles(got.Gap.Scope, []string{existingUnix}) {
+				t.Fatalf("an ungranted create must hold the %s gap: %+v", c.kind, got)
+			}
+			if !strings.Contains(got.Condition, "prospective admission") || strings.Contains(got.Condition, "import --refresh") {
+				t.Fatalf("the ungranted create is not sent to prospective admission: %q", got.Condition)
+			}
+			d := disposeGap(got, ungranted, "/repo", "github.com/globulario/sensei-code")
+			if d.Outcome != gapEscalated || d.Limit != nil || strings.Contains(d.Routing.Closes, "import --refresh") ||
+				!sameFiles(d.Routing.Gap.Scope, got.Gap.Scope) {
+				t.Fatalf("the exhausted %s gap prescribed a refresh or lost its Scope: %+v", c.kind, d)
+			}
+			// A present file beside the granted create: only it is asked, and
+			// its own derivation closes it.
+			const present = "cmd/sensei-code/main.go"
+			mixed := createOnly(t, true)
+			mixed.Files = append(mixed.Files, present)
+			mixed.Present = []string{present}
+			if got := routeAuthorityForAction(scoped, nil, mixed); !got.ClosesGap() || !sameFiles(got.Gap.Scope, []string{present}) {
+				t.Fatalf("the present file must hold the %s gap alone: %+v", c.kind, got)
+			}
+			mixed.DerivedCoverage = append(mixed.DerivedCoverage, lockAnchors(present)...)
+			if got := routeAuthorityForAction(scoped, nil, mixed); !got.Granted() {
+				t.Fatalf("its own derivation must close the %s gap: %+v", c.kind, got)
+			}
+			// Presence is required: a grant beside a file whose absence was
+			// never established, or one the world holds, settles nothing.
+			// The create's prospective anchors are withheld so the grant is the
+			// only authority asked about.
+			for name, a := range map[string]Action{"unknown": createOnly(t, true), "present": createOnly(t, true)} {
+				a.Absent, a.DerivedCoverage = nil, nil
+				if name == "present" {
+					a.Present = []string{existingUnix}
+				}
+				if got := routeAuthorityForAction(scoped, nil, a); got.Granted() {
+					t.Fatalf("a grant over a create of %s presence settled the %s gap: %+v", name, c.kind, got)
+				}
+			}
+		})
+	}
+}
+
+// W10 (presence). Prospective authority settles a gap file only when the
+// pinned world provably lacks it: unknown presence or a present file keeps it.
+func TestDF30W10AGrantWithoutConfirmedAbsenceSettlesNothing(t *testing.T) {
+	prior, _ := unexaminedCoverageGap(run7Action(t, existingDeclarations(), nil), blindSpotReading{})
+	both := []string{existingUnix, existingWindows}
+	for name, a := range map[string]Action{
+		"unknown presence": {Stage: StageCandidateEdit, Files: run7Planned(), ProspectiveAuthority: both},
+		"present":          {Stage: StageCandidateEdit, Files: run7Planned(), ProspectiveAuthority: both, Present: both},
+		"contradictory":    {Stage: StageCandidateEdit, Files: run7Planned(), ProspectiveAuthority: both, Present: both, Absent: both},
+	} {
+		if r, open := reevaluateGap(prior, a, blindSpotReading{}); !open || !sameFiles(r.Gap.Scope, prior.Gap.Scope) {
+			t.Fatalf("%s: a grant settled a file not confirmed absent: %+v", name, r)
+		}
+		if d := disposeGap(prior, a, "/repo", ""); d.Outcome == gapClosed || !sameFiles(d.Routing.Gap.Scope, prior.Gap.Scope) {
+			t.Fatalf("%s: disposal settled a file not confirmed absent: %+v", name, d)
+		}
+	}
+}
+
+// W5 (ledger cut point). The engine's ledger, not a local flag, carries the
+// transition: after a partial grant the open identity IS the narrowed one and
+// the full-scope observation is retired; after the last grant none is open.
+// A restarted process that reconstructs the full-scope question from its
+// durable deferral reconciles it from the durable grant record before any
+// consumer reads it.
+func TestDF30W5TheLedgerRetiresTheSupersededGap(t *testing.T) {
+	e, _ := attemptEngine(t)
+	const task = "task-df30-w5-ledger"
+	id := candidateIdentityFor(prospectiveWorld)
+	id.TaskID = task
+	if err := id.Save(e.Repo.Root); err != nil {
+		t.Fatal(err)
+	}
+	decl := existingDeclarations()
+	d := attemptPlan("record locks", run7Planned()...)
+	d.ProspectiveSurfaces = decl
+	a, err := e.beginPlanAttempt(task, attemptObjective, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := func(eng *Engine, gs []prospectiveGrant) {
+		t.Helper()
+		if err := eng.recordProspectiveGrants(task, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: a.World, Grants: gs}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	record(e, nil)
+	action := run7Action(t, decl, nil)
+	action.ProspectiveAuthority = e.recordedProspectiveAuthority(task, decl)
+	prior := routeAuthorityForAction(scopedPreflight(t, neighbourCovered), nil, action)
+	prior.Gap.World = a.World
+	if r := e.observeGap(task, prior); !r.Open() || !sameFiles(prior.Gap.Scope, []string{existingUnix, existingWindows}) {
+		t.Fatalf("premise: the full-scope gap is open: %+v", r)
+	}
+	grants, _ := existingGrants(t, existingPlanned(), decl, existingWorld())
+	var unixOnly []prospectiveGrant
+	for _, g := range grants {
+		if g.Anchor.File == existingUnix {
+			unixOnly = append(unixOnly, g)
+		}
+	}
+	reconcile := func(eng *Engine) (AuthorityResolution, bool) {
+		t.Helper()
+		act := run7Action(t, decl, nil)
+		act.ProspectiveAuthority = eng.recordedProspectiveAuthority(task, decl)
+		return eng.reconcileOpenGaps(task, a.World, act, blindSpotReading{})
+	}
+	record(e, unixOnly)
+	if r, ok := reconcile(e); !ok || !sameFiles(r.Gap.Scope, []string{existingWindows}) || r.Gap.World != a.World {
+		t.Fatalf("partial settlement must leave exactly the ungranted create open: %+v %v", r, ok)
+	}
+	if r, ok := e.openGap(task, a.World); !ok || !sameFiles(r.Gap.Scope, []string{existingWindows}) {
+		t.Fatalf("the ledger still returns the superseded Scope: %+v %v", r, ok)
+	}
+	// Restart: the full-scope question was deferred durably before the grant.
+	full := prior
+	full.Route = RouteHuman
+	e.preserveQuestion(withAuthorityGap(withPlanAttempt(t.Context(), a.ID), full.Gap), task, full.Condition, "", a.World,
+		DeferredAuthority{}.Decision, "deferred", full.Gap.Scope)
+	restarted := &Engine{Store: e.Store, SessionID: e.SessionID, Bus: e.Bus, Repo: e.Repo}
+	// The restarted routing is of the same canonical attempt, whose grant
+	// record is durable.
+	if again, err := restarted.beginPlanAttempt(task, attemptObjective, d); err != nil || again.ID != a.ID {
+		t.Fatalf("premise: the restarted routing is of the same attempt: %+v %v", again, err)
+	}
+	// Its routing records the attempt's grant state again, as routePlan does.
+	record(restarted, unixOnly)
+	if r, ok := restarted.openGap(task, a.World); !ok || !sameFiles(r.Gap.Scope, full.Gap.Scope) {
+		t.Fatalf("premise: the restarted ledger reconstructs the deferred full-scope question: %+v %v", r, ok)
+	}
+	if r, ok := reconcile(restarted); !ok || !sameFiles(r.Gap.Scope, []string{existingWindows}) {
+		t.Fatalf("a restarted process restored the superseded full Scope: %+v %v", r, ok)
+	}
+	if r, ok := restarted.openGap(task, a.World); !ok || !sameFiles(r.Gap.Scope, []string{existingWindows}) {
+		t.Fatalf("after restart the ledger returns the superseded Scope: %+v %v", r, ok)
+	}
+	record(e, grants)
+	record(restarted, grants)
+	for name, eng := range map[string]*Engine{"live": e, "restarted": restarted} {
+		if r, ok := reconcile(eng); ok {
+			t.Fatalf("%s: every file settled and a gap is still open: %+v", name, r)
+		}
+		if r, ok := eng.openGap(task, a.World); ok {
+			t.Fatalf("%s: the ledger resurrected a settled gap: %+v", name, r)
+		}
+	}
+}
+
+// W8/W9 (one canonical seam). Admission, restoration and inspection
+// (matchGrantsToDeclarations) and routing (settledProspectiveFiles) read one
+// validateProspectiveGrants value: a record is admitted exactly when every
+// declared unit settles, and no second grant validator exists.
+func TestDF30W8RoutingAndAdmissionShareOneValidator(t *testing.T) {
+	lib := prospectiveFor(t, newLibPlanned(), newLibDeclarations(), newPackageAnchors(), newPackageWorld())
+	existing, _ := existingGrants(t, existingPlanned(), existingDeclarations(), existingWorld())
+	decl := append(newLibDeclarations(), existingDeclarations()...)
+	all := append(append([]prospectiveGrant(nil), lib...), existing...)
+	cases := map[string][]prospectiveGrant{"valid": all}
+	malformed := append([]prospectiveGrant(nil), all...)
+	for i := range malformed {
+		if malformed[i].Anchor.File == existingWindows {
+			malformed[i].Existing = nil
+		}
+	}
+	cases["one independent create malformed"] = malformed
+	cases["one library member missing"] = all[1:]
+	for name, gs := range cases {
+		v := validateProspectiveGrants(decl, gs)
+		settled := v.settled()
+		admitted := matchGrantsToDeclarations(decl, gs) == nil
+		if admitted != (v.err() == nil) || admitted != (len(settled) == len(decl)) || !sameFiles(settled, settledProspectiveFiles(decl, gs)) {
+			t.Fatalf("%s: admission (%v) and routing (%v) disagree on one record", name, admitted, settled)
+		}
+	}
+	src := rawSource(t, "internal/workflow/prospective.go")
+	if strings.Count(src, "grantFault(f, d, count[f], byPath, declared)") != 1 ||
+		!strings.Contains(src, "return validateProspectiveGrants(declared, grants).err()") ||
+		!strings.Contains(src, "return validateProspectiveGrants(declared, grants).settled()") {
+		t.Fatal("routing and admission do not read one canonical prospective validation")
+	}
+}
+
+// W11 (region parity). A region coverage gap reaches the same remaining
+// Scope through the router, re-evaluation and exhausted-gap disposal.
+func TestDF30W11RegionGapsReachTheSameScopeOnEveryPath(t *testing.T) {
+	scoped := scopedPreflight(t, regionUncovered)
+	const present = "cmd/sensei-code/main.go"
+	a := createOnly(t, true)
+	a.Files = append([]string{present}, a.Files...)
+	a.Present = []string{present}
+	proceed := routeAuthorityForAction(scoped, nil, a)
+	if !proceed.ClosesGap() || !sameFiles(proceed.Gap.Scope, []string{present}) {
+		t.Fatalf("premise: the router keeps only the present file: %+v", proceed)
+	}
+	stale := proceed
+	stale.Gap.Scope = a.Files
+	reevaluated, open := reevaluateGap(stale, a, readBlindSpots(scoped.BlindSpots))
+	exhausted := disposeGap(stale, a, "/repo", "")
+	if !open || !sameFiles(reevaluated.Gap.Scope, proceed.Gap.Scope) || !sameFiles(exhausted.Routing.Gap.Scope, proceed.Gap.Scope) ||
+		exhausted.Outcome != gapEscalated {
+		t.Fatalf("re-evaluation %v and disposal %+v disagree with the router %v", reevaluated.Gap.Scope, exhausted, proceed.Gap.Scope)
 	}
 }
