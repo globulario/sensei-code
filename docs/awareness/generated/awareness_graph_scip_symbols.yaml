@@ -40799,6 +40799,12 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: AuthorityPremise
     kind: type
+  - id: internal/workflow/authority.go:AuthorityResolution.Disposition
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: AuthorityResolution.Disposition
+    kind: var
   - id: internal/workflow/authority.go:AuthorityResolution.Gap
     namespace: structural.scip
     language: go
@@ -40834,6 +40840,42 @@ code_symbols:
     language: go
     file: internal/workflow/authority.go
     symbol: AuthorityResolution.Settled
+    kind: var
+  - id: internal/workflow/authority.go:AuthorityResolution.held
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: AuthorityResolution.held
+    kind: var
+  - id: internal/workflow/authority.go:AuthorityResolution.hold
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: AuthorityResolution.hold
+    kind: method
+  - id: internal/workflow/authority.go:AuthorityResolution.lineage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: AuthorityResolution.lineage
+    kind: method
+  - id: internal/workflow/authority.go:AuthorityResolution.members
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: AuthorityResolution.members
+    kind: method
+  - id: internal/workflow/authority.go:AuthorityResolution.opened
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: AuthorityResolution.opened
+    kind: var
+  - id: internal/workflow/authority.go:AuthorityResolution.restored
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: AuthorityResolution.restored
     kind: var
   - id: internal/workflow/authority.go:AuthorityResolution~type
     namespace: structural.scip
@@ -40895,6 +40937,42 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: Claim
     kind: type
+  - id: internal/workflow/authority.go:CoverageSemantics.Diagnostic
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: CoverageSemantics.Diagnostic
+    kind: var
+  - id: internal/workflow/authority.go:CoverageSemantics.Requirement
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: CoverageSemantics.Requirement
+    kind: var
+  - id: internal/workflow/authority.go:CoverageSemantics.Spots
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: CoverageSemantics.Spots
+    kind: var
+  - id: internal/workflow/authority.go:CoverageSemantics.validFor
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: CoverageSemantics.validFor
+    kind: method
+  - id: internal/workflow/authority.go:CoverageSemantics~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: CoverageSemantics
+    kind: type
+  - id: internal/workflow/authority.go:Engine.disposeExhaustedGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: Engine.disposeExhaustedGap
+    kind: method
   - id: internal/workflow/authority.go:Engine.disposeUnclosedGap
     namespace: structural.scip
     language: go
@@ -40907,6 +40985,54 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: Engine.premisesUnderRecordedAuthority
     kind: method
+  - id: internal/workflow/authority.go:GapDisposition.Kind
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapDisposition.Kind
+    kind: var
+  - id: internal/workflow/authority.go:GapDisposition.Narrowed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapDisposition.Narrowed
+    kind: method
+  - id: internal/workflow/authority.go:GapDisposition.Open
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapDisposition.Open
+    kind: method
+  - id: internal/workflow/authority.go:GapDisposition.Settled
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapDisposition.Settled
+    kind: var
+  - id: internal/workflow/authority.go:GapDisposition.Unresolved
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapDisposition.Unresolved
+    kind: var
+  - id: internal/workflow/authority.go:GapDisposition.Withdrawn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapDisposition.Withdrawn
+    kind: var
+  - id: internal/workflow/authority.go:GapDisposition~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapDisposition
+    kind: type
+  - id: internal/workflow/authority.go:GapIdentity.Ambiguous
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapIdentity.Ambiguous
+    kind: var
   - id: internal/workflow/authority.go:GapIdentity.Identified
     namespace: structural.scip
     language: go
@@ -40925,11 +41051,29 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: GapIdentity.Kind
     kind: var
+  - id: internal/workflow/authority.go:GapIdentity.Opening
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapIdentity.Opening
+    kind: var
+  - id: internal/workflow/authority.go:GapIdentity.Question
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapIdentity.Question
+    kind: var
   - id: internal/workflow/authority.go:GapIdentity.Scope
     namespace: structural.scip
     language: go
     file: internal/workflow/authority.go
     symbol: GapIdentity.Scope
+    kind: var
+  - id: internal/workflow/authority.go:GapIdentity.Semantics
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapIdentity.Semantics
     kind: var
   - id: internal/workflow/authority.go:GapIdentity.Subject
     namespace: structural.scip
@@ -40943,11 +41087,71 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: GapIdentity.World
     kind: var
+  - id: internal/workflow/authority.go:GapIdentity.episodeSemantics
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapIdentity.episodeSemantics
+    kind: method
+  - id: internal/workflow/authority.go:GapIdentity.validBinding
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapIdentity.validBinding
+    kind: method
   - id: internal/workflow/authority.go:GapIdentity~type
     namespace: structural.scip
     language: go
     file: internal/workflow/authority.go
     symbol: GapIdentity
+    kind: type
+  - id: internal/workflow/authority.go:GapOpening.Kind
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapOpening.Kind
+    kind: var
+  - id: internal/workflow/authority.go:GapOpening.Question
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapOpening.Question
+    kind: var
+  - id: internal/workflow/authority.go:GapOpening.Scope
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapOpening.Scope
+    kind: var
+  - id: internal/workflow/authority.go:GapOpening.Semantics
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapOpening.Semantics
+    kind: var
+  - id: internal/workflow/authority.go:GapOpening.Subject
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapOpening.Subject
+    kind: var
+  - id: internal/workflow/authority.go:GapOpening.World
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapOpening.World
+    kind: var
+  - id: internal/workflow/authority.go:GapOpening.identity
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapOpening.identity
+    kind: method
+  - id: internal/workflow/authority.go:GapOpening~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: GapOpening
     kind: type
   - id: internal/workflow/authority.go:RefusalBasis.String
     namespace: structural.scip
@@ -41135,6 +41339,12 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: authorityGapKey
     kind: type
+  - id: internal/workflow/authority.go:canonicalQuestion
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: canonicalQuestion
+    kind: function
   - id: internal/workflow/authority.go:closureOwnerFor
     namespace: structural.scip
     language: go
@@ -41159,6 +41369,18 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: consequenceSignalSuffix
     kind: function
+  - id: internal/workflow/authority.go:coverageAfterAuthorization
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: coverageAfterAuthorization
+    kind: function
+  - id: internal/workflow/authority.go:coverageSemantics
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: coverageSemantics
+    kind: function
   - id: internal/workflow/authority.go:decideRouteForAction
     namespace: structural.scip
     language: go
@@ -41177,12 +41399,102 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: degradedReason
     kind: function
+  - id: internal/workflow/authority.go:disposeCoverageGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: disposeCoverageGap
+    kind: function
   - id: internal/workflow/authority.go:documentGovernanceGap
     namespace: structural.scip
     language: go
     file: internal/workflow/authority.go
     symbol: documentGovernanceGap
     kind: function
+  - id: internal/workflow/authority.go:episodeContinuation~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeContinuation
+    kind: type
+  - id: internal/workflow/authority.go:episodeDegenerate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeDegenerate
+    kind: const
+  - id: internal/workflow/authority.go:episodeLineage.Current
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeLineage.Current
+    kind: var
+  - id: internal/workflow/authority.go:episodeLineage.Kind
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeLineage.Kind
+    kind: var
+  - id: internal/workflow/authority.go:episodeLineage.Members
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeLineage.Members
+    kind: var
+  - id: internal/workflow/authority.go:episodeLineage.Opening
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeLineage.Opening
+    kind: var
+  - id: internal/workflow/authority.go:episodeLineage.Question
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeLineage.Question
+    kind: var
+  - id: internal/workflow/authority.go:episodeLineage.Subject
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeLineage.Subject
+    kind: var
+  - id: internal/workflow/authority.go:episodeLineage.World
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeLineage.World
+    kind: var
+  - id: internal/workflow/authority.go:episodeLineage.continuation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeLineage.continuation
+    kind: method
+  - id: internal/workflow/authority.go:episodeLineage~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeLineage
+    kind: type
+  - id: internal/workflow/authority.go:episodeOverlapping
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeOverlapping
+    kind: const
+  - id: internal/workflow/authority.go:episodeSameScope
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeSameScope
+    kind: const
+  - id: internal/workflow/authority.go:episodeUnrelated
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: episodeUnrelated
+    kind: const
   - id: internal/workflow/authority.go:escalationCondition
     namespace: structural.scip
     language: go
@@ -41219,12 +41531,36 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: gapClosureOwner
     kind: type
+  - id: internal/workflow/authority.go:gapCoverageAbsent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: gapCoverageAbsent
+    kind: const
+  - id: internal/workflow/authority.go:gapCoverageBlindSpot
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: gapCoverageBlindSpot
+    kind: const
+  - id: internal/workflow/authority.go:gapCoverageUnexamined
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: gapCoverageUnexamined
+    kind: const
   - id: internal/workflow/authority.go:gapDocumentGovernanceUnestablished
     namespace: structural.scip
     language: go
     file: internal/workflow/authority.go
     symbol: gapDocumentGovernanceUnestablished
     kind: const
+  - id: internal/workflow/authority.go:gapSettlement~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: gapSettlement
+    kind: type
   - id: internal/workflow/authority.go:gapSubject
     namespace: structural.scip
     language: go
@@ -41243,6 +41579,12 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: gapUnsupportedArtifact
     kind: const
+  - id: internal/workflow/authority.go:isCoverageGapKind
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: isCoverageGapKind
+    kind: function
   - id: internal/workflow/authority.go:knowledgeLimitError.Closes
     namespace: structural.scip
     language: go
@@ -41303,11 +41645,47 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: premiseTestEdit
     kind: const
+  - id: internal/workflow/authority.go:presenceRemedy
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: presenceRemedy
+    kind: function
+  - id: internal/workflow/authority.go:prospectiveSurfaceRemedy
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: prospectiveSurfaceRemedy
+    kind: function
+  - id: internal/workflow/authority.go:regionArtifactGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: regionArtifactGap
+    kind: function
+  - id: internal/workflow/authority.go:regionCoverageGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: regionCoverageGap
+    kind: function
+  - id: internal/workflow/authority.go:remedyForCoverage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: remedyForCoverage
+    kind: function
   - id: internal/workflow/authority.go:remedyForGap
     namespace: structural.scip
     language: go
     file: internal/workflow/authority.go
     symbol: remedyForGap
+    kind: function
+  - id: internal/workflow/authority.go:renderCoverageGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: renderCoverageGap
     kind: function
   - id: internal/workflow/authority.go:resolvedAuthority.Gap
     namespace: structural.scip
@@ -41339,6 +41717,30 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: routeAuthorityForAction
     kind: function
+  - id: internal/workflow/authority.go:sameSemantics
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: sameSemantics
+    kind: function
+  - id: internal/workflow/authority.go:settledByDerivation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: settledByDerivation
+    kind: const
+  - id: internal/workflow/authority.go:settledByExamination
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: settledByExamination
+    kind: const
+  - id: internal/workflow/authority.go:settledByProspectiveGrant
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: settledByProspectiveGrant
+    kind: const
   - id: internal/workflow/authority.go:taskResolutions.answerScope
     namespace: structural.scip
     language: go
@@ -41356,6 +41758,12 @@ code_symbols:
     language: go
     file: internal/workflow/authority.go
     symbol: taskResolutions.entry
+    kind: method
+  - id: internal/workflow/authority.go:taskResolutions.episodeEntry
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: taskResolutions.episodeEntry
     kind: method
   - id: internal/workflow/authority.go:taskResolutions.hydrated
     namespace: structural.scip
@@ -41549,6 +41957,102 @@ code_symbols:
     file: internal/workflow/authority_resume_identity_test.go
     symbol: TestAnUnprovenScopeStillAdmitsAHumanStop
     kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30RestoreBoundaryALegacyCoverageRecordIsRefusedBeforeAnyoneIsAsked
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30RestoreBoundaryALegacyCoverageRecordIsRefusedBeforeAnyoneIsAsked
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30RestoreBoundaryALiveDeferredCoverageQuestionIsRefusedOnResume
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30RestoreBoundaryALiveDeferredCoverageQuestionIsRefusedOnResume
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30RestoreBoundaryTheRendezvousRefusesARestoredCoverageIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30RestoreBoundaryTheRendezvousRefusesARestoredCoverageIdentity
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30W10AnUnprobedActionPreservesTheGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30W10AnUnprobedActionPreservesTheGap
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30W13ANarrowedQualifiedEpisodeKeepsItsCondition
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30W13ANarrowedQualifiedEpisodeKeepsItsCondition
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30W13ASettledMemberReEntersWhenItsFactDisappears
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30W13ASettledMemberReEntersWhenItsFactDisappears
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30W14ADistinctQualifiedQuestionIsNotFoldedIntoTheEpisode
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30W14ADistinctQualifiedQuestionIsNotFoldedIntoTheEpisode
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30W14AGatedFirstObservationDecidesItsRegionGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30W14AGatedFirstObservationDecidesItsRegionGap
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30W14AHistoricallyHeldMemberReturnsToItsEpisode
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30W14AHistoricallyHeldMemberReturnsToItsEpisode
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30W14APlanMembershipIsTheActionsFact
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30W14APlanMembershipIsTheActionsFact
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30W14AQualifiedEpisodeIsDecidedByItsOwnRequirement
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30W14AQualifiedEpisodeIsDecidedByItsOwnRequirement
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30W14TheGapLifecycleReEvaluatesBeforeAbsenceProjection
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30W14TheGapLifecycleReEvaluatesBeforeAbsenceProjection
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30W14TheProductionLifecycleDecidesOneEpisode
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30W14TheProductionLifecycleDecidesOneEpisode
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30W14TwoDistinctQualifiedQuestionsKeepTheirOwnEpisodes
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30W14TwoDistinctQualifiedQuestionsKeepTheirOwnEpisodes
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30W5AGrantRecordedInTheClosureRoundSettlesTheSameGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30W5AGrantRecordedInTheClosureRoundSettlesTheSameGap
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestDF30W5AnOverlappingOrWiderReplanContinuesTheEpisode
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestDF30W5AnOverlappingOrWiderReplanContinuesTheEpisode
+    kind: function
   - id: internal/workflow/authority_resume_identity_test.go:TestNeitherAuthorityPathKeepsItsOwnTerminalDecision
     namespace: structural.scip
     language: go
@@ -41633,11 +42137,47 @@ code_symbols:
     file: internal/workflow/authority_resume_identity_test.go
     symbol: architectCapture
     kind: type
+  - id: internal/workflow/authority_resume_identity_test.go:assertEpisodeOfKind
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: assertEpisodeOfKind
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:assertNarrowedAnswersReturnToTheEpisode
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: assertNarrowedAnswersReturnToTheEpisode
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:assertOneEpisode
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: assertOneEpisode
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:assertOneEpisodeOwnedBy
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: assertOneEpisodeOwnedBy
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:assertRecordedCoverageQuestionFailsClosed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: assertRecordedCoverageQuestionFailsClosed
+    kind: function
   - id: internal/workflow/authority_resume_identity_test.go:assertRefusedBeforeTheAnswer
     namespace: structural.scip
     language: go
     file: internal/workflow/authority_resume_identity_test.go
     symbol: assertRefusedBeforeTheAnswer
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:assertResumeRefusedBeforeAsking
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: assertResumeRefusedBeforeAsking
     kind: function
   - id: internal/workflow/authority_resume_identity_test.go:authorizeResolution
     namespace: structural.scip
@@ -41663,11 +42203,143 @@ code_symbols:
     file: internal/workflow/authority_resume_identity_test.go
     symbol: collect
     kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:confinementAnchors
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: confinementAnchors
+    kind: function
   - id: internal/workflow/authority_resume_identity_test.go:deferScoped
     namespace: structural.scip
     language: go
     file: internal/workflow/authority_resume_identity_test.go
     symbol: deferScoped
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:df30Architect
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30Architect
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:df30AssertQualified
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30AssertQualified
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:df30ConfinementSpot
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30ConfinementSpot
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:df30Engine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30Engine
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:df30EngineOn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30EngineOn
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:df30Enter
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30Enter
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:df30LiveDeferral
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30LiveDeferral
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:df30Locked
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30Locked
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:df30NextAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30NextAttempt
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:df30Other
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30Other
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:df30QualifiedLaters
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30QualifiedLaters
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:df30QualifiedOutcome.condition
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30QualifiedOutcome.condition
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:df30QualifiedOutcome.open
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30QualifiedOutcome.open
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:df30QualifiedOutcome.scope
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30QualifiedOutcome.scope
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:df30QualifiedOutcome~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30QualifiedOutcome
+    kind: type
+  - id: internal/workflow/authority_resume_identity_test.go:df30QualifiedSpot
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30QualifiedSpot
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:df30ReEvaluateQualified
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30ReEvaluateQualified
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:df30Record
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30Record
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:df30RecordPending
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30RecordPending
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:df30Region
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30Region
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:df30RunQualified
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: df30RunQualified
     kind: function
   - id: internal/workflow/authority_resume_identity_test.go:driveGapLoop
     namespace: structural.scip
@@ -41687,6 +42359,24 @@ code_symbols:
     file: internal/workflow/authority_resume_identity_test.go
     symbol: gapEscalateWithPremise
     kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:gapLedger.order
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: gapLedger.order
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:gapLedger.owners
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: gapLedger.owners
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:gapLedger~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: gapLedger
+    kind: type
   - id: internal/workflow/authority_resume_identity_test.go:gapLoopRun.engine
     namespace: structural.scip
     language: go
@@ -41747,17 +42437,41 @@ code_symbols:
     file: internal/workflow/authority_resume_identity_test.go
     symbol: kindsOf
     kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:ledgerOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: ledgerOf
+    kind: function
   - id: internal/workflow/authority_resume_identity_test.go:legacyAsk
     namespace: structural.scip
     language: go
     file: internal/workflow/authority_resume_identity_test.go
     symbol: legacyAsk
     kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:liveOwner
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: liveOwner
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:mustJSON
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: mustJSON
+    kind: function
   - id: internal/workflow/authority_resume_identity_test.go:newGapLoopEngine
     namespace: structural.scip
     language: go
     file: internal/workflow/authority_resume_identity_test.go
     symbol: newGapLoopEngine
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:openCoverageGaps
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: openCoverageGaps
     kind: function
   - id: internal/workflow/authority_resume_identity_test.go:payloadOf
     namespace: structural.scip
@@ -41782,6 +42496,12 @@ code_symbols:
     language: go
     file: internal/workflow/authority_resume_identity_test.go
     symbol: realOptions
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:resolutionOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: resolutionOf
     kind: function
   - id: internal/workflow/authority_resume_identity_test.go:resolvedTaskID
     namespace: structural.scip
@@ -41896,6 +42616,12 @@ code_symbols:
     language: go
     file: internal/workflow/authority_test.go
     symbol: TestCoverageAbsentNeverGrantsAndNoLongerInterrupts
+    kind: function
+  - id: internal/workflow/authority_test.go:TestDF30AZeroMemberRegionGapClosesWithoutAdmission
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_test.go
+    symbol: TestDF30AZeroMemberRegionGapClosesWithoutAdmission
     kind: function
   - id: internal/workflow/authority_test.go:TestEveryHumanRouteNamesItsCondition
     namespace: structural.scip
@@ -42353,6 +43079,12 @@ code_symbols:
     file: internal/workflow/blindspot_test.go
     symbol: authorityStatementSummaryArgs
     kind: function
+  - id: internal/workflow/blindspot_test.go:containsFile
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: containsFile
+    kind: function
   - id: internal/workflow/blindspot_test.go:isSelector
     namespace: structural.scip
     language: go
@@ -42635,11 +43367,29 @@ code_symbols:
     file: internal/workflow/closure_episode_test.go
     symbol: TestAClaimReferenceStillSelectsItsReceipt
     kind: function
+  - id: internal/workflow/closure_episode_test.go:TestACoverageClaimReferenceCannotCollapseADistinctRequirement
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/closure_episode_test.go
+    symbol: TestACoverageClaimReferenceCannotCollapseADistinctRequirement
+    kind: function
+  - id: internal/workflow/closure_episode_test.go:TestAnAmbiguousScopelessObservationFailsClosed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/closure_episode_test.go
+    symbol: TestAnAmbiguousScopelessObservationFailsClosed
+    kind: function
   - id: internal/workflow/closure_episode_test.go:TestAnEmptyReplanDoesNotEscapeTheClosureEpisode
     namespace: structural.scip
     language: go
     file: internal/workflow/closure_episode_test.go
     symbol: TestAnEmptyReplanDoesNotEscapeTheClosureEpisode
+    kind: function
+  - id: internal/workflow/closure_episode_test.go:TestAnEpisodeOpenedOverNoFilesIsContinuedWhenThePlanNamesFiles
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/closure_episode_test.go
+    symbol: TestAnEpisodeOpenedOverNoFilesIsContinuedWhenThePlanNamesFiles
     kind: function
   - id: internal/workflow/closure_episode_test.go:TestAnOverlappingReplanDoesNotBuyASecondClosureRound
     namespace: structural.scip
@@ -42647,11 +43397,23 @@ code_symbols:
     file: internal/workflow/closure_episode_test.go
     symbol: TestAnOverlappingReplanDoesNotBuyASecondClosureRound
     kind: function
+  - id: internal/workflow/closure_episode_test.go:TestDistinctQualifiedRequirementsHaveDistinctReceiptsAndBudgets
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/closure_episode_test.go
+    symbol: TestDistinctQualifiedRequirementsHaveDistinctReceiptsAndBudgets
+    kind: function
   - id: internal/workflow/closure_episode_test.go:TestEachEpisodeContinuationReasonIsDistinct
     namespace: structural.scip
     language: go
     file: internal/workflow/closure_episode_test.go
     symbol: TestEachEpisodeContinuationReasonIsDistinct
+    kind: function
+  - id: internal/workflow/closure_episode_test.go:TestEveryEntryRouteKeepsOneEpisodeAndOneBudget
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/closure_episode_test.go
+    symbol: TestEveryEntryRouteKeepsOneEpisodeAndOneBudget
     kind: function
   - id: internal/workflow/closure_episode_test.go:TestNarrowingThePlanDoesNotBuyASecondClosureRound
     namespace: structural.scip
@@ -42701,12 +43463,24 @@ code_symbols:
     file: internal/workflow/closure_episode_test.go
     symbol: closureEpisode
     kind: function
+  - id: internal/workflow/closure_episode_test.go:closureEpisodeVia
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/closure_episode_test.go
+    symbol: closureEpisodeVia
+    kind: function
   - id: internal/workflow/closure_episode_test.go:episodeWorld
     namespace: structural.scip
     language: go
     file: internal/workflow/closure_episode_test.go
     symbol: episodeWorld
     kind: const
+  - id: internal/workflow/closure_episode_test.go:registerEpisode
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/closure_episode_test.go
+    symbol: registerEpisode
+    kind: function
   - id: internal/workflow/closure_write_test.go:TestDerivedCoverageExcludesTheWritingTask
     namespace: structural.scip
     language: go
@@ -42719,6 +43493,12 @@ code_symbols:
     file: internal/workflow/closure_write_test.go
     symbol: TestTheQuestionWriterIsReachableOnlyFromAnUnclosedGap
     kind: function
+  - id: internal/workflow/consequence.go:Action.Absent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: Action.Absent
+    kind: var
   - id: internal/workflow/consequence.go:Action.DeclaredConsequences
     namespace: structural.scip
     language: go
@@ -42749,6 +43529,12 @@ code_symbols:
     file: internal/workflow/consequence.go
     symbol: Action.DocumentEvidence
     kind: var
+  - id: internal/workflow/consequence.go:Action.Examined
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: Action.Examined
+    kind: var
   - id: internal/workflow/consequence.go:Action.Files
     namespace: structural.scip
     language: go
@@ -42760,6 +43546,18 @@ code_symbols:
     language: go
     file: internal/workflow/consequence.go
     symbol: Action.OperationalAuthority
+    kind: var
+  - id: internal/workflow/consequence.go:Action.Present
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: Action.Present
+    kind: var
+  - id: internal/workflow/consequence.go:Action.Prospective
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: Action.Prospective
     kind: var
   - id: internal/workflow/consequence.go:Action.Stage
     namespace: structural.scip
@@ -42790,6 +43588,12 @@ code_symbols:
     language: go
     file: internal/workflow/consequence.go
     symbol: Action.probeSet
+    kind: method
+  - id: internal/workflow/consequence.go:Action.settledByProspective
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: Action.settledByProspective
     kind: method
   - id: internal/workflow/consequence.go:Action.unexaminedArchitecturalFiles
     namespace: structural.scip
@@ -43187,6 +43991,12 @@ code_symbols:
     file: internal/workflow/consequence.go
     symbol: conjunctions
     kind: var
+  - id: internal/workflow/consequence.go:containsPath
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: containsPath
+    kind: function
   - id: internal/workflow/consequence.go:containsWord
     namespace: structural.scip
     language: go
@@ -43751,6 +44561,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: ArchitectTurnUnobtainable
     kind: function
+  - id: internal/workflow/engine.go:AuthorityResolution.opening
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: AuthorityResolution.opening
+    kind: method
   - id: internal/workflow/engine.go:DeferredAuthority.BaseSHA
     namespace: structural.scip
     language: go
@@ -44015,6 +44831,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.behavioralVerdict
     kind: method
+  - id: internal/workflow/engine.go:Engine.bindEpisode
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.bindEpisode
+    kind: method
   - id: internal/workflow/engine.go:Engine.bindGraph
     namespace: structural.scip
     language: go
@@ -44087,6 +44909,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.coverageWorlds
     kind: var
+  - id: internal/workflow/engine.go:Engine.currentResolution
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.currentResolution
+    kind: method
   - id: internal/workflow/engine.go:Engine.decisionAuthority
     namespace: structural.scip
     language: go
@@ -44369,6 +45197,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.planAttemptsOf
     kind: method
+  - id: internal/workflow/engine.go:Engine.plannedPresence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.plannedPresence
+    kind: method
   - id: internal/workflow/engine.go:Engine.policyFor
     namespace: structural.scip
     language: go
@@ -44405,6 +45239,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.prospectiveGrants
     kind: method
+  - id: internal/workflow/engine.go:Engine.prospectiveUnitsFor
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.prospectiveUnitsFor
+    kind: method
   - id: internal/workflow/engine.go:Engine.questionOwner
     namespace: structural.scip
     language: go
@@ -44417,6 +45257,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.receipts
     kind: var
+  - id: internal/workflow/engine.go:Engine.reconcileCoverageGaps
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.reconcileCoverageGaps
+    kind: method
   - id: internal/workflow/engine.go:Engine.reconcileProspectiveGrants
     namespace: structural.scip
     language: go
@@ -44512,6 +45358,24 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.refuseUnprovenAuthority
+    kind: method
+  - id: internal/workflow/engine.go:Engine.register
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.register
+    kind: method
+  - id: internal/workflow/engine.go:Engine.registerAuthorizedRouting
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.registerAuthorizedRouting
+    kind: method
+  - id: internal/workflow/engine.go:Engine.registerRouting
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.registerRouting
     kind: method
   - id: internal/workflow/engine.go:Engine.reinstateOperativePlanAttempt
     namespace: structural.scip
@@ -44825,6 +45689,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.timedOut
     kind: var
+  - id: internal/workflow/engine.go:Engine.unauthenticatedCoverageRestore
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.unauthenticatedCoverageRestore
+    kind: method
   - id: internal/workflow/engine.go:Engine.unexaminedPlannedFiles
     namespace: structural.scip
     language: go
@@ -45425,6 +46295,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: do
     kind: var
+  - id: internal/workflow/engine.go:episodeOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: episodeOf
+    kind: function
   - id: internal/workflow/engine.go:errArchitectSilent
     namespace: structural.scip
     language: go
@@ -45472,6 +46348,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: escalationPrompt
+    kind: function
+  - id: internal/workflow/engine.go:examinedOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: examinedOf
     kind: function
   - id: internal/workflow/engine.go:existingProductionMutations
     namespace: structural.scip
@@ -45622,6 +46504,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: governingInvariants
+    kind: function
+  - id: internal/workflow/engine.go:grantAnchors
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: grantAnchors
     kind: function
   - id: internal/workflow/engine.go:hasAccountingMember
     namespace: structural.scip
@@ -46637,6 +47525,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: resolutionRounds
     kind: type
+  - id: internal/workflow/engine.go:restorationSubjectCoverageEpisode
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: restorationSubjectCoverageEpisode
+    kind: const
   - id: internal/workflow/engine.go:restorationSubjectPlanAdmissionRefusal
     namespace: structural.scip
     language: go
@@ -52715,42 +53609,6 @@ code_symbols:
     file: internal/workflow/premise.go
     symbol: appendWording
     kind: function
-  - id: internal/workflow/premise.go:continuesClosureEpisode
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/premise.go
-    symbol: continuesClosureEpisode
-    kind: function
-  - id: internal/workflow/premise.go:episodeContinuation~type
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/premise.go
-    symbol: episodeContinuation
-    kind: type
-  - id: internal/workflow/premise.go:episodeDegenerate
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/premise.go
-    symbol: episodeDegenerate
-    kind: const
-  - id: internal/workflow/premise.go:episodeOverlapping
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/premise.go
-    symbol: episodeOverlapping
-    kind: const
-  - id: internal/workflow/premise.go:episodeSameScope
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/premise.go
-    symbol: episodeSameScope
-    kind: const
-  - id: internal/workflow/premise.go:episodeUnrelated
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/premise.go
-    symbol: episodeUnrelated
-    kind: const
   - id: internal/workflow/premise.go:normalizeEpisodeScope
     namespace: structural.scip
     language: go
@@ -53015,6 +53873,12 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: prospectiveAnchors
     kind: function
+  - id: internal/workflow/prospective.go:prospectiveAuthorityUnits
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveAuthorityUnits
+    kind: function
   - id: internal/workflow/prospective.go:prospectiveEdge.Import
     namespace: structural.scip
     language: go
@@ -53207,6 +54071,36 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: prospectiveRole
     kind: type
+  - id: internal/workflow/prospective.go:prospectiveUnit.Fault
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveUnit.Fault
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveUnit.Files
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveUnit.Files
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveUnit.Requires
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveUnit.Requires
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveUnit.Valid
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveUnit.Valid
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveUnit~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveUnit
+    kind: type
   - id: internal/workflow/prospective.go:renderProspectiveGrants
     namespace: structural.scip
     language: go
@@ -53332,6 +54226,42 @@ code_symbols:
     language: go
     file: internal/workflow/prospective_test.go
     symbol: TestCauseBW4TheEdgeResumesOnlyIntact
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestDF30ACommandUnitSharingOneLibraryEdgeSettlesAtomically
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestDF30ACommandUnitSharingOneLibraryEdgeSettlesAtomically
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestDF30W1TheMeasuredRecordLockPlanRoutesPastCoverageUnexamined
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestDF30W1TheMeasuredRecordLockPlanRoutesPastCoverageUnexamined
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestDF30W2AnUngrantedStaleOrMismatchedCreateKeepsItsGapOpen
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestDF30W2AnUngrantedStaleOrMismatchedCreateKeepsItsGapOpen
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestDF30W8ANewPackageUnitSettlesWholeOrNotAtAll
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestDF30W8ANewPackageUnitSettlesWholeOrNotAtAll
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestDF30W8AUnitSettlesOnlyWhenTheWorldConfirmsItWhollyAbsent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestDF30W8AUnitSettlesOnlyWhenTheWorldConfirmsItWhollyAbsent
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestDF30W9IndependentCreatesSettleIndependently
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestDF30W9IndependentCreatesSettleIndependently
     kind: function
   - id: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
     namespace: structural.scip
@@ -53555,6 +54485,126 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: derivedAnchorNaming
     kind: function
+  - id: internal/workflow/prospective_test.go:df30Action
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Action
+    kind: function
+  - id: internal/workflow/prospective_test.go:df30Attempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Attempt
+    kind: function
+  - id: internal/workflow/prospective_test.go:df30Commands
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Commands
+    kind: const
+  - id: internal/workflow/prospective_test.go:df30Declarations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Declarations
+    kind: function
+  - id: internal/workflow/prospective_test.go:df30Main
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Main
+    kind: const
+  - id: internal/workflow/prospective_test.go:df30Measured
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Measured
+    kind: function
+  - id: internal/workflow/prospective_test.go:df30Planned
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Planned
+    kind: function
+  - id: internal/workflow/prospective_test.go:df30Production.derives
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Production.derives
+    kind: method
+  - id: internal/workflow/prospective_test.go:df30Production.e
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Production.e
+    kind: var
+  - id: internal/workflow/prospective_test.go:df30Production.probes
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Production.probes
+    kind: method
+  - id: internal/workflow/prospective_test.go:df30Production.put
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Production.put
+    kind: method
+  - id: internal/workflow/prospective_test.go:df30Production.region
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Production.region
+    kind: method
+  - id: internal/workflow/prospective_test.go:df30Production.root
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Production.root
+    kind: var
+  - id: internal/workflow/prospective_test.go:df30Production.state
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Production.state
+    kind: var
+  - id: internal/workflow/prospective_test.go:df30Production.world
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Production.world
+    kind: var
+  - id: internal/workflow/prospective_test.go:df30Production~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Production
+    kind: type
+  - id: internal/workflow/prospective_test.go:df30Recorded
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Recorded
+    kind: function
+  - id: internal/workflow/prospective_test.go:df30Repair
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Repair
+    kind: const
+  - id: internal/workflow/prospective_test.go:df30Resume
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30Resume
+    kind: const
+  - id: internal/workflow/prospective_test.go:df30World
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: df30World
+    kind: function
   - id: internal/workflow/prospective_test.go:edgeCmdDeclarations
     namespace: structural.scip
     language: go
@@ -53729,6 +54779,12 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: libSSource
     kind: const
+  - id: internal/workflow/prospective_test.go:mutateGrant
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: mutateGrant
+    kind: function
   - id: internal/workflow/prospective_test.go:newCmdDeclarations
     namespace: structural.scip
     language: go
@@ -53741,6 +54797,12 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: newCmdDir
     kind: const
+  - id: internal/workflow/prospective_test.go:newDF30Production
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: newDF30Production
+    kind: function
   - id: internal/workflow/prospective_test.go:newLibDeclarations
     namespace: structural.scip
     language: go
@@ -53801,6 +54863,12 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: obj59Test
     kind: const
+  - id: internal/workflow/prospective_test.go:pinWorld
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: pinWorld
+    kind: function
   - id: internal/workflow/prospective_test.go:prospectiveFor
     namespace: structural.scip
     language: go
@@ -53813,6 +54881,12 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: prospectiveWorld
     kind: const
+  - id: internal/workflow/prospective_test.go:sameFiles
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: sameFiles
+    kind: function
   - id: internal/workflow/prospective_test.go:unixGranted
     namespace: structural.scip
     language: go
@@ -53837,6 +54911,12 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: windowsLockSrc
     kind: const
+  - id: internal/workflow/prospective_test.go:withoutGrantFor
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: withoutGrantFor
+    kind: function
   - id: internal/workflow/prospective_test.go:worldOf
     namespace: structural.scip
     language: go
@@ -59435,6 +60515,42 @@ code_symbols:
     file: internal/workflow/unexamined_test.go
     symbol: TestAnUnexaminedPlannedFileIsNotCoveredByItsNeighbour
     kind: function
+  - id: internal/workflow/unexamined_test.go:TestDF30W11EveryRouteReachesTheSameDisposition
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: TestDF30W11EveryRouteReachesTheSameDisposition
+    kind: function
+  - id: internal/workflow/unexamined_test.go:TestDF30W12ExaminationDoesNotSettleARegionGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: TestDF30W12ExaminationDoesNotSettleARegionGap
+    kind: function
+  - id: internal/workflow/unexamined_test.go:TestDF30W13ANarrowedRegionConditionIsReRendered
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: TestDF30W13ANarrowedRegionConditionIsReRendered
+    kind: function
+  - id: internal/workflow/unexamined_test.go:TestDF30W3APresentUnexaminedFileStillNeedsItsOwnDerivation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: TestDF30W3APresentUnexaminedFileStillNeedsItsOwnDerivation
+    kind: function
+  - id: internal/workflow/unexamined_test.go:TestDF30W4NoTerminalTellsACreateToCloseByExamination
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: TestDF30W4NoTerminalTellsACreateToCloseByExamination
+    kind: function
+  - id: internal/workflow/unexamined_test.go:TestDF30W7OnlyTheGrantedMemberLeavesTheGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: TestDF30W7OnlyTheGrantedMemberLeavesTheGap
+    kind: function
   - id: internal/workflow/unexamined_test.go:TestFullyIndexedRegionDoesNotHidePerFileInsufficiency
     namespace: structural.scip
     language: go
@@ -59453,6 +60569,36 @@ code_symbols:
     file: internal/workflow/unexamined_test.go
     symbol: TestProbesRunOnlyWhereTheNextStepIsAWorker
     kind: function
+  - id: internal/workflow/unexamined_test.go:df30ExaminedProbe
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: df30ExaminedProbe
+    kind: const
+  - id: internal/workflow/unexamined_test.go:df30ProductionScript
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: df30ProductionScript
+    kind: const
+  - id: internal/workflow/unexamined_test.go:df30Sensei
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: df30Sensei
+    kind: function
+  - id: internal/workflow/unexamined_test.go:df30UnexaminedProbe
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: df30UnexaminedProbe
+    kind: const
+  - id: internal/workflow/unexamined_test.go:gatedNeighbourCovered
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: gatedNeighbourCovered
+    kind: const
   - id: internal/workflow/unexamined_test.go:identifiedAuthority
     namespace: structural.scip
     language: go
@@ -59465,12 +60611,36 @@ code_symbols:
     file: internal/workflow/unexamined_test.go
     symbol: neighbourCovered
     kind: const
+  - id: internal/workflow/unexamined_test.go:perFileSensei
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: perFileSensei
+    kind: function
+  - id: internal/workflow/unexamined_test.go:perFileSenseiScript
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: perFileSenseiScript
+    kind: const
   - id: internal/workflow/unexamined_test.go:probeOf
     namespace: structural.scip
     language: go
     file: internal/workflow/unexamined_test.go
     symbol: probeOf
     kind: function
+  - id: internal/workflow/unexamined_test.go:regionAbsent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: regionAbsent
+    kind: const
+  - id: internal/workflow/unexamined_test.go:regionBlindSpot
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/unexamined_test.go
+    symbol: regionBlindSpot
+    kind: const
   - id: internal/workflow/validate_body_test.go:TestArchitectureFieldsCarriedSeesEveryReservedField
     namespace: structural.scip
     language: go
