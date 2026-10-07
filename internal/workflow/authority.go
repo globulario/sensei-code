@@ -19,6 +19,8 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -213,18 +215,347 @@ type Routing struct {
 // premise about one file share an identity; two premises about two files do
 // not. Normalising the prose would be a claim that wording is identity; this
 // is the opposite claim.
+//
+// A coverage gap is one EPISODE from the moment it opens: its ledger key is
+// fixed then, and a same-identity re-evaluation that settles some of its
+// members narrows Scope in place without minting another key (DF-30, ruling
+// 177). Opening carries the form the episode opened as on every later form of
+// the gap this process hands around -- the routing, the question, the answer --
+// so each returns to the one AuthorityResolution the gap opened as. It is
+// structure, never an opaque key: the key is derived from it, and a binding
+// whose opening does not describe the same kind, subject and world
+// (validBinding) is refused rather than trusted. Nil until a gap is narrowed.
+//
+// Opening and Semantics are LIVE episode state and are never written to a
+// durable record (json "-"). Objective 59a owns the live episode only: no
+// canonical encoding of an episode exists yet, so a recorded coverage gap
+// carries no episode a resume could authenticate, and restoration fails closed
+// on it (unauthenticatedCoverageRestore) instead of trusting a payload nobody
+// can verify. Durable episode reconstruction is objective 59b's.
 type GapIdentity struct {
 	Kind    string
 	Subject string
 	Scope   []string
 	World   string
+	// Question tells apart two coverage episodes over one kind, subject,
+	// scope and world that ask different qualified questions: the qualified
+	// requirement a coverage episode asks, and empty for an unqualified one
+	// (canonicalQuestion). It is part of the key, so each question is its own
+	// canonical ledger entry -- its own disposition, budget and answer -- and
+	// neither consumes the other's.
+	Question Requirement `json:",omitempty"`
+	Opening  *GapOpening `json:"-"`
+	// Semantics is the question a coverage episode asks, fixed when the
+	// episode opens and carried unchanged on every later form of it (DF-30,
+	// rulings 176 and 181). Nil on every other kind. A coverage episode
+	// without a valid one is never settled, narrowed or re-rendered.
+	Semantics *CoverageSemantics `json:"-"`
+	// Ambiguous marks a scope-less coverage observation more than one live
+	// episode is compatible with (bindEpisode). It continues none of them and
+	// opens none: it has no ledger entry, no receipt and no budget, binds no
+	// answer, and is never put to a person (validBinding). It fails closed.
+	Ambiguous bool `json:"-"`
 }
 
-// Key is the ledger key the closure budget is spent against.
+// CoverageSemantics is the semantic payload one coverage episode owns: the
+// derivation requirement its members are decided against, and the evidence
+// its condition quotes. renderCoverageGap produces it from the preflight the
+// episode opened under; every later re-evaluation of that episode reads it
+// back, so a later preflight -- unqualified where the opening one was
+// qualified, or quoting other diagnostics -- can neither widen which
+// derivation settles the episode nor rewrite what its condition says. It is
+// immutable for the episode; no canonical replacement rule exists.
+type CoverageSemantics struct {
+	// Requirement is gapRequirement over Spots.
+	Requirement Requirement
+	// Spots are the coverage blind spots the requirement was read from, and
+	// what a coverage-blind-spot condition quotes.
+	Spots []string
+	// Diagnostic is the coverage diagnostic a coverage-absent condition
+	// quotes. Empty for every other kind.
+	Diagnostic string
+}
+
+// coverageSemantics is the payload a coverage episode of kind opens with,
+// read from the preflight's coverage blind spots and coverage diagnostic.
+func coverageSemantics(kind string, spots []string, diagnostic string) CoverageSemantics {
+	s := CoverageSemantics{Requirement: gapRequirement(spots), Spots: append([]string(nil), spots...)}
+	if kind == gapCoverageAbsent {
+		s.Diagnostic = diagnostic
+	}
+	return s
+}
+
+// validFor reports whether s is a payload coverageSemantics writes for kind:
+// every blind spot it quotes is one readBlindSpots classifies as coverage --
+// the only spots any producer reads its payload from -- its requirement is the
+// one those spots name, a coverage-blind-spot quotes at least one of them, a
+// coverage-absent quotes a nonblank coverage diagnostic (which
+// sensei.Coverage.Diagnostic never leaves blank), and no other kind carries a
+// diagnostic. Anything else is a payload no producer writes.
+func (s CoverageSemantics) validFor(kind string) bool {
+	if !isCoverageGapKind(kind) || s.Requirement != gapRequirement(s.Spots) {
+		return false
+	}
+	for _, spot := range s.Spots {
+		if classifyBlindSpot(spot) != blindSpotCoverage {
+			return false
+		}
+	}
+	switch kind {
+	case gapCoverageAbsent:
+		return strings.TrimSpace(s.Diagnostic) != ""
+	case gapCoverageBlindSpot:
+		return len(s.Spots) != 0 && s.Diagnostic == ""
+	}
+	return s.Diagnostic == ""
+}
+
+// canonicalQuestion is gap under the canonical identity of the question it
+// asks: a coverage gap that is no later form of an episode (Opening nil) and
+// carries a payload naming a qualified requirement is that requirement's
+// question (GapIdentity.Question) -- the FIRST episode over an identity
+// included -- so two distinct qualified requirements never share a ledger
+// entry, an answer, a disposition, a receipt or a budget. An unqualified
+// report asks no question of its own: it keeps Question empty and continues
+// whatever compatible episode the discriminator finds (continuation).
+func canonicalQuestion(gap GapIdentity) GapIdentity {
+	if !isCoverageGapKind(gap.Kind) || gap.Opening != nil || gap.Semantics == nil {
+		return gap
+	}
+	if req := gap.Semantics.Requirement; req != RequirementUnqualified {
+		gap.Question = req
+	}
+	return gap
+}
+
+// episodeContinuation says WHY an observed gap belongs to a live episode, or
+// that it does not.
+//
+// Named cases rather than one boolean, because the rule has to be explicit and
+// each branch separately testable. In particular a degenerate observation is
+// NOT treated as "a scope that overlaps everything" -- that would silently make
+// unrelated gaps share an episode the moment one of them named no files.
+type episodeContinuation int
+
+const (
+	// episodeUnrelated: a different question. It gets its own identity, its
+	// own receipt and its own budget, which is the discrimination
+	// sensei-code#97 established.
+	episodeUnrelated episodeContinuation = iota
+	// episodeSameScope: the observation names the files the episode opened
+	// over or currently holds, or the episode holds none to compare against.
+	episodeSameScope
+	// episodeOverlapping: the observation moved, narrowed or widened, and
+	// still concerns files the episode has held.
+	episodeOverlapping
+	// episodeDegenerate: the observation names NO files.
+	//
+	// Observed live at 14:32:21 on task-1789272620293170079: coverage
+	// collapsed to "0 anchor(s) over 0 planned file(s)". A plan that names
+	// nothing has not answered the question and has not become a different
+	// question, so it stays bound to the episode it is failing to close -- but
+	// only when exactly one live episode is compatible with it (bindEpisode).
+	// It must never buy a round by evaporating the work surface.
+	episodeDegenerate
+)
+
+// episodeLineage is everything the one continuation discriminator reads of a
+// live episode: its kind, pinned world, subject and immutable qualified
+// requirement, the scope it opened over, its current scope, and every member
+// it has ever held. The resolution ledger (bindEpisode) and the closure-budget
+// ledger (premiseReceiptFor) both decide continuation through it, so they
+// cannot disagree about which episode a later observation belongs to.
+type episodeLineage struct {
+	Kind, Subject, World string
+	Question             Requirement
+	Opening, Current     []string
+	Members              []string
+}
+
+// lineage is the episode r as the discriminator reads it.
+func (r *AuthorityResolution) lineage() episodeLineage {
+	o := r.opening()
+	opened := r.opened
+	if opened == nil {
+		opened = o.Scope
+	}
+	return episodeLineage{Kind: o.Kind, Subject: o.Subject, World: o.World, Question: o.Question,
+		Opening: opened, Current: r.Gap.Scope, Members: r.members()}
+}
+
+// continuation decides whether gap continues the episode l describes.
+//
+// THE LAW: the retried actor may change its plan; it may not thereby change
+// the episode's identity. Kind, world and the qualified requirement
+// discriminate exactly; a gap naming a subject must name the episode's; and
+// the scope test is episode membership, not equality: the same members,
+// fewer, more, moved onto one the episode once held, or none at all.
+//
+// Measured consequence of comparing against the LATEST scope instead, on
+// task-1789272620293170079 (2026-09-13): one coverage-unexamined gap, scope
+// 7 -> 5 -> 7 -> 0 -> 7 -> 6, six closure rounds under closureBudget = 1.
+func (l episodeLineage) continuation(gap GapIdentity) episodeContinuation {
+	if l.Kind != gap.Kind || l.World != gap.World {
+		return episodeUnrelated
+	}
+	// An equal subject continues, and a gap that names none continues
+	// whatever it landed in. Two premises about one file remain two questions.
+	if gap.Subject != l.Subject && gap.Subject != "" {
+		return episodeUnrelated
+	}
+	// A distinct qualified requirement is a distinct question; an unqualified
+	// observation asks none of its own.
+	if gap.Question != "" && gap.Question != l.Question {
+		return episodeUnrelated
+	}
+	reported := normalizeEpisodeScope(gap.Scope)
+	members := normalizeEpisodeScope(l.Members)
+	switch {
+	case len(reported) == 0:
+		return episodeDegenerate
+	case len(members) == 0:
+		// The episode has never held a file, so nothing constrains
+		// membership by path; the fields above already discriminated.
+		return episodeSameScope
+	case scopesEqual(reported, normalizeEpisodeScope(l.Opening)) || scopesEqual(reported, normalizeEpisodeScope(l.Current)):
+		return episodeSameScope
+	case scopesOverlap(members, reported):
+		return episodeOverlapping
+	}
+	return episodeUnrelated
+}
+
+// sameSemantics reports whether two payloads are the same, absence included.
+func sameSemantics(a, b *CoverageSemantics) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return a.Requirement == b.Requirement && a.Diagnostic == b.Diagnostic && slices.Equal(a.Spots, b.Spots)
+}
+
+// episodeSemantics is the payload g's episode decides and renders by, and
+// whether it has a valid one: a coverage gap carrying one coverageSemantics
+// writes for its kind. A missing, malformed or kind-inconsistent payload is
+// not one, and an episode without one is never settled, narrowed or
+// re-rendered.
+//
+// A later form of the episode carries the payload twice -- its own, and the
+// one its opening binds -- and has one only when the two are the same: the
+// payload a form asks by is the one the episode opened with, never one the
+// form substitutes.
+func (g GapIdentity) episodeSemantics() (CoverageSemantics, bool) {
+	if g.Semantics == nil || !g.Semantics.validFor(g.Kind) {
+		return CoverageSemantics{}, false
+	}
+	if g.Opening != nil && !sameSemantics(g.Opening.Semantics, g.Semantics) {
+		return CoverageSemantics{}, false
+	}
+	return *g.Semantics, true
+}
+
+// GapOpening is the immutable form a coverage episode opened as, with the
+// payload it opened with bound into it, so every later form proves which
+// question it continues: its own payload must be this one (validBinding).
+type GapOpening struct {
+	Kind      string
+	Subject   string
+	Scope     []string
+	World     string
+	Question  Requirement
+	Semantics *CoverageSemantics
+}
+
+// identity is the opening as the gap identity it opened as. The payload is
+// not part of the key; the qualified requirement it asks is (Question).
+func (o GapOpening) identity() GapIdentity {
+	return GapIdentity{Kind: o.Kind, Subject: o.Subject, Scope: append([]string(nil), o.Scope...), World: o.World, Question: o.Question}
+}
+
+// members is every planned file the episode r has held: its current scope,
+// then the scope it opened over and every scope it has held since. A member an
+// earlier re-evaluation settled is still the episode's member -- settlement is
+// a fact about the Action that settled it, not about the file -- so it is
+// decided again on every re-evaluation (reconcileCoverageGaps).
+func (r *AuthorityResolution) members() []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(files []string) {
+		for _, f := range files {
+			if c := cleanPlannedPath(f); c != "." && !seen[c] {
+				seen[c] = true
+				out = append(out, c)
+			}
+		}
+	}
+	add(r.Gap.Scope)
+	add(r.opened)
+	if r.Gap.Opening != nil {
+		add(r.Gap.Opening.Scope)
+	}
+	add(r.held)
+	return out
+}
+
+// hold records the episode's current scope among the scopes it has held,
+// before its current form is replaced.
+func (r *AuthorityResolution) hold() {
+	r.held = normalizeEpisodeScope(append(append([]string(nil), r.held...), r.Gap.Scope...))
+}
+
+// Key is the ledger key the closure budget is spent against: the episode the
+// gap belongs to, which is the key of the form it opened in.
 func (g GapIdentity) Key() string {
+	if g.Opening != nil {
+		return g.Opening.identity().Key()
+	}
 	scope := append([]string(nil), g.Scope...)
 	sort.Strings(scope)
-	return g.Kind + "|" + g.Subject + "|" + strings.Join(scope, ",") + "|" + g.World
+	key := g.Kind + "|" + g.Subject + "|" + strings.Join(scope, ",") + "|" + g.World
+	if g.Question != "" {
+		key += "|" + string(g.Question)
+	}
+	return key
+}
+
+// validBinding reports whether g's episode binding is one the engine itself
+// writes: none at all, or an opening of a coverage gap of the SAME kind,
+// subject and world as g, over a non-empty scope in Key's canonical order,
+// carrying exactly g's payload, that is not g's own form (episodeOf writes no
+// opening for the form the episode opened as). The opening scope may be empty:
+// an episode that opened over no files is continued by a later populated form.
+// Any other binding would attach a question or answer to an identity it is
+// not about, so it is refused -- as is an ambiguous observation, which is
+// bound to no episode at all.
+func (g GapIdentity) validBinding() bool {
+	if g.Ambiguous {
+		return false
+	}
+	o := g.Opening
+	if o == nil {
+		return true
+	}
+	if !isCoverageGapKind(g.Kind) || o.Kind != g.Kind || o.Subject != g.Subject || o.World != g.World || o.Question != g.Question ||
+		!scopesEqual(o.Scope, normalizeEpisodeScope(o.Scope)) ||
+		!sameSemantics(o.Semantics, g.Semantics) || (o.Semantics != nil && !o.Semantics.validFor(o.Kind)) {
+		return false
+	}
+	own := g
+	own.Opening = nil
+	return own.Key() != g.Key()
+}
+
+// episodeEntry is the ledger entry gap is a form of: the one under its
+// canonical key (canonicalQuestion), so a gap asking a distinct qualified
+// question is never read as another question's episode -- its answer,
+// disposition and condition are not that gap's. An ambiguous observation is a
+// form of no entry.
+func (tr *taskResolutions) episodeEntry(gap GapIdentity) (*AuthorityResolution, bool) {
+	if gap.Ambiguous {
+		return nil, false
+	}
+	r, ok := tr.byKey[canonicalQuestion(gap).Key()]
+	return r, ok
 }
 
 // Identified reports whether the router classified this gap at all.
@@ -259,6 +590,25 @@ type AuthorityResolution struct {
 	Observed bool
 	Settled  bool
 	Outcome  authority.Outcome
+	// Disposition is the typed result of this coverage identity's latest
+	// same-identity re-evaluation (reconcileCoverageGaps), nil until one ran.
+	// Gap, Routing and Disposition are the episode's CURRENT state: a narrowing
+	// rewrites them here, under the key the episode opened with, and never
+	// opens a second entry for the members that remain.
+	Disposition *GapDisposition
+	// opened is the scope the identity opened over, when this process saw it
+	// open: immutable, and what a later routing's coverage gap is compared
+	// against to decide whether it continues this episode (bindEpisode).
+	opened []string
+	// held is every scope the episode has held since it opened, so a member a
+	// re-evaluation settled is decided again by the next one (members).
+	held []string
+	// restored marks a coverage identity read back from the durable record
+	// rather than opened by this process. It carries no episode this process
+	// can authenticate (GapIdentity), so it is preserved unresolved: never
+	// settled, narrowed or re-rendered, and never put to a person
+	// (unauthenticatedCoverageRestore, RULING-181).
+	restored bool
 }
 
 // Open reports an identity that is currently observed and nobody has settled.
@@ -283,15 +633,22 @@ type taskResolutions struct {
 	observedBy map[string]string
 }
 
-// observe records that attempt's routing raised the identity key.
-func (tr *taskResolutions) observe(key, attempt string) {
+// observe records that attempt's routing raised gap.
+//
+// Every identity is about the attempt currently routing it. A coverage
+// episode keeps its GapIdentity and its opening semantics through every
+// later observation, but its live question is asked by -- and its answer
+// owned by -- the plan attempt whose routing observed it last, which is the
+// attempt gapSettlement reads it for. Ownership by the attempt that OPENED the
+// episode recorded an answer no live boundary could consume (DF-30A review f1).
+func (tr *taskResolutions) observe(gap GapIdentity, attempt string) {
 	if attempt == "" {
 		return
 	}
 	if tr.observedBy == nil {
 		tr.observedBy = map[string]string{}
 	}
-	tr.observedBy[key] = attempt
+	tr.observedBy[gap.Key()] = attempt
 }
 
 // gapAnswer is one explicit settlement of a gap identity.
@@ -392,6 +749,12 @@ func (tr *taskResolutions) entry(gap GapIdentity) *AuthorityResolution {
 	r, ok := tr.byKey[key]
 	if !ok {
 		r = &AuthorityResolution{Gap: gap}
+		r.opened = normalizeEpisodeScope(gap.Scope)
+		if gap.Opening != nil {
+			// A later form of the episode: what it opened over is its
+			// opening.
+			r.opened = normalizeEpisodeScope(gap.Opening.Scope)
+		}
 		tr.byKey[key] = r
 		tr.order = append(tr.order, key)
 	}
@@ -702,27 +1065,30 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 	if gap, open := unexaminedCoverageGap(action, spots); open {
 		return gap
 	}
-	if coverageAbsent && len(action.Files) != 0 {
+	if coverageAbsent {
 		// Files holding an operational grant are not asked to be covered:
 		// they are authorised to be edited, which is a different thing, and
 		// the question put to the derivations is about the rest.
-		if arch := action.architecturalFiles(); len(arch) != 0 {
-			if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, arch); closed {
-				coverageAbsent = false
-			}
-		}
-	}
-	if coverageAbsent {
-		// Sending this to a human asks them to supply coverage Sensei lacks —
-		// a technical answer — and answering leaves the graph exactly as empty
-		// as before, so the next task over the same region asks again.
 		//
-		// The condition states the evidence rather than the status, because the
-		// two came apart: a preflight can answer EMPTY while publishing
-		// sufficient coverage, and it can answer OK while proving none.
-		return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
-			Condition: "graph coverage is absent for the planned files: " + scoped.Coverage.Diagnostic(),
-			Gap:       GapIdentity{Kind: "coverage-absent", Scope: action.Files}}
+		// Decided per member by the one typed owner (regionCoverageGap): a
+		// confirmed-absent create settles only by its recorded prospective
+		// unit, a present file only by a derivation over it. Examination
+		// settles nothing here -- this gap is about the region, not about
+		// whether a present file was examined.
+		//
+		// A plan with no architectural member has a zero-member disposition,
+		// which closes the coverage concern: a coverage gap over its other
+		// files would ask the region's question of files that do not answer
+		// to it. Closing it admits nothing -- those files stay with their own
+		// evidence owners (regionArtifactGap), and the consequences are
+		// judged below.
+		//
+		// Sending an open one to a human asks them to supply coverage Sensei
+		// lacks -- a technical answer -- and answering leaves the graph exactly
+		// as empty as before, so the next task over the same region asks again.
+		if r, open := regionCoverageGap(gapCoverageAbsent, scoped, action, spots); open {
+			return r
+		}
 	}
 
 	// An unclassified gate on a preflight that DOES hold coverage is a
@@ -783,13 +1149,14 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 			// recurring one seam over (M2.2 had been wired into the other
 			// branch only). The identity below is what keeps its closure
 			// budget honest.
-			arch := action.architecturalFiles()
-			if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, arch); len(arch) == 0 || !closed {
-				return Routing{
-					Route:     RouteCloseGap,
-					Condition: "Sensei reported missing coverage in the planned region: " + strings.Join(spots.Coverage, ", "),
-					Gap:       GapIdentity{Kind: "coverage-blind-spot", Scope: arch},
-				}
+			//
+			// A plan that names files is decided per member, as in the
+			// coverage-absent branch: a zero-member disposition closes the
+			// coverage signals, and its non-architectural files stay with
+			// their own evidence owners (regionArtifactGap). Only an action
+			// that names no file at all keeps the region's question whole.
+			if r, open := regionCoverageGap(gapCoverageBlindSpot, scoped, action, spots); open {
+				return r
 			}
 			spots.Coverage = nil
 			fallthrough
@@ -911,11 +1278,19 @@ func consequenceSignalSuffix(spots blindSpotReading) string {
 }
 
 // unexaminedCoverageGap is the coverage gap the unexamined planned files open,
-// and whether it is open: closed only by a recognised derivation over every
-// architectural file. Asked by the router after the consequence checks, and
+// and whether it is open. Asked by the router after the consequence checks, and
 // asked AGAIN by the engine once a human has authorised a consequence -- the
 // gate is answered first, and the answer is about the consequence, not about
 // coverage, so a file the graph never examined is not admitted by it.
+//
+// The gap is decided over ITS OWN members, the unexamined architectural files,
+// and nothing else (DF-30). It once asked a recognised derivation to cover
+// every architectural file, so a planned file the graph had examined -- already
+// positively governed -- was required to acquire a derived anchor because some
+// other file was unexamined, and a granted create was told to close by graph
+// examination of a file that does not exist (objective 49, run 7). Each member
+// is now settled only by what can settle it: its own recorded prospective unit
+// when it is a confirmed-absent create, a derivation over it when it is not.
 func unexaminedCoverageGap(action Action, spots blindSpotReading) (Routing, bool) {
 	unexamined := action.unexaminedArchitecturalFiles()
 	// PRODUCTION SOURCE BLOCKS FIRST, because it is the stronger claim: a file a
@@ -927,10 +1302,9 @@ func unexaminedCoverageGap(action Action, spots blindSpotReading) (Routing, bool
 	// derivation would then have carried an ungranted test out silently -- the same
 	// silence this slice exists to end, one branch over.
 	if len(unexamined) != 0 {
-		if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, action.architecturalFiles()); !closed {
-			return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
-				Condition: "graph coverage is absent for planned file(s) the graph has not examined: " + strings.Join(unexamined, ", "),
-				Gap:       GapIdentity{Kind: "coverage-unexamined", Scope: unexamined}}, true
+		sem := coverageSemantics(gapCoverageUnexamined, spots.Coverage, "")
+		if disposition := disposeCoverageGap(gapCoverageUnexamined, unexamined, action, sem.Requirement); disposition.Open() {
+			return renderCoverageGap(disposition, sem), true
 		}
 	}
 	if r, open := ungrantedTestGovernanceGap(action); open {
@@ -940,6 +1314,62 @@ func unexaminedCoverageGap(action Action, spots blindSpotReading) (Routing, bool
 		return r, true
 	}
 	return unsupportedArtifactGap(action)
+}
+
+// regionCoverageGap is the coverage gap a region answer of kind
+// (coverage-absent or coverage-blind-spot) opens over this action, and whether
+// it is open: the one rendering of a region gap, used by the router and by the
+// post-authorization continuation alike (coverageAfterAuthorization), so a
+// region question is decided by one disposition whichever route asks it.
+//
+// A plan that names files is decided per member by disposeCoverageGap; a
+// zero-member disposition closes the coverage concern and leaves the plan's
+// other files with their own evidence owners (regionArtifactGap). Only an
+// action that names no file at all keeps the region's question whole.
+func regionCoverageGap(kind string, scoped sensei.PreflightDecision, action Action, spots blindSpotReading) (Routing, bool) {
+	sem := coverageSemantics(kind, spots.Coverage, scoped.Coverage.Diagnostic())
+	if len(action.Files) == 0 {
+		if kind == gapCoverageAbsent {
+			// The condition states the evidence rather than the status,
+			// because the two came apart: a preflight can answer EMPTY while
+			// publishing sufficient coverage, and it can answer OK while
+			// proving none.
+			return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
+				Condition: "graph coverage is absent for the planned files: " + scoped.Coverage.Diagnostic(),
+				Gap:       canonicalQuestion(GapIdentity{Kind: gapCoverageAbsent, Scope: action.Files, Semantics: &sem})}, true
+		}
+		return Routing{Route: RouteCloseGap,
+			Condition: "Sensei reported missing coverage in the planned region: " + strings.Join(spots.Coverage, ", "),
+			Gap:       canonicalQuestion(GapIdentity{Kind: gapCoverageBlindSpot, Semantics: &sem})}, true
+	}
+	if disposition := disposeCoverageGap(kind, action.architecturalFiles(), action, sem.Requirement); disposition.Open() {
+		return renderCoverageGap(disposition, sem), true
+	}
+	return regionArtifactGap(action)
+}
+
+// coverageAfterAuthorization is every coverage question the router would have
+// asked had the consequence a human just authorised not stopped it first: the
+// unexamined planned files, then the region's coverage-absent and
+// coverage-blind-spot questions, each decided by the same typed disposition
+// the router uses (DF-30A review f1). The answer satisfies only the
+// consequence it was about; it settles no coverage, so a gated region gap
+// whose present members were merely examined stays open after it exactly as
+// it would without the gate.
+func coverageAfterAuthorization(scoped sensei.PreflightDecision, action Action) (Routing, bool) {
+	spots := readBlindSpots(scoped.BlindSpots)
+	if gap, open := unexaminedCoverageGap(action, spots); open {
+		return gap, true
+	}
+	if !scoped.Coverage.Proven() {
+		if gap, open := regionCoverageGap(gapCoverageAbsent, scoped, action, spots); open {
+			return gap, true
+		}
+	}
+	if len(spots.Coverage) != 0 {
+		return regionCoverageGap(gapCoverageBlindSpot, scoped, action, spots)
+	}
+	return Routing{}, false
 }
 
 // ungrantedTestGovernanceGap is the typed knowledge limit for a test artifact whose
@@ -963,6 +1393,46 @@ func ungrantedTestGovernanceGap(action Action) (Routing, bool) {
 	return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
 		Condition: "test-governance evidence is absent for planned test file(s): no covered production file in the same directory and package establishes an existing-test edit grant: " + strings.Join(tests, ", "),
 		Gap:       GapIdentity{Kind: gapTestGovernanceUnestablished, Scope: tests}}, true
+}
+
+// regionArtifactGap is the artifact-specific question a region coverage gap
+// leaves behind when the plan has NO architectural member, so the gap's
+// disposition is zero-member and closes. Before that disposition existed the
+// region gap itself held such a plan; closing it must not turn into silent
+// admission of what it held. A plan with architectural members is unchanged:
+// its gap was always decided over those members alone. The region's
+// coverage signal is the graph saying it does not vouch for these files, so a
+// planned test that holds no operational grant cannot be read as one the graph
+// already governs: unexaminedCoverageGap asks that only of a test a per-file
+// probe found unexamined, and tests are never probed. It is put to its own
+// owner, test governance, rather than to a coverage question it cannot answer
+// or to silence. Documents and unsupported artifacts were already put to their
+// owners by unexaminedCoverageGap, which runs first on every route.
+//
+// A test a valid prospective unit settles -- confirmed absent, as every
+// member of its unit is -- holds the governance that unit's admission gave it.
+func regionArtifactGap(action Action) (Routing, bool) {
+	if len(action.architecturalFiles()) != 0 {
+		return Routing{}, false
+	}
+	granted, absent := map[string]bool{}, map[string]bool{}
+	for _, f := range action.OperationalAuthority {
+		granted[path.Clean(strings.TrimSpace(f))] = true
+	}
+	for _, f := range action.Absent {
+		absent[path.Clean(strings.TrimSpace(f))] = true
+	}
+	var tests []string
+	for _, f := range action.Files {
+		c := path.Clean(strings.TrimSpace(f))
+		if classifyArtifact(c) == classTestGo && !granted[c] && !(absent[c] && action.settledByProspective(c, absent)) {
+			tests = append(tests, c)
+		}
+	}
+	if len(tests) == 0 {
+		return Routing{}, false
+	}
+	return ungrantedTestGovernanceGap(Action{Files: tests, Unexamined: tests})
 }
 
 // documentGovernanceGap is the typed knowledge limit for a document whose governance could
@@ -1074,7 +1544,7 @@ const (
 // this repair cannot widen the set of gaps that stop a run.
 func closureOwnerFor(kind string) gapClosureOwner {
 	switch strings.TrimSpace(kind) {
-	case "coverage-unexamined", gapTestGovernanceUnestablished,
+	case gapCoverageUnexamined, gapTestGovernanceUnestablished,
 		gapDocumentGovernanceUnestablished, gapUnsupportedArtifact:
 		// Neither is closable by reasoning: one needs a derivation to run, the other a
 		// production neighbour in the plan. A round spent thinking closes neither.
@@ -1151,23 +1621,85 @@ func (e *Engine) disposeUnclosedGap(taskID, domain string, routing Routing, acti
 	switch routing.Gap.Kind {
 	case gapTestGovernanceUnestablished, gapDocumentGovernanceUnestablished, gapUnsupportedArtifact:
 		missing = routing.Gap.Scope
+	case gapCoverageUnexamined, gapCoverageAbsent, gapCoverageBlindSpot:
+		// The gap's own typed disposition: its Scope IS the unresolved set the
+		// one owner computed (renderCoverageGap), so a member settled by its
+		// prospective unit or a derivation is never reported missing here.
+		// Recomputing the set from Action.Unexamined reported a granted create
+		// as unexamined and prescribed graph examination of a file that does
+		// not exist (objective 49, run 7). Only the members this plan still
+		// depends on remain a limit.
+		//
+		// All three coverage kinds take this one disposition (ruling 80). A
+		// region gap is closed only by a derivation over its present members
+		// or by prospective authority over its absent creates -- neither of
+		// which a human's answer supplies -- so an unresolved region member is
+		// a knowledge limit like an unexamined one, never converted into a
+		// question about proceeding with it open.
+		//
+		// Read from the episode's ledger entry -- its current Gap, rendered
+		// condition and typed disposition, as the episode's latest
+		// same-identity re-evaluation left them (reconcileCoverageGaps) --
+		// and consumed verbatim. Which members the plan still depends on was
+		// decided THERE, together with scope and condition; nothing here
+		// re-derives membership from the action, so no unresolved member can
+		// be dropped by a second rule.
+		current, registered := e.currentResolution(taskID, routing.Gap)
+		routing.Gap = current.Gap
+		if current.Routing.ClosesGap() {
+			routing.Condition = current.Routing.Condition
+		}
+		missing = append([]string(nil), current.Gap.Scope...)
+		if current.Disposition != nil {
+			missing = append([]string(nil), current.Disposition.Unresolved...)
+		}
+		if !registered {
+			// No routing registered this gap, so no typed re-evaluation ever
+			// decided which members the plan still depends on and there is no
+			// stored disposition to consume. Every production route registers
+			// a gap before disposing of it (registerRouting); this reading
+			// exists only for a gap handed here without one, and it can only
+			// shrink what is reported, never settle a member.
+			planned := map[string]bool{}
+			for _, f := range action.Files {
+				planned[path.Clean(strings.TrimSpace(f))] = true
+			}
+			kept := missing[:0]
+			for _, f := range missing {
+				if planned[path.Clean(strings.TrimSpace(f))] {
+					kept = append(kept, f)
+				}
+			}
+			missing = kept
+		}
 	}
 	// Coverage the plan no longer depends on is not a limit: the architect
 	// narrowed onto examined material, which is the legitimate escape, and the
 	// remaining stop is an ordinary escalation.
-	if closureOwnerFor(routing.Gap.Kind) == closureOwnerOutOfBand && len(missing) > 0 {
+	if (closureOwnerFor(routing.Gap.Kind) == closureOwnerOutOfBand || isCoverageGapKind(routing.Gap.Kind)) && len(missing) > 0 {
 		routing.Basis = BasisLacksKnowledge
-		routing.Closes = remedyForGap(routing.Gap, e.Repo.Root, domain)
+		routing.Closes = remedyForCoverage(routing.Gap, action, e.Repo.Root, domain)
 		limit := &knowledgeLimitError{Condition: routing.Condition, Missing: missing, Closes: routing.Closes}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-			"knowledge-limited: no actor reachable from a governed run can examine "+
-				strings.Join(missing, ", ")+"; this is not a decision a human can supply. "+
+			"knowledge-limited: no actor reachable from a governed run can establish what "+
+				strings.Join(missing, ", ")+" lacks; this is not a decision a human can supply. "+
 				"closes: "+routing.Closes, routing))
 		return routing, limit
 	}
 	routing.Route = RouteHuman
 	routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
 	return routing, nil
+}
+
+// disposeExhaustedGap is the exhausted-gap disposal the post-authorization
+// route takes once the gap its answer left open has spent its closure budget.
+// It is disposeUnclosedGap -- the one typed owner of what an unclosed gap
+// becomes -- over the gap and the facts it was decided on, so this route can
+// neither convert a coverage gap of any of the three kinds to a human question
+// by hand nor recompute what it lacks from anything but the gap's own
+// disposition.
+func (e *Engine) disposeExhaustedGap(taskID, domain string, gap Routing, action Action) (Routing, error) {
+	return e.disposeUnclosedGap(taskID, domain, gap, action)
 }
 
 // knowledgeLimitError reports a bounded knowledge gap that NO actor reachable
@@ -1275,4 +1807,221 @@ func (e *Engine) premisesUnderRecordedAuthority(taskID string, d architectureDec
 		contradicted = append(contradicted, c)
 	}
 	return kept, contradicted
+}
+
+// The three coverage-gap kinds the one typed disposition owner decides.
+const (
+	gapCoverageUnexamined = "coverage-unexamined"
+	gapCoverageAbsent     = "coverage-absent"
+	gapCoverageBlindSpot  = "coverage-blind-spot"
+)
+
+// isCoverageGapKind reports membership in the closed set above.
+func isCoverageGapKind(kind string) bool {
+	switch kind {
+	case gapCoverageUnexamined, gapCoverageAbsent, gapCoverageBlindSpot:
+		return true
+	}
+	return false
+}
+
+// gapSettlement is the governed mechanism that settled one gap member.
+type gapSettlement string
+
+const (
+	// settledByExamination: a per-file preflight examined a file confirmed
+	// present at the pinned world. Settles coverage-unexamined only.
+	settledByExamination gapSettlement = "examination"
+	// settledByProspectiveGrant: the file is confirmed absent at the pinned
+	// world and a member of a valid recorded prospective authority unit.
+	settledByProspectiveGrant gapSettlement = "prospective-grant"
+	// settledByDerivation: a recognised derivation that satisfies the gap's
+	// requirement covers the file, which is confirmed present.
+	settledByDerivation gapSettlement = "derivation"
+)
+
+// GapDisposition is the ONE typed answer to "which members of this coverage gap
+// remain unresolved" (DF-30, rulings 79, 80 and 176). Every routing site --
+// initial and supplied-plan routing, the post-authorization re-evaluation, the
+// escalation, the exhausted-gap disposal and the same-identity reconciliation
+// of a prior gap -- obtains it from disposeCoverageGap and renders it through
+// renderCoverageGap, so typed scope and readable condition cannot diverge.
+type GapDisposition struct {
+	Kind string
+	// Unresolved are the members no applicable mechanism settled, in member
+	// order. The gap is open exactly when it is non-empty.
+	Unresolved []string
+	// Settled names, per settled member, the mechanism that settled it.
+	Settled map[string]gapSettlement
+	// Withdrawn are members the modifying plan no longer names. Not settled:
+	// the plan stopped depending on them, which reconcileCoverageGaps alone
+	// decides, and a later routing that names one again reopens the episode.
+	Withdrawn []string `json:",omitempty"`
+}
+
+// Open reports whether any member remains unresolved.
+func (d GapDisposition) Open() bool { return len(d.Unresolved) != 0 }
+
+// Narrowed reports whether any member was settled, by whichever mechanism, or
+// withdrawn by the plan: the gap no longer describes every member it was
+// decided over.
+func (d GapDisposition) Narrowed() bool { return len(d.Settled) != 0 || len(d.Withdrawn) != 0 }
+
+// disposeCoverageGap decides each member of a coverage gap of kind, and only
+// with the mechanism that kind admits:
+//
+//   - examination settles a member only of coverage-unexamined, and only when
+//     the file is confirmed PRESENT at the pinned world and its own per-file
+//     preflight examined it. A region gap's question is not "was this present
+//     file examined", so examination never settles one;
+//   - a prospective grant settles a member only when the file is confirmed
+//     ABSENT at the pinned world and belongs to a VALID recorded authority
+//     unit every member of which -- with any unit it depends on -- the world
+//     also confirms absent. Absence alone, a merely declared surface, and a
+//     unit only part of which is confirmed absent settle nothing;
+//   - a derivation settles a member it covers with a satisfying requirement
+//     only when the file is confirmed PRESENT at the pinned world: no
+//     derivation can observe a file that does not exist, and a member whose
+//     presence is unknown is not thereby known to exist. In a real run every
+//     derived anchor is over a confirmed-present file (coverPlannedAtWorld),
+//     and prospective grants are never projected into ordinary coverage.
+//
+// Every other member stays unresolved. Missing presence, probe or grant data
+// is never settlement: a member in neither Present nor Absent is settled by no
+// mechanism, whatever DerivedCoverage or prospective authority names -- even
+// when the pinned world was not read for any member. Members are canonicalised
+// as the gap identity is.
+func disposeCoverageGap(kind string, members []string, action Action, req Requirement) GapDisposition {
+	set := func(files []string) map[string]bool {
+		out := make(map[string]bool, len(files))
+		for _, f := range files {
+			out[path.Clean(strings.TrimSpace(f))] = true
+		}
+		return out
+	}
+	present, absent, examined := set(action.Present), set(action.Absent), set(action.Examined)
+	d := GapDisposition{Kind: kind, Settled: map[string]gapSettlement{}}
+	seen := map[string]bool{}
+	for _, m := range members {
+		f := path.Clean(strings.TrimSpace(m))
+		if f == "." || seen[f] {
+			continue
+		}
+		seen[f] = true
+		switch {
+		case kind == gapCoverageUnexamined && present[f] && examined[f]:
+			d.Settled[f] = settledByExamination
+		case absent[f] && action.settledByProspective(f, absent):
+			d.Settled[f] = settledByProspectiveGrant
+		case present[f]:
+			if closed, _ := derivationClosesGap(req, action.DerivedCoverage, []string{f}); closed {
+				d.Settled[f] = settledByDerivation
+				continue
+			}
+			d.Unresolved = append(d.Unresolved, f)
+		default:
+			d.Unresolved = append(d.Unresolved, f)
+		}
+	}
+	return d
+}
+
+// renderCoverageGap is the one rendering owner of a coverage gap: the routing,
+// its condition and its identity are all built from the SAME disposition, so a
+// narrowed gap names exactly its remaining members and no settled member is
+// still described as lacking authority. Nothing edits a rendered condition
+// afterwards; a re-evaluated gap is re-rendered here.
+//
+// A region gap's condition quotes the region's evidence, which names no file.
+// Once ANY member has been settled -- by prospective authority or by a
+// derivation alike (ruling 176) -- that evidence no longer describes the gap
+// alone, so the condition names the members that remain. Which mechanism
+// settled a member never decides whether the text is truthful. The text is a
+// function of the disposition and the episode's payload alone, so every route
+// that reaches one disposition of one episode renders one condition. The
+// payload is carried on the gap it renders: a gap's question travels with it.
+func renderCoverageGap(d GapDisposition, sem CoverageSemantics) Routing {
+	unresolved := append([]string(nil), d.Unresolved...)
+	gap := canonicalQuestion(GapIdentity{Kind: d.Kind, Scope: unresolved, Semantics: &sem})
+	files := strings.Join(unresolved, ", ")
+	narrowed := ""
+	if d.Narrowed() {
+		narrowed = "; unresolved planned file(s): " + files
+	}
+	switch d.Kind {
+	case gapCoverageUnexamined:
+		return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
+			Condition: "graph coverage is absent for planned file(s) the graph has not examined: " + files,
+			Gap:       gap}
+	case gapCoverageAbsent:
+		return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
+			Condition: "graph coverage is absent for the planned files: " + sem.Diagnostic + narrowed,
+			Gap:       gap}
+	default:
+		return Routing{Route: RouteCloseGap,
+			Condition: "Sensei reported missing coverage in the planned region: " + strings.Join(sem.Spots, ", ") + narrowed,
+			Gap:       gap}
+	}
+}
+
+// remedyForCoverage is remedyForGap for a gap whose members are read against
+// the pinned world, in its three states. A planned create the world confirms
+// absent cannot be examined and no graph refresh can cover it, so it is never
+// told to: its route is a declared prospective surface whose canonical grant is
+// recorded for the plan attempt. A member the world confirms present keeps the
+// graph-examination remedy. A member whose presence was never established is
+// given neither -- either would assume a fact nobody read -- and is told to
+// establish it first (presenceRemedy), even when no member's presence was read.
+func remedyForCoverage(gap GapIdentity, action Action, root, domain string) string {
+	if !isCoverageGapKind(gap.Kind) {
+		return remedyForGap(gap, root, domain)
+	}
+	set := func(files []string) map[string]bool {
+		out := make(map[string]bool, len(files))
+		for _, f := range files {
+			out[path.Clean(strings.TrimSpace(f))] = true
+		}
+		return out
+	}
+	present, absent := set(action.Present), set(action.Absent)
+	var creates, examinable, unknown []string
+	for _, f := range gap.Scope {
+		switch c := path.Clean(strings.TrimSpace(f)); {
+		case absent[c]:
+			creates = append(creates, f)
+		case present[c]:
+			examinable = append(examinable, f)
+		default:
+			unknown = append(unknown, f)
+		}
+	}
+	var parts []string
+	if len(creates) != 0 {
+		parts = append(parts, prospectiveSurfaceRemedy(creates))
+	}
+	if len(examinable) != 0 {
+		parts = append(parts, knowledgeLimitRemedy(root, domain, examinable))
+	}
+	if len(unknown) != 0 {
+		parts = append(parts, presenceRemedy(unknown))
+	}
+	return strings.Join(parts, "\n")
+}
+
+// presenceRemedy is the closure route of a member whose presence at the pinned
+// world is unknown: fail closed, and establish the fact before choosing a route.
+func presenceRemedy(files []string) string {
+	return "pinned-world presence is unknown for planned file(s): " + strings.Join(files, ", ") +
+		"; neither a prospective-surface grant nor a graph refresh can be prescribed until the pinned world's tree has " +
+		"been read and confirms whether each exists. The gap stays open: re-run routing once the pinned base is readable, " +
+		"then close each file by the route its confirmed presence admits, or remove it from the plan."
+}
+
+// prospectiveSurfaceRemedy is the closure route of a planned create absent at
+// the pinned world that holds no valid recorded prospective grant.
+func prospectiveSurfaceRemedy(creates []string) string {
+	return "prospective authority for planned create(s) absent at the pinned world: " + strings.Join(creates, ", ") +
+		"; a file that does not exist has no coverage to examine, so close it through the prospective-surface route: " +
+		"declare each one in prospective_surfaces (path, package, role, covering) so a canonical prospective grant is " +
+		"derived and recorded for this plan attempt, or remove it from the plan."
 }

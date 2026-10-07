@@ -88,13 +88,28 @@ func (e *Engine) applyPremiseResolutions(taskID string, resolutions []PremiseRes
 // new one when it continues none. The receipt's ID is what the closure
 // budget is spent against.
 //
-// A route continues an existing receipt when:
+// A coverage gap is one live episode of the task's resolution ledger, and its
+// receipt is that episode's: selected by the canonical episode key the
+// registered routing carries (bindEpisode bound it through the one
+// continuation discriminator, episodeLineage.continuation), so the resolution
+// ledger and the closure budget cannot disagree about which episode a replan
+// continues. A distinct qualified requirement is a distinct key, so it never
+// shares a receipt or a budget; a narrowed, widened, emptied or returned
+// scope keeps the key, so it never buys one. A scope-less observation the
+// ledger could not bind to one episode (GapIdentity.Ambiguous) continues no
+// receipt and is issued none: it gets no budget (spendClosure refuses it).
+//
+// Any other gap continues an existing receipt when:
 //   - the claim that produced it references the receipt by ID (claimRef); or
-//   - a receipt is open and unresolved after its round, and this route is the
-//     residue of that round: same kind, scope and world, and the same subject
-//     or no located subject at all. An unanswered question about a place does
-//     not fund a new question about the same place, and a premise that moved
+//   - a receipt is open and unresolved after its round, and this route
+//     continues it under the same discriminator: same kind and world, the
+//     same subject or no located subject at all, and a scope the receipt's
+//     opening shares, or none. An unanswered question about a place does not
+//     fund a new question about the same place, and a premise that moved
 //     from a path to a symbol is still the premise the round did not settle.
+//
+// A coverage claimRef continues only the canonical episode its receipt names:
+// it cannot fold a distinct qualified requirement into another's receipt.
 //
 // A receipt the round answered -- established or refuted -- is closed, so a
 // later premise about the same file is a different question with its own
@@ -106,13 +121,25 @@ func (e *Engine) premiseReceiptFor(taskID string, routing Routing, claimRef stri
 	if e.premises == nil {
 		e.premises = map[string][]*premiseReceipt{}
 	}
+	if routing.Gap.Ambiguous {
+		return &premiseReceipt{Gap: routing.Gap, Wordings: []string{routing.Condition}}
+	}
+	coverage := routing.Gap.Identified() && isCoverageGapKind(routing.Gap.Kind)
+	episode := ""
+	if coverage {
+		episode = canonicalQuestion(routing.Gap).Key()
+	}
 	receipts := e.premises[taskID]
 	if ref := strings.TrimSpace(claimRef); ref != "" {
 		for _, r := range receipts {
-			if r.ID == ref {
-				r.Wordings = appendWording(r.Wordings, routing.Condition)
-				return r
+			if r.ID != ref {
+				continue
 			}
+			if coverage && (!isCoverageGapKind(r.Gap.Kind) || canonicalQuestion(r.Gap).Key() != episode) {
+				break
+			}
+			r.Wordings = appendWording(r.Wordings, routing.Condition)
+			return r
 		}
 	}
 	if !routing.Gap.Identified() {
@@ -131,16 +158,19 @@ func (e *Engine) premiseReceiptFor(taskID string, routing Routing, claimRef stri
 	}
 	if routing.Gap.Identified() {
 		for _, r := range receipts {
-			// An open receipt continues its episode. The old test also required
-			// Outcome == unresolved, which excluded a receipt no round had
-			// answered yet (Outcome "") -- one more way to reach a fresh
-			// receipt, and therefore a fresh budget, for the same question.
-			// open() already excludes established and refuted, which are the
-			// two outcomes that genuinely END an episode.
+			// An open receipt continues its episode. open() excludes
+			// established and refuted, the two outcomes that genuinely END an
+			// episode; a receipt no round has answered yet (Outcome "") still
+			// continues, or the same question would buy a fresh budget.
 			if !r.open() {
 				continue
 			}
-			if continuesClosureEpisode(r, routing.Gap) == episodeUnrelated {
+			if coverage {
+				if !isCoverageGapKind(r.Gap.Kind) || canonicalQuestion(r.Gap).Key() != episode {
+					continue
+				}
+			} else if (episodeLineage{Kind: r.Gap.Kind, Subject: r.Gap.Subject, World: r.Gap.World, Question: r.Gap.Question,
+				Opening: r.Gap.Scope, Current: r.Gap.Scope, Members: r.Gap.Scope}).continuation(routing.Gap) == episodeUnrelated {
 				continue
 			}
 			r.Wordings = appendWording(r.Wordings, routing.Condition)
@@ -154,81 +184,6 @@ func (e *Engine) premiseReceiptFor(taskID string, routing Routing, claimRef stri
 	}
 	e.premises[taskID] = append(receipts, r)
 	return r
-}
-
-// episodeContinuation says WHY a replan belongs to an open closure episode, or
-// that it does not.
-//
-// Named cases rather than one boolean, because the rule has to be explicit and
-// each branch separately testable. In particular a degenerate replan is NOT
-// treated as "a scope that overlaps everything" -- that would silently make
-// unrelated gaps share an episode the moment one of them named no files.
-type episodeContinuation int
-
-const (
-	// episodeUnrelated: a different question. It gets its own receipt and its
-	// own budget, which is the discrimination sensei-code#97 established.
-	episodeUnrelated episodeContinuation = iota
-	// episodeSameScope: the replan named the same files.
-	episodeSameScope
-	// episodeOverlapping: the replan moved, narrowed or widened, and still
-	// concerns files the episode opened over.
-	episodeOverlapping
-	// episodeDegenerate: the replan named NO files during an active episode.
-	//
-	// Observed live at 14:32:21 on task-1789272620293170079: coverage collapsed
-	// to "0 anchor(s) over 0 planned file(s)". A plan that names nothing has not
-	// answered the question and has not become a different question, so it stays
-	// bound to the episode it is failing to close. It must never buy a round by
-	// evaporating the work surface.
-	episodeDegenerate
-)
-
-// continuesClosureEpisode decides whether a routing's gap continues the episode
-// this receipt opened.
-//
-// THE LAW: the retried actor may change its plan; it may not thereby change the
-// closure episode's identity. premise.go already states this about
-// PremiseResolution -- "authored by the architect but keyed by an engine-issued
-// ID, so what the model chooses is the outcome, not the identity" -- and the
-// lookup is where it was lost: selection recomputed the identity from the
-// architect's LATEST scope, so a replan selected a different receipt and
-// spendClosure, correctly keyed on that receipt's ID, handed out a fresh budget.
-//
-// Measured consequence on task-1789272620293170079 (2026-09-13): one
-// coverage-unexamined gap, scope 7 -> 5 -> 7 -> 0 -> 7 -> 6, six closure rounds
-// under closureBudget = 1.
-//
-// The comparison is against the receipt's STORED OPENING GAP, which is immutable
-// once issued, rather than against the current plan. Kind, World and Subject keep
-// discriminating exactly as before; only the scope test is relaxed from equality
-// to episode membership.
-func continuesClosureEpisode(r *premiseReceipt, gap GapIdentity) episodeContinuation {
-	if r.Gap.Kind != gap.Kind || r.Gap.World != gap.World {
-		return episodeUnrelated
-	}
-	// Subject unchanged from the previous rule: an equal subject continues, and
-	// a routing that names none continues whatever it landed in. Two premises
-	// about one file remain two questions.
-	if gap.Subject != r.Gap.Subject && gap.Subject != "" {
-		return episodeUnrelated
-	}
-	opening, replanned := normalizeEpisodeScope(r.Gap.Scope), normalizeEpisodeScope(gap.Scope)
-	switch {
-	case len(replanned) == 0:
-		// Explicitly its own case. A degenerate replan during an OPEN episode
-		// stays in it; it is not overlap and must not be described as overlap.
-		return episodeDegenerate
-	case len(opening) == 0:
-		// The episode opened over no files, so nothing constrains membership by
-		// path. Only Kind/World/Subject can discriminate, and they already did.
-		return episodeSameScope
-	case scopesEqual(opening, replanned):
-		return episodeSameScope
-	case scopesOverlap(opening, replanned):
-		return episodeOverlapping
-	}
-	return episodeUnrelated
 }
 
 // normalizeEpisodeScope is the cleaning the episode test and GapIdentity.Key

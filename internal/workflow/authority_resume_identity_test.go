@@ -1734,3 +1734,1791 @@ func TestAResumeOverADirtyCanonicalCheckoutRefusesBeforeConsumingTheAnswer(t *te
 	// checkout, which the base check -- decided first -- would have preempted.
 	assertRefusedBeforeTheAnswer(t, e, seen, consumed, before, after, event.WorkflowDirtyCanonicalRefused)
 }
+
+// ---------------------------------------------------------------------------
+// DF-30 (objective 59) -- THE GAP LIFECYCLE. A coverage gap is one identity
+// observed, re-evaluated, authorized, exhausted and disposed of across several
+// production transitions. Each witness below drives registerRouting, the one
+// P9 sequence the proceed, escalate and post-authorization routes all run, over
+// routings the production router (routeAuthorityForAction, afterAuthorization)
+// computed, with grants recorded through the production recorder.
+// ---------------------------------------------------------------------------
+
+// df30Engine is an engine routing df30Attempt for taskID, with a durable record.
+func df30Engine(t *testing.T, taskID string) *Engine {
+	t.Helper()
+	return df30EngineOn(t, sessionStore(t), taskID)
+}
+
+// df30EngineOn is df30Engine over an existing durable record: a restarted
+// process, which rebuilds its ledger from store.
+func df30EngineOn(t *testing.T, store *session.Store, taskID string) *Engine {
+	t.Helper()
+	e := &Engine{Bus: event.NewBus(), Store: store, SessionID: "s1", pending: map[string]chan string{}}
+	attempt := df30Attempt()
+	attempt.TaskID = taskID
+	e.notePlanAttemptStarted(taskID, attempt.ID)
+	e.mu.Lock()
+	e.planAttemptsOf(taskID).pending = attempt
+	e.mu.Unlock()
+	return e
+}
+
+// df30Record writes a prospective grant record for df30Attempt through the
+// production recorder.
+func df30Record(t *testing.T, e *Engine, taskID string, grants []prospectiveGrant) {
+	t.Helper()
+	if err := e.recordProspectiveGrants(taskID, "prospective authority recorded during the closure round", df30Recorded(grants)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// df30NextAttempt makes a fresh plan attempt id, durably started for taskID at
+// the pinned world, the one routing has pending: a re-plan of the same task.
+func df30NextAttempt(t *testing.T, e *Engine, taskID, id string) {
+	t.Helper()
+	e.notePlanAttemptStarted(taskID, id)
+	e.mu.Lock()
+	e.planAttemptsOf(taskID).pending = planAttempt{ID: id, TaskID: taskID, World: prospectiveWorld}
+	e.mu.Unlock()
+}
+
+// df30RecordPending writes a prospective grant record for the attempt routing
+// has pending, through the production recorder.
+func df30RecordPending(t *testing.T, e *Engine, taskID string, grants []prospectiveGrant) {
+	t.Helper()
+	rec := prospectiveRecord{PlanAttemptID: e.pendingPlanAttempt(taskID).ID, World: prospectiveWorld, Grants: grants}
+	if err := e.recordProspectiveGrants(taskID, "prospective authority recorded during the closure round", rec); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// openCoverageGaps are the coverage identities open for taskID at world.
+func openCoverageGaps(e *Engine, taskID, world string) []AuthorityResolution {
+	tr := e.gapResolutions(taskID)
+	pending := e.pendingPlanAttempt(taskID).ID
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	var out []AuthorityResolution
+	for _, key := range tr.order {
+		if r := tr.view(key, pending); r.Open() && r.Gap.World == world && isCoverageGapKind(r.Gap.Kind) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func resolutionOf(e *Engine, taskID string, gap GapIdentity) AuthorityResolution {
+	tr := e.gapResolutions(taskID)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if r := tr.byKey[gap.Key()]; r != nil {
+		return *r
+	}
+	return AuthorityResolution{}
+}
+
+// assertEpisodeOfKind is assertOneEpisodeOwnedBy for a run whose later
+// routing may legitimately raise a gap of ANOTHER kind -- after authorization
+// the unexamined question is asked beside a region episode. The identities
+// that existed stay, in order, and no second identity of the episode's own
+// kind and world is opened for its remaining members.
+func assertEpisodeOfKind(t *testing.T, e *Engine, taskID string, opened GapIdentity, before gapLedger, owner string) AuthorityResolution {
+	t.Helper()
+	after := ledgerOf(e, taskID)
+	if len(after.order) < len(before.order) || !sameFiles(after.order[:len(before.order)], before.order) {
+		t.Fatalf("the re-evaluation changed the ledger's identities:\n before %q\n after  %q", before.order, after.order)
+	}
+	tr := e.gapResolutions(taskID)
+	for _, key := range after.order[len(before.order):] {
+		if g := tr.byKey[key].Gap; g.Kind == opened.Kind && g.World == opened.World {
+			t.Fatalf("a second %s identity %q was opened beside the episode %q", g.Kind, key, opened.Key())
+		}
+	}
+	key := opened.Key()
+	if after.owners[key] != owner {
+		t.Fatalf("the question owner of %s is %q, want %q (it was %q)", key, after.owners[key], owner, before.owners[key])
+	}
+	r := resolutionOf(e, taskID, opened)
+	if r.Gap.Key() != key {
+		t.Fatalf("the episode's current form has key %q, want the key it opened with %q", r.Gap.Key(), key)
+	}
+	return r
+}
+
+// gapLedger is the P9 ledger state a narrowing must leave unchanged: which
+// identities exist, in order, and which plan attempt owns each one's question.
+type gapLedger struct {
+	order  []string
+	owners map[string]string
+}
+
+func ledgerOf(e *Engine, taskID string) gapLedger {
+	tr := e.gapResolutions(taskID)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	l := gapLedger{order: append([]string(nil), tr.order...), owners: map[string]string{}}
+	for k, v := range tr.observedBy {
+		l.owners[k] = v
+	}
+	return l
+}
+
+// assertOneEpisode proves a re-evaluation of opened, however it narrowed it,
+// kept ONE ledger identity: no entry was added or reordered, the resolution
+// count is unchanged, the entry keyed by the gap as it opened holds the current
+// narrowed form (whose Key is still that key), and its live question is owned
+// by the attempt the episode's lifecycle now names (liveOwner). It returns the
+// current form.
+func assertOneEpisode(t *testing.T, e *Engine, taskID string, opened GapIdentity, before gapLedger) AuthorityResolution {
+	t.Helper()
+	if before.owners[opened.Key()] == "" {
+		t.Fatalf("premise: no plan attempt owns the question of %s", opened.Key())
+	}
+	return assertOneEpisodeOwnedBy(t, e, taskID, opened, before, liveOwner(t, e, taskID, opened, before.owners[opened.Key()]))
+}
+
+// liveOwner is the plan attempt that must own the live question of the
+// episode opened after a re-evaluation (DF-30A review f1): while the episode
+// is open, the attempt currently routing it -- never, merely because it opened
+// the episode, an earlier one. An episode the re-evaluation closed asks no
+// live question; its owner is the one it had, or the attempt that last
+// observed it.
+func liveOwner(t *testing.T, e *Engine, taskID string, opened GapIdentity, previous string) string {
+	t.Helper()
+	pending := e.pendingPlanAttempt(taskID).ID
+	tr := e.gapResolutions(taskID)
+	e.mu.Lock()
+	open := tr.view(opened.Key(), pending).Open()
+	by := tr.observedBy[opened.Key()]
+	e.mu.Unlock()
+	if open || by == pending {
+		return pending
+	}
+	return previous
+}
+
+// assertOneEpisodeOwnedBy is assertOneEpisode with the owning attempt named.
+func assertOneEpisodeOwnedBy(t *testing.T, e *Engine, taskID string, opened GapIdentity, before gapLedger, owner string) AuthorityResolution {
+	t.Helper()
+	after := ledgerOf(e, taskID)
+	if !sameFiles(after.order, before.order) {
+		t.Fatalf("the re-evaluation changed the ledger's identities:\n before %q\n after  %q", before.order, after.order)
+	}
+	if got := len(e.gapResolutions(taskID).byKey); got != len(before.order) {
+		t.Fatalf("the ledger holds %d resolutions, want %d", got, len(before.order))
+	}
+	key := opened.Key()
+	if after.owners[key] != owner {
+		t.Fatalf("the question owner of %s is %q, want %q (it was %q)", key, after.owners[key], owner, before.owners[key])
+	}
+	r := resolutionOf(e, taskID, opened)
+	if r.Gap.Key() != key {
+		t.Fatalf("the episode's current form has key %q, want the key it opened with %q", r.Gap.Key(), key)
+	}
+	if r.Routing.ClosesGap() && r.Routing.Gap.Key() != key {
+		t.Fatalf("the episode's current routing names another identity %q", r.Routing.Gap.Key())
+	}
+	return r
+}
+
+// W5 -- THE CUT POINT. A coverage-unexamined gap is open over absent planned
+// creates; during the closure round the matching prospective grant is recorded
+// through the production recorder; the same gap is re-evaluated from that
+// record before any further decision. A fully granted gap closes and the run
+// proceeds; a partly granted one keeps only its ungranted member.
+func TestDF30W5AGrantRecordedInTheClosureRoundSettlesTheSameGap(t *testing.T) {
+	decl, grants, out := df30Measured(t)
+	scoped := scopedPreflight(t, neighbourCovered)
+	d := architectureDecision{Decision: "proceed", Mode: ModeModify, Files: df30Planned(), ProspectiveSurfaces: decl}
+	for name, c := range map[string]struct {
+		recorded []prospectiveGrant
+		want     []string
+	}{
+		"every create granted": {grants, nil},
+		"one create granted":   {withoutGrantFor(grants, existingWindows), []string{existingWindows}},
+		"no create granted":    {nil, []string{existingUnix, existingWindows}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			taskID := "task-df30-w5"
+			e := df30Engine(t, taskID)
+			before := df30Action(out, e.prospectiveUnitsFor(taskID, d))
+			opened := routeAuthorityForAction(scoped, nil, before)
+			if !opened.ClosesGap() || !sameFiles(opened.Gap.Scope, []string{existingUnix, existingWindows}) {
+				t.Fatalf("premise: before any grant the creates hold the gap open: %+v", opened)
+			}
+			opened.Gap.World = prospectiveWorld
+			if _, r := e.registerRouting(taskID, prospectiveWorld, opened, before, scoped, d, true); !r.Open() {
+				t.Fatalf("premise: the gap is registered open: %+v", r)
+			}
+			ledger := ledgerOf(e, taskID)
+
+			// The closure round re-plans: a different plan attempt, whose own
+			// grant is recorded through the production recorder.
+			df30NextAttempt(t, e, taskID, "pa-df30-w5-replan")
+			df30RecordPending(t, e, taskID, c.recorded)
+
+			after := df30Action(out, e.prospectiveUnitsFor(taskID, d))
+			fresh := routeAuthorityForAction(scoped, nil, after)
+			if fresh.Gap.Identified() {
+				fresh.Gap.World = prospectiveWorld
+			}
+			routed, _ := e.registerRouting(taskID, prospectiveWorld, fresh, after, scoped, d, true)
+			current := assertOneEpisode(t, e, taskID, opened.Gap, ledger)
+			open := openCoverageGaps(e, taskID, prospectiveWorld)
+			if c.want == nil {
+				if !routed.Granted() || len(open) != 0 {
+					t.Fatalf("a fully granted gap did not close and let the run proceed: %+v open=%+v", routed, open)
+				}
+				if dp := current.Disposition; dp == nil || dp.Open() {
+					t.Fatalf("the gap identity was not re-evaluated to settled: %+v", dp)
+				}
+				return
+			}
+			if len(open) != 1 || !sameFiles(open[0].Gap.Scope, c.want) || !routed.ClosesGap() || !sameFiles(routed.Gap.Scope, c.want) {
+				t.Fatalf("the re-evaluated gap is not exactly its ungranted members %v: routed=%+v open=%+v", c.want, routed, open)
+			}
+			if routed.Gap.Key() != opened.Gap.Key() || open[0].Gap.Key() != opened.Gap.Key() {
+				t.Fatalf("the narrowed gap is not the identity that opened: routed %q open %q opened %q",
+					routed.Gap.Key(), open[0].Gap.Key(), opened.Gap.Key())
+			}
+			if len(c.want) == 2 {
+				return
+			}
+			assertNarrowedAnswersReturnToTheEpisode(t, e, taskID, opened.Gap, routed)
+		})
+	}
+}
+
+// assertNarrowedAnswersReturnToTheEpisode proves a question asked, and an
+// answer given, about the narrowed form of a gap belong to the episode it
+// opened as -- its one ledger identity -- and to the plan attempt CURRENTLY
+// routing it, not to the attempt that opened it (DF-30A review f1). The
+// question is asked and answered through the real authority rendezvous
+// (awaitHuman), and the answer is consumed through gapSettlement: it
+// authorizes the current attempt, while the opening attempt and an unrelated
+// attempt remain unsettled. A restarted process restores no authority from the
+// record (RULING-181).
+func assertNarrowedAnswersReturnToTheEpisode(t *testing.T, e *Engine, taskID string, opened GapIdentity, routed Routing) {
+	t.Helper()
+	narrowed := routed.Gap
+	opener := df30Attempt().ID
+	current := e.pendingPlanAttempt(taskID).ID
+	if current == opener {
+		t.Fatalf("premise: the episode is routed by a later attempt than the one that opened it (%q)", opener)
+	}
+	if owner := e.questionOwner(taskID, narrowed); owner != current {
+		t.Fatalf("the narrowed question is about %q, want the attempt currently routing it %q (opener %q)", owner, current, opener)
+	}
+	if authorized, settled := e.gapSettlement(taskID, routed); authorized || settled {
+		t.Fatal("premise: the narrowed episode is unsettled before anyone answers it")
+	}
+
+	// Ask through the one rendezvous, and answer it.
+	ledger := ledgerOf(e, taskID)
+	d := architectureDecision{Decision: "escalate", Mode: ModeModify, Files: narrowed.Scope, HumanQuestion: "May the run proceed?"}
+	errc := make(chan error, 1)
+	go func() {
+		_, err := e.awaitHuman(context.Background(), nil, certifiedStart{}, taskID, d, routed.Condition, narrowed)
+		errc <- err
+	}()
+	waitForPending(t, e, taskID)
+	if !e.ResolveHuman(taskID, "1") {
+		t.Fatal("the narrowed question was not pending at the rendezvous")
+	}
+	if err := <-errc; err != nil {
+		t.Fatalf("the live answer was refused: %v", err)
+	}
+	tr := e.gapResolutions(taskID)
+	e.mu.Lock()
+	answers := append([]gapAnswer(nil), tr.settlements[opened.Key()]...)
+	e.mu.Unlock()
+	if r := assertOneEpisodeOwnedBy(t, e, taskID, opened, ledger, current); len(answers) != 1 ||
+		answers[0].owner != current || !sameFiles(r.Gap.Scope, narrowed.Scope) {
+		t.Fatalf("the answer was not recorded against the episode that opened, for the attempt that asked it: %+v", answers)
+	}
+	var recorded *resolvedAuthority
+	history, err := e.Store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ev := range history {
+		var res resolvedAuthority
+		if ev.TaskID == taskID && ev.Kind == event.AuthorityResolved && json.Unmarshal(ev.Payload, &res) == nil && res.Gap != nil {
+			recorded = &res
+		}
+	}
+	// The durable record names the attempt and the narrowed form it was
+	// asked about; it carries no live episode binding (RULING-181).
+	if recorded == nil || recorded.PlanAttemptID != current || recorded.Gap.Opening != nil || !sameFiles(recorded.Gap.Scope, narrowed.Scope) {
+		t.Fatalf("the durable answer does not name the attempt that asked it and the form it is about: %+v", recorded)
+	}
+
+	// Consumed by the live boundary, for the attempt that asked it -- and by
+	// no other.
+	if authorized, settled := e.gapSettlement(taskID, routed); !authorized || !settled {
+		t.Fatalf("the explicit answer did not settle the episode for the attempt currently routing it: authorized=%v settled=%v", authorized, settled)
+	}
+	for _, other := range []string{opener, "pa-df30-unrelated"} {
+		e.notePlanAttemptStarted(taskID, other)
+		e.mu.Lock()
+		e.planAttemptsOf(taskID).pending = planAttempt{ID: other, TaskID: taskID, World: prospectiveWorld}
+		e.mu.Unlock()
+		if authorized, settled := e.gapSettlement(taskID, routed); authorized || settled {
+			t.Fatalf("attempt %q consumed an answer given about attempt %q", other, current)
+		}
+	}
+	e.mu.Lock()
+	e.planAttemptsOf(taskID).pending = planAttempt{ID: current, TaskID: taskID, World: prospectiveWorld}
+	e.mu.Unlock()
+
+	// The question as a deferral would have recorded it, so a restarted
+	// process reads it back.
+	q := DeferredAuthority{Condition: routed.Condition, TaskID: taskID, SessionID: "s1", Scope: narrowed.Scope,
+		ScopeRecorded: true, Gap: &narrowed, PlanAttemptID: current}
+	if err := e.Store.Append(event.New("s1", taskID, event.SourceSystem, event.WorkflowAwaitingAuthority, q.Condition, q)); err != nil {
+		t.Fatal(err)
+	}
+	assertRecordedCoverageQuestionFailsClosed(t, e, taskID, current, narrowed, routed)
+}
+
+// assertRecordedCoverageQuestionFailsClosed proves the RULING-181 restore
+// boundary for a coverage question and answer the live process recorded: a
+// fresh process reading the record installs no historical authority -- the
+// recorded answer settles nothing -- and refuses, typed, to put the restored
+// question to a person, because the record carries no episode it can
+// authenticate.
+func assertRecordedCoverageQuestionFailsClosed(t *testing.T, e *Engine, taskID, owner string, asked GapIdentity, routed Routing) {
+	t.Helper()
+	raw, err := json.Marshal(asked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var recorded GapIdentity
+	if err := json.Unmarshal(raw, &recorded); err != nil {
+		t.Fatal(err)
+	}
+	if recorded.Opening != nil || recorded.Semantics != nil {
+		t.Fatalf("a durable record carries live episode state: %s", raw)
+	}
+	restored := &Engine{Bus: event.NewBus(), Store: e.Store, SessionID: "s1", pending: map[string]chan string{}}
+	restored.notePlanAttemptStarted(taskID, owner)
+	restored.mu.Lock()
+	restored.planAttemptsOf(taskID).pending = planAttempt{ID: owner, TaskID: taskID, World: prospectiveWorld}
+	restored.mu.Unlock()
+	for _, g := range []GapIdentity{recorded, routed.Gap} {
+		if authorized, settled := restored.gapSettlement(taskID, Routing{Gap: g}); authorized || settled {
+			t.Fatalf("a restarted process installed the recorded coverage answer as authority: authorized=%v settled=%v", authorized, settled)
+		}
+	}
+	r := resolutionOf(restored, taskID, recorded)
+	if !r.restored || !r.Open() || r.Disposition != nil {
+		t.Fatalf("the restored coverage identity is not preserved unresolved and unauthenticated: %+v", r)
+	}
+	refusal := restored.unauthenticatedCoverageRestore(taskID, recorded)
+	if refusal == nil || refusal.Subject != restorationSubjectCoverageEpisode || refusal.Binding != RestorationRecordUnreadable {
+		t.Fatalf("the restored coverage question is not refused before it is asked: %+v", refusal)
+	}
+	if _, err := ParseRestorationRefusal(mustJSON(t, refusal)); err != nil {
+		t.Fatalf("the refusal is not a valid typed restoration refusal: %v", err)
+	}
+}
+
+func mustJSON(t *testing.T, v any) json.RawMessage {
+	t.Helper()
+	raw, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// W5 -- AN OVERLAPPING OR WIDER RE-PLAN CONTINUES THE EPISODE. The retried
+// architect may move, narrow or widen its plan; it may not thereby change the
+// episode's identity (episodeLineage.continuation). A coverage gap a later plan
+// attempt reports over members that overlap the episode's is that episode,
+// updated in place: one ledger identity, its key and position unchanged, its
+// live question owned by the attempt now routing it, never a second scope-derived entry. A member the re-plan withdraws
+// leaves its scope; a member it adds joins it; a question and answer about the
+// widened form return to the episode live, and a restart restores no
+// authority from them (RULING-181).
+func TestDF30W5AnOverlappingOrWiderReplanContinuesTheEpisode(t *testing.T) {
+	_, _, out := df30Measured(t)
+	scoped := scopedPreflight(t, neighbourCovered)
+	extra := "internal/session/zz_present_unexamined.go"
+	const taskID = "task-df30-w5-overlap"
+	e := df30Engine(t, taskID)
+	route := func(planned, unexamined []string) Routing {
+		t.Helper()
+		action := df30Action(out, nil)
+		action.Files, action.Unexamined = planned, unexamined
+		for _, f := range planned {
+			if f == extra {
+				action.Present = append(action.Present, extra)
+			}
+		}
+		fresh := routeAuthorityForAction(scoped, nil, action)
+		if !fresh.ClosesGap() || !sameFiles(fresh.Gap.Scope, unexamined) {
+			t.Fatalf("premise: the routing reports exactly %v: %+v", unexamined, fresh)
+		}
+		fresh.Gap.World = prospectiveWorld
+		d := architectureDecision{Decision: "proceed", Mode: ModeModify, Files: planned}
+		routed, r := e.registerRouting(taskID, prospectiveWorld, fresh, action, scoped, d, true)
+		if !r.Open() {
+			t.Fatalf("the continued episode is not open: %+v", r)
+		}
+		return routed
+	}
+	opened := route(df30Planned(), []string{existingUnix, existingWindows})
+	ledger := ledgerOf(e, taskID)
+
+	var moved []string
+	for _, f := range df30Planned() {
+		if f != existingUnix {
+			moved = append(moved, f)
+		}
+	}
+	for _, c := range []struct {
+		name, attempt       string
+		planned, unexamined []string
+	}{
+		{"moved", "pa-df30-w5-moved", append(moved, extra), []string{existingWindows, extra}},
+		{"wider", "pa-df30-w5-wider", append(df30Planned(), extra), []string{existingUnix, existingWindows, extra}},
+	} {
+		df30NextAttempt(t, e, taskID, c.attempt)
+		routed := route(c.planned, c.unexamined)
+		current := assertOneEpisode(t, e, taskID, opened.Gap, ledger)
+		if routed.Gap.Key() != opened.Gap.Key() || !sameFiles(current.Gap.Scope, c.unexamined) || current.Routing.Condition != routed.Condition {
+			t.Fatalf("%s: the re-plan did not continue the episode in place: routed=%+v current=%+v", c.name, routed, current)
+		}
+		for _, f := range []string{existingUnix, existingWindows, extra} {
+			named := false
+			for _, u := range c.unexamined {
+				named = named || u == f
+			}
+			if named != strings.Contains(routed.Condition, f) {
+				t.Fatalf("%s: scope %v and condition disagree about %s: %q", c.name, c.unexamined, f, routed.Condition)
+			}
+		}
+		if c.name == "wider" {
+			assertNarrowedAnswersReturnToTheEpisode(t, e, taskID, opened.Gap, routed)
+		}
+	}
+}
+
+// W10 -- UNPROBED ACTION. A routing whose action carries neither Examined nor
+// Unexamined data settles nothing by examination: an open two-file gap keeps
+// both members -- and outranks the grant such a routing would reach -- unless
+// another positive mechanism settles one. With one exact grant, exactly the
+// other remains.
+func TestDF30W10AnUnprobedActionPreservesTheGap(t *testing.T) {
+	decl, grants, out := df30Measured(t)
+	scoped := scopedPreflight(t, neighbourCovered)
+	d := architectureDecision{Decision: "proceed", Mode: ModeModify, Files: df30Planned(), ProspectiveSurfaces: decl}
+	for name, c := range map[string]struct {
+		recorded []prospectiveGrant
+		want     []string
+	}{
+		"no settling mechanism": {nil, []string{existingUnix, existingWindows}},
+		"one exact grant":       {withoutGrantFor(grants, existingWindows), []string{existingWindows}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			taskID := "task-df30-w10"
+			e := df30Engine(t, taskID)
+			// The payload the router writes for this gap under this preflight.
+			sem := coverageSemantics(gapCoverageUnexamined, readBlindSpots(scoped.BlindSpots).Coverage, "")
+			prior := Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge, Gap: GapIdentity{Kind: gapCoverageUnexamined,
+				Scope: []string{existingUnix, existingWindows}, World: prospectiveWorld, Semantics: &sem}}
+			e.registerRouting(taskID, prospectiveWorld, prior, df30Action(out, nil), scoped, d, true)
+			ledger := ledgerOf(e, taskID)
+			df30NextAttempt(t, e, taskID, "pa-df30-w10-replan")
+			if c.recorded != nil {
+				df30RecordPending(t, e, taskID, c.recorded)
+			}
+			unprobed := df30Action(out, e.prospectiveUnitsFor(taskID, d))
+			unprobed.Examined, unprobed.Unexamined = nil, nil
+			fresh := routeAuthorityForAction(scoped, nil, unprobed)
+			if !fresh.Granted() {
+				t.Fatalf("premise: the unprobed routing alone would grant: %+v", fresh)
+			}
+			routed, _ := e.registerRouting(taskID, prospectiveWorld, fresh, unprobed, scoped, d, true)
+			open := openCoverageGaps(e, taskID, prospectiveWorld)
+			if routed.Granted() || len(open) != 1 || !sameFiles(open[0].Gap.Scope, c.want) || !sameFiles(routed.Gap.Scope, c.want) {
+				t.Fatalf("missing probe data settled a member, or the open gap was overridden by a grant: routed=%+v open=%+v", routed, open)
+			}
+			assertOneEpisode(t, e, taskID, prior.Gap, ledger)
+			if routed.Gap.Key() != prior.Gap.Key() || open[0].Gap.Key() != prior.Gap.Key() {
+				t.Fatalf("the preserved or narrowed gap is not the identity that opened: routed %q open %q", routed.Gap.Key(), open[0].Gap.Key())
+			}
+		})
+	}
+}
+
+// W14 (supplemental, component level; TestDF30W14TheProductionLifecycleDecidesOneEpisode
+// is the production witness) -- GAP LIFECYCLE ORDER. For each coverage-gap kind, entry
+// route and settling fact, a prior gap is re-evaluated as the same identity
+// before absence projection could deactivate it; only a fact authorized for the
+// kind settles a member; the outcome is the same through either entry route;
+// scope and condition describe the same members; an unresolved member stays
+// open and a settled identity closes.
+func TestDF30W14TheGapLifecycleReEvaluatesBeforeAbsenceProjection(t *testing.T) {
+	create, examinedFile := existingUnix, df30Main
+	planned := []string{existingS, examinedFile, create}
+	decl := existingDeclarations()[:1]
+	anchors := derivedAnchorNaming(t, existingS, existingSibling)
+	grants, out := coverPlannedAtWorld(context.Background(), prospectiveWorld, planned, decl, anchors, worldOf(df30World()))
+	if len(grants) != 1 {
+		t.Fatalf("premise: the create is granted, got %+v", grants)
+	}
+	gate := func(body string) string {
+		return strings.Replace(body, `"approval_gate":"APPROVAL_GATE_NONE"`, `"approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"`, 1)
+	}
+	kinds := []struct {
+		kind  string
+		plain string
+	}{
+		// The region answer is about the three planned files, as the per-file
+		// probe of the post-authorization continuation requires.
+		{gapCoverageUnexamined, strings.Replace(strings.Replace(gatedNeighbourCovered, "APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED", "APPROVAL_GATE_NONE", 1),
+			`"file_count":2`, `"file_count":3`, 1)},
+		{gapCoverageAbsent, regionAbsent},
+		{gapCoverageBlindSpot, regionBlindSpot},
+	}
+	facts := []struct {
+		name  string
+		grant bool
+		apply func(a *Action)
+		// want maps a kind to the members that must remain unresolved.
+		want map[string][]string
+	}{
+		{"confirmed prospective grant", true, func(*Action) {}, map[string][]string{
+			gapCoverageUnexamined: {examinedFile}, gapCoverageAbsent: {examinedFile}, gapCoverageBlindSpot: {examinedFile}}},
+		{"examination of a present file", false, func(a *Action) {
+			a.Examined = append(a.Examined, examinedFile)
+			if a.Unexamined != nil {
+				a.Unexamined = []string{create}
+			}
+		}, map[string][]string{
+			gapCoverageUnexamined: {create}, gapCoverageAbsent: {examinedFile, create}, gapCoverageBlindSpot: {examinedFile, create}}},
+		{"canonical derivation", false, func(a *Action) { a.DerivedCoverage = append(a.DerivedCoverage, lockAnchors(examinedFile)...) }, map[string][]string{
+			gapCoverageUnexamined: {create}, gapCoverageAbsent: {create}, gapCoverageBlindSpot: {create}}},
+		{"grant and derivation", true, func(a *Action) { a.DerivedCoverage = append(a.DerivedCoverage, lockAnchors(examinedFile)...) }, map[string][]string{
+			gapCoverageUnexamined: nil, gapCoverageAbsent: nil, gapCoverageBlindSpot: nil}},
+		{"no settling fact", false, func(*Action) {}, map[string][]string{
+			gapCoverageUnexamined: {examinedFile, create}, gapCoverageAbsent: {examinedFile, create}, gapCoverageBlindSpot: {examinedFile, create}}},
+		// The same VALID recorded unit, but the pinned world's read of the
+		// create was not answered: it is neither confirmed absent nor present.
+		// A grant settles only a canonically confirmed absent CREATE, and the
+		// anchor projected onto it from its covering surface is no derivation
+		// over a file whose existence is unknown, so the create stays.
+		{"grant without confirmed absence", true, func(a *Action) { a.Absent = nil }, map[string][]string{
+			gapCoverageUnexamined: {examinedFile, create}, gapCoverageAbsent: {examinedFile, create}, gapCoverageBlindSpot: {examinedFile, create}}},
+	}
+	type outcome struct{ key, condition string }
+	for _, k := range kinds {
+		for _, f := range facts {
+			results := map[string]outcome{}
+			for _, entry := range []string{"initial", "post-authorization"} {
+				t.Run(k.kind+"/"+f.name+"/"+entry, func(t *testing.T) {
+					taskID := "task-df30-w14"
+					e := df30Engine(t, taskID)
+					pinWorld(t, e, taskID, prospectiveWorld)
+					d := architectureDecision{Decision: "proceed", Mode: ModeModify, Files: planned, ProspectiveSurfaces: decl}
+					plain := scopedPreflight(t, k.plain)
+					base := Action{Stage: StageCandidateEdit, Files: planned, DerivedCoverage: out,
+						Present: []string{existingS, examinedFile}, Absent: []string{create}}
+					if k.kind == gapCoverageUnexamined {
+						base.Unexamined, base.Examined = []string{examinedFile, create}, []string{existingS}
+					}
+					prior := routeAuthorityForAction(plain, nil, base)
+					if !prior.ClosesGap() || prior.Gap.Kind != k.kind || !sameFiles(prior.Gap.Scope, []string{examinedFile, create}) {
+						t.Fatalf("premise: the prior %s gap holds both members: %+v", k.kind, prior)
+					}
+					prior.Gap.World = prospectiveWorld
+					e.registerRouting(taskID, prospectiveWorld, prior, base, plain, d, true)
+					ledger := ledgerOf(e, taskID)
+
+					if f.grant {
+						df30Record(t, e, taskID, grants)
+					}
+					act := base
+					act.Examined = append([]string(nil), base.Examined...)
+					act.DerivedCoverage = append([]CoverageAnchor(nil), base.DerivedCoverage...)
+					act.Prospective = e.prospectiveUnitsFor(taskID, d)
+					f.apply(&act)
+
+					var routed Routing
+					switch entry {
+					case "initial":
+						fresh := routeAuthorityForAction(plain, nil, act)
+						if fresh.Gap.Identified() {
+							fresh.Gap.World = prospectiveWorld
+						}
+						routed, _ = e.registerRouting(taskID, prospectiveWorld, fresh, act, plain, d, true)
+					default:
+						// The real post-authorization continuation both the
+						// architect loop and a supplied plan take: the per-file
+						// probe runs against an MCP client answering this
+						// case's examination facts, and the routing returned
+						// alone decides whether the plan reaches a worker.
+						gated := scopedPreflight(t, gate(k.plain))
+						human := routeAuthorityForAction(gated, nil, act)
+						if !human.RequiresHuman() {
+							t.Fatalf("premise: the gate is asked first: %+v", human)
+						}
+						var err error
+						routed, _, _, err = e.afterHumanAuthorization(perFileSensei(t, act.Unexamined...), certifiedStart{}, taskID,
+							"change the planned files", human, act, gated, d)
+						if err != nil {
+							t.Fatal(err)
+						}
+					}
+
+					want := f.want[k.kind]
+					// One identity of this kind, however it was narrowed; one
+					// plan attempt routes both, so its owner never moves.
+					assertEpisodeOfKind(t, e, taskID, prior.Gap, ledger, ledger.owners[prior.Gap.Key()])
+					open := openCoverageGaps(e, taskID, prospectiveWorld)
+					// The prior identity reached its typed re-evaluation: it is
+					// still open in its own form, or a disposition decided it.
+					if p := resolutionOf(e, taskID, prior.Gap); !p.Observed {
+						if p.Disposition == nil || !sameFiles(p.Disposition.Unresolved, want) {
+							t.Fatalf("the prior identity was deactivated without its typed re-evaluation: %+v", p)
+						}
+					}
+					if want == nil {
+						if len(open) != 0 || routed.ClosesGap() {
+							t.Fatalf("a settled identity was kept open: routed=%+v open=%+v", routed, open)
+						}
+						results[entry] = outcome{}
+						return
+					}
+					if len(open) != 1 || !sameFiles(open[0].Gap.Scope, want) {
+						t.Fatalf("the open identity is not exactly the unresolved members %v: %+v", want, open)
+					}
+					// An unresolved member prevents execution on EVERY entry
+					// route: the continuation is the open identity itself, not
+					// the route the answer was about.
+					if !routed.ClosesGap() || routed.Gap.Key() != open[0].Gap.Key() || routed.Condition != open[0].Routing.Condition {
+						t.Fatalf("an unresolved %s member did not stop the continuation: routed=%+v open=%+v", k.kind, routed, open[0])
+					}
+					cond := open[0].Routing.Condition
+					for _, m := range []string{examinedFile, create} {
+						remaining := false
+						for _, w := range want {
+							remaining = remaining || w == m
+						}
+						if !remaining && strings.Contains(cond, m) {
+							t.Fatalf("the condition still describes settled member %s: %q", m, cond)
+						}
+						if remaining && !strings.Contains(cond, m) {
+							t.Fatalf("the condition omits unresolved member %s: %q", m, cond)
+						}
+					}
+					results[entry] = outcome{key: open[0].Gap.Key(), condition: cond}
+				})
+			}
+			if results["initial"] != results["post-authorization"] {
+				t.Errorf("%s/%s: the entry route changed the disposition:\n initial %+v\n post-authorization %+v",
+					k.kind, f.name, results["initial"], results["post-authorization"])
+			}
+		}
+	}
+}
+
+// W14 -- THE PRODUCTION LIFECYCLE. Every case is driven only through the
+// engine's entry points over a pinned Git world, a real derivation record and a
+// Sensei MCP; nothing calls the router, a reconciler or the ledger directly.
+// Three entries reach the second routing of the same task:
+//
+//   - ordinary: the architect's proceed route (resolveArchitectureIn ->
+//     askArchitect), its closure round and its exhausted-gap disposal, with a
+//     scripted provider answering the plan;
+//   - supplied: resolveSuppliedPlan routing a plan supplied with the task;
+//   - post-authorization: a supplied plan behind a gate answered before it, so
+//     coverage is reached only through the human answer's continuation
+//     (afterHumanAuthorization).
+//
+// A first routing, by a first plan attempt, opens the gap over a present
+// unexamined file and an absent planned CREATE. The settling fact then arrives
+// the way production obtains it -- the re-plan declares the create's
+// prospective surface and routing records its grant, the per-file probe
+// examines the present file, or the derivation covers it -- and the second
+// routing, by a DIFFERENT plan attempt, must decide THAT SAME episode: one
+// ledger identity, its key, its position, the resolution count and the attempt
+// that owns its question all unchanged, narrowed or closed by the one typed
+// disposition, with typed scope, condition and the refusal the run reports all
+// naming exactly the members that remain, and the same outcome whichever entry
+// route reached it.
+func TestDF30W14TheProductionLifecycleDecidesOneEpisode(t *testing.T) {
+	create, examinedFile := existingUnix, df30Main
+	planned := []string{existingS, examinedFile, create}
+	files := existingWorld()
+	files[examinedFile] = "package main\n"
+	gate := func(body string) string {
+		return strings.Replace(body, `"approval_gate":"APPROVAL_GATE_NONE"`, `"approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"`, 1)
+	}
+	kinds := []struct{ kind, body string }{
+		{gapCoverageUnexamined, strings.Replace(strings.Replace(gatedNeighbourCovered, "APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED", "APPROVAL_GATE_NONE", 1),
+			`"file_count":2`, `"file_count":3`, 1)},
+		{gapCoverageAbsent, regionAbsent},
+		{gapCoverageBlindSpot, regionBlindSpot},
+	}
+	facts := []struct {
+		name                    string
+		grant, examine, derived bool
+		want                    map[string][]string
+	}{
+		{"confirmed prospective grant", true, false, false, map[string][]string{
+			gapCoverageUnexamined: {examinedFile}, gapCoverageAbsent: {examinedFile}, gapCoverageBlindSpot: {examinedFile}}},
+		{"examination of a present file", false, true, false, map[string][]string{
+			gapCoverageUnexamined: {create}, gapCoverageAbsent: {examinedFile, create}, gapCoverageBlindSpot: {examinedFile, create}}},
+		{"canonical derivation", false, false, true, map[string][]string{
+			gapCoverageUnexamined: {create}, gapCoverageAbsent: {create}, gapCoverageBlindSpot: {create}}},
+		{"grant and derivation", true, false, true, map[string][]string{
+			gapCoverageUnexamined: nil, gapCoverageAbsent: nil, gapCoverageBlindSpot: nil}},
+		{"no settling fact", false, false, false, map[string][]string{
+			gapCoverageUnexamined: {examinedFile, create}, gapCoverageAbsent: {examinedFile, create}, gapCoverageBlindSpot: {examinedFile, create}}},
+	}
+	const taskID, task = "task-df30-w14", "change the planned files"
+	entries := []string{"ordinary", "supplied", "post-authorization"}
+	type outcome struct{ admitted, scope, condition string }
+	for _, k := range kinds {
+		for _, f := range facts {
+			results := map[string]outcome{}
+			for _, entry := range entries {
+				t.Run(k.kind+"/"+f.name+"/"+entry, func(t *testing.T) {
+					w := newDF30Production(t, taskID, files)
+					sc := df30Sensei(t, w.state)
+					e := w.e
+					if err := e.Store.Append(event.New("s1", taskID, event.SourceSystem, event.TaskCreated, task, nil)); err != nil {
+						t.Fatal(err)
+					}
+					w.region(t, k.body)
+					w.probes([]string{existingS}, []string{examinedFile, create})
+					w.derives(t, existingS, existingSibling)
+
+					// OBSERVE: the first routing, by the first plan attempt, opens
+					// the gap over both members.
+					d0 := architectureDecision{Decision: "proceed", Mode: ModeModify, Plan: "the plan as first routed", Files: planned}
+					_, err := e.resolveSuppliedPlan(t.Context(), sc, certifiedStart{}, taskID, task, SuppliedPlan{decision: d0, Digest: "d0"})
+					opened := openCoverageGaps(e, taskID, w.world)
+					if err == nil || len(opened) != 1 || opened[0].Gap.Kind != k.kind || !sameFiles(opened[0].Gap.Scope, []string{examinedFile, create}) {
+						t.Fatalf("premise: the first routing refuses over one open %s gap holding both members: err=%v open=%+v", k.kind, err, opened)
+					}
+					episode, ledger := opened[0].Gap, ledgerOf(e, taskID)
+					first := e.pendingPlanAttempt(taskID).ID
+					if first == "" || ledger.owners[episode.Key()] != first {
+						t.Fatalf("premise: the first attempt %q owns the episode's question: %+v", first, ledger.owners)
+					}
+					resolutions := len(e.gapResolutions(taskID).byKey)
+
+					// The settling fact arrives through production inputs only.
+					d1 := d0
+					d1.Plan = "the plan after the closure round"
+					if f.grant {
+						d1.ProspectiveSurfaces = existingDeclarations()[:1]
+					}
+					if f.examine {
+						w.probes([]string{existingS, examinedFile}, []string{create})
+					}
+					if f.derived {
+						w.derives(t, existingS, existingSibling, examinedFile)
+					}
+					var admitted architectureDecision
+					switch entry {
+					case "ordinary":
+						df30Architect(t, e, d1)
+						admitted, err = e.resolveArchitectureIn(t.Context(), sc, certifiedStart{}, taskID, task, "plan the change", e.Repo.Root)
+					case "supplied":
+						admitted, err = e.resolveSuppliedPlan(t.Context(), sc, certifiedStart{}, taskID, task, SuppliedPlan{decision: d1, Digest: "d1"})
+					default:
+						// The second routing meets a gate, answered before it,
+						// so it reaches coverage only through the human answer's
+						// continuation (afterHumanAuthorization).
+						body := gate(k.body)
+						human := routeAuthorityForAction(scopedPreflight(t, body), nil, Action{Stage: StageCandidateEdit, Files: planned})
+						if !human.RequiresHuman() {
+							t.Fatalf("premise: the gate is asked first: %+v", human)
+						}
+						answer := authority.Resolution{TaskID: taskID, SessionID: "s1", Question: "May this change proceed?",
+							Condition: human.Condition, OptionID: "1", OptionLabel: "Authorize the architectural change described above",
+							Scope: planned, Outcome: authority.Authorize, DecidedAt: time.Now().UTC()}
+						if err := e.Store.Append(event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, answer.OptionLabel, answer)); err != nil {
+							t.Fatal(err)
+						}
+						w.region(t, body)
+						admitted, err = e.resolveSuppliedPlan(t.Context(), sc, certifiedStart{}, taskID, task, SuppliedPlan{decision: d1, Digest: "d1"})
+					}
+					if second := e.pendingPlanAttempt(taskID).ID; second == "" || second == first {
+						t.Fatalf("premise: the second routing is a different plan attempt: first %q second %q", first, second)
+					}
+
+					// RE-EVALUATE: one identity, decided as itself, its key,
+					// and position unchanged across the attempts, its live
+					// question owned by the attempt now routing it.
+					// After authorization a region episode may stand beside an
+					// unexamined question of ANOTHER kind; nothing else is added.
+					want := f.want[k.kind]
+					current := assertEpisodeOfKind(t, e, taskID, episode, ledger, liveOwner(t, e, taskID, episode, first))
+					added := len(e.gapResolutions(taskID).byKey) - resolutions
+					if added != 0 && !(entry == "post-authorization" && k.kind != gapCoverageUnexamined && added == 1) {
+						t.Fatalf("the re-evaluation added %d resolutions", added)
+					}
+					if !sameFiles(want, episode.Scope) && (current.Disposition == nil || !sameFiles(current.Disposition.Unresolved, want)) {
+						t.Fatalf("the episode was not decided by its typed re-evaluation: %+v", current.Disposition)
+					}
+					if want == nil {
+						// A lawfully settled identity closes and the run goes on.
+						if open := openCoverageGaps(e, taskID, w.world); err != nil || admitted.Plan != d1.Plan || len(open) != 0 || current.Observed {
+							t.Fatalf("a settled episode was kept open or the plan refused: err=%v open=%+v", err, open)
+						}
+						results[entry] = outcome{admitted: d1.Plan}
+						return
+					}
+					// An unresolved member stays open as the episode, with typed
+					// scope and condition naming exactly the members that remain.
+					if !current.Open() || !sameFiles(current.Gap.Scope, want) || current.Routing.Gap.Key() != episode.Key() {
+						t.Fatalf("the episode is not open over exactly %v: %+v", want, current)
+					}
+					cond := current.Routing.Condition
+					for _, m := range []string{examinedFile, create} {
+						if remaining := strings.Contains(strings.Join(want, "\n"), m); remaining != strings.Contains(cond, m) {
+							t.Fatalf("scope %v and condition disagree about %s: %q", want, m, cond)
+						}
+					}
+					// And it stops the run on every entry route. The refusal
+					// describes no settled member; when it is the episode's own
+					// question it is the re-rendered condition itself.
+					if err == nil {
+						t.Fatalf("an unresolved %s member did not stop the run: plan=%q", k.kind, admitted.Plan)
+					}
+					for _, m := range []string{examinedFile, create} {
+						if !strings.Contains(strings.Join(want, "\n"), m) && strings.Contains(err.Error(), m) {
+							t.Fatalf("the refusal describes settled member %s: %v", m, err)
+						}
+					}
+					if entry == "ordinary" {
+						// The architect's route spends the episode's closure round
+						// and then disposes of it: a knowledge limit over exactly
+						// the stored disposition's unresolved members.
+						var limit *knowledgeLimitError
+						if !errors.As(err, &limit) || !sameFiles(limit.Missing, current.Disposition.Unresolved) || limit.Condition != cond {
+							t.Fatalf("the ordinary route did not end on the episode's typed disposition: %v", err)
+						}
+					} else if !strings.Contains(err.Error(), "a bounded knowledge gap must be closed first") {
+						t.Fatalf("an unresolved %s member did not stop the supplied plan: %v", k.kind, err)
+					}
+					if entry != "post-authorization" || k.kind == gapCoverageUnexamined {
+						if !strings.Contains(err.Error(), cond) {
+							t.Fatalf("the run's refusal does not carry the episode's re-rendered condition %q: %v", cond, err)
+						}
+					}
+					results[entry] = outcome{scope: strings.Join(want, ","), condition: cond}
+				})
+			}
+			for _, entry := range entries[1:] {
+				if results[entry] != results[entries[0]] {
+					t.Errorf("%s/%s: the entry route changed the disposition:\n %s %+v\n %s %+v",
+						k.kind, f.name, entries[0], results[entries[0]], entry, results[entry])
+				}
+			}
+		}
+	}
+}
+
+// W14 -- A GATED FIRST OBSERVATION IS DECIDED BY THE SAME DISPOSITION
+// (DF-30A review f1). No earlier routing opened any episode: the FIRST region
+// answer the run sees is gated, so the router stops at the gate and asks no
+// coverage question, and a recorded human answer authorizes the consequence.
+// The post-authorization continuation (afterHumanAuthorization) must then ask
+// the region's coverage question itself, through the same typed disposition
+// as ordinary routing. A present member the per-file probe examined but no
+// derivation covers is NOT settled -- examination does not own
+// coverage-absent or coverage-blind-spot -- so the gap opens over exactly it
+// and the plan stops; when a derivation covers every member the gap is
+// lawfully closed and the plan proceeds. The ungated ordinary route reaches the
+// same disposition.
+func TestDF30W14AGatedFirstObservationDecidesItsRegionGap(t *testing.T) {
+	examinedFile := df30Main
+	planned := []string{existingS, examinedFile}
+	files := existingWorld()
+	files[examinedFile] = "package main\n"
+	gate := func(body string) string {
+		return strings.Replace(body, `"approval_gate":"APPROVAL_GATE_NONE"`, `"approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"`, 1)
+	}
+	const taskID, task = "task-df30-w14-gated", "change the planned files"
+	// The region answers describe this two-file plan.
+	twoFiles := func(body string) string {
+		return strings.ReplaceAll(strings.Replace(body, `"file_count":3`, `"file_count":2`, 1), `"indexed_file_count":3`, `"indexed_file_count":2`)
+	}
+	for _, k := range []struct{ kind, body string }{{gapCoverageAbsent, twoFiles(regionAbsent)}, {gapCoverageBlindSpot, twoFiles(regionBlindSpot)}} {
+		for _, c := range []struct {
+			name    string
+			derived []string
+			want    []string
+		}{
+			{"examined but not derived", []string{existingS}, []string{examinedFile}},
+			{"derived over every member", []string{existingS, examinedFile}, nil},
+		} {
+			results := map[string]string{}
+			for _, entry := range []string{"ordinary", "post-authorization"} {
+				t.Run(k.kind+"/"+c.name+"/"+entry, func(t *testing.T) {
+					w := newDF30Production(t, taskID, files)
+					sc := df30Sensei(t, w.state)
+					e := w.e
+					if err := e.Store.Append(event.New("s1", taskID, event.SourceSystem, event.TaskCreated, task, nil)); err != nil {
+						t.Fatal(err)
+					}
+					// Every planned file is present and examined.
+					w.probes(planned, nil)
+					w.derives(t, c.derived...)
+					body := k.body
+					if entry == "post-authorization" {
+						body = gate(k.body)
+						human := routeAuthorityForAction(scopedPreflight(t, body), nil, Action{Stage: StageCandidateEdit, Files: planned})
+						if !human.RequiresHuman() {
+							t.Fatalf("premise: the gate is asked first: %+v", human)
+						}
+						answer := authority.Resolution{TaskID: taskID, SessionID: "s1", Question: "May this change proceed?",
+							Condition: human.Condition, OptionID: "1", OptionLabel: "Authorize the architectural change described above",
+							Scope: planned, Outcome: authority.Authorize, DecidedAt: time.Now().UTC()}
+						if err := e.Store.Append(event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, answer.OptionLabel, answer)); err != nil {
+							t.Fatal(err)
+						}
+					}
+					w.region(t, body)
+					d := architectureDecision{Decision: "proceed", Mode: ModeModify, Plan: "the plan", Files: planned}
+					admitted, err := e.resolveSuppliedPlan(t.Context(), sc, certifiedStart{}, taskID, task, SuppliedPlan{decision: d, Digest: "d"})
+					open := openCoverageGaps(e, taskID, w.world)
+					if c.want == nil {
+						if err != nil || admitted.Plan != d.Plan || len(open) != 0 {
+							t.Fatalf("a lawfully settled %s gap stopped the plan: err=%v open=%+v", k.kind, err, open)
+						}
+						results[entry] = "admitted"
+						return
+					}
+					if err == nil || !strings.Contains(err.Error(), "a bounded knowledge gap must be closed first") {
+						t.Fatalf("an examined, underived member of a %s gap did not stop the plan: plan=%q err=%v", k.kind, admitted.Plan, err)
+					}
+					if len(open) != 1 || open[0].Gap.Kind != k.kind || !sameFiles(open[0].Gap.Scope, c.want) ||
+						open[0].Disposition == nil || !sameFiles(open[0].Disposition.Unresolved, c.want) {
+						t.Fatalf("the %s gap is not one recorded episode open over exactly %v: %+v", k.kind, c.want, open)
+					}
+					cond := open[0].Routing.Condition
+					if !strings.Contains(cond, examinedFile) || strings.Contains(cond, existingS) || !strings.Contains(err.Error(), cond) {
+						t.Fatalf("the refusal does not carry the episode's condition over exactly %v: %q / %v", c.want, cond, err)
+					}
+					results[entry] = strings.Join(open[0].Disposition.Unresolved, ",") + "\n" + cond
+				})
+			}
+			if results["ordinary"] != results["post-authorization"] {
+				t.Errorf("%s/%s: the entry route changed the disposition:\n%q\n%q", k.kind, c.name, results["ordinary"], results["post-authorization"])
+			}
+		}
+	}
+}
+
+// df30Architect configures e's one architect as a provider scripted to answer
+// d on every turn -- the proceed the ordinary route (resolveArchitectureIn ->
+// askArchitect) routes and the plan it re-sends after a closure round alike.
+func df30Architect(t *testing.T, e *Engine, d architectureDecision) {
+	t.Helper()
+	answer, err := json.Marshal(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := make([]architectTurn, 8)
+	for i := range script {
+		script[i] = architectTurn{text: string(answer)}
+	}
+	e.Runners = &fixedResolver{runner: &scriptedArchitect{turns: script}, name: "claude"}
+	e.Config.Architect.Name, e.Config.Architect.Command, e.Config.Architect.Graph = "claude", "true", "none"
+}
+
+// ---------------------------------------------------------------------------
+// One episode, one question (DF-30 cycle 4, ruling 176 and the r10
+// counterexample "one immutable resolution episode must not be recomputed
+// under a different semantic owner"). A coverage-blind-spot episode opened by
+// a QUALIFIED blind spot -- one naming the question the graph cannot answer --
+// is re-evaluated by a later routing whose preflight is unqualified or clean.
+// The later routing supplies the facts; the episode keeps its question: the
+// requirement its members are decided against and the evidence its condition
+// quotes.
+// ---------------------------------------------------------------------------
+
+// df30QualifiedSpot is a coverage blind spot naming the question it cannot
+// answer: lock discipline.
+const df30QualifiedSpot = "coverage_insufficient: no lock discipline established"
+
+// df30Region is a covered two-file region answer reporting spot, or no blind
+// spot at all when spot is empty, its gate answered as gate.
+func df30Region(spot, gate string) string {
+	spots := ""
+	if spot != "" {
+		spots = `"blind_spots":["` + spot + `"],`
+	}
+	return `{"status":"PREFLIGHT_STATUS_OK",` +
+		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":2},` + spots +
+		`"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"` + gate + `"},` +
+		identifiedAuthority + `}`
+}
+
+// confinementAnchors is derived coverage from a RECOGNISED family that answers
+// another question than lock discipline: true, and the wrong family.
+func confinementAnchors(files ...string) []CoverageAnchor {
+	var out []CoverageAnchor
+	for _, f := range files {
+		out = append(out, CoverageAnchor{File: f, Requirement: RequirementInvocationConfinement,
+			Describe: "command_invocation_confined_to(sensei under internal/sensei)"})
+	}
+	return out
+}
+
+const (
+	df30Locked = "internal/workflow/zz_df30_locked.go"
+	df30Other  = "internal/workflow/zz_df30_other.go"
+)
+
+// df30QualifiedOutcome is what one re-evaluation of the qualified episode
+// left: whether it is open, over which members, saying what.
+type df30QualifiedOutcome struct {
+	open      bool
+	scope     string
+	condition string
+}
+
+// df30ReEvaluateQualified opens the qualified episode through the production
+// sequence, then re-evaluates it in the same live process through entry ("ordinary": registerRouting over
+// the router's answer; "post-authorization": afterHumanAuthorization's real
+// continuation behind an answered gate) under the region answer later (a
+// df30Region spot) with anchors as the derived coverage. It returns the engine
+// that re-evaluated, the episode as opened, the routing the entry returned and
+// the action it was decided on.
+func df30ReEvaluateQualified(t *testing.T, taskID, entry, later string, anchors []CoverageAnchor) (*Engine, Routing, Routing, Action) {
+	t.Helper()
+	planned := []string{df30Locked, df30Other}
+	d := architectureDecision{Decision: "proceed", Mode: ModeModify, Files: planned}
+	base := Action{Stage: StageCandidateEdit, Files: planned, Present: planned, Examined: planned}
+
+	e := df30Engine(t, taskID)
+	pinWorld(t, e, taskID, prospectiveWorld)
+	qualified := scopedPreflight(t, df30Region(df30QualifiedSpot, "APPROVAL_GATE_NONE"))
+	opened := routeAuthorityForAction(qualified, nil, base)
+	if !opened.ClosesGap() || opened.Gap.Kind != gapCoverageBlindSpot || !sameFiles(opened.Gap.Scope, planned) ||
+		opened.Gap.Semantics == nil || opened.Gap.Semantics.Requirement != RequirementLockDiscipline {
+		t.Fatalf("premise: a qualified blind-spot episode opens over both files: %+v", opened)
+	}
+	opened.Gap.World = prospectiveWorld
+	if _, r := e.registerRouting(taskID, prospectiveWorld, opened, base, qualified, d, true); !r.Open() {
+		t.Fatalf("premise: the episode is open: %+v", r)
+	}
+	act := base
+	act.DerivedCoverage = anchors
+	routed, act := df30Enter(t, e, taskID, entry, later, act, d)
+	return e, opened, routed, act
+}
+
+// df30Enter re-evaluates the task's episodes through entry ("ordinary":
+// registerRouting over the router's answer; "post-authorization":
+// afterHumanAuthorization's real continuation behind an answered gate) under
+// the region answer later (a df30Region spot), deciding on act.
+func df30Enter(t *testing.T, e *Engine, taskID, entry, later string, act Action, d architectureDecision) (Routing, Action) {
+	t.Helper()
+	var routed Routing
+	switch entry {
+	case "ordinary":
+		scoped := scopedPreflight(t, df30Region(later, "APPROVAL_GATE_NONE"))
+		fresh := routeAuthorityForAction(scoped, nil, act)
+		if fresh.Gap.Identified() {
+			fresh.Gap.World = prospectiveWorld
+		}
+		routed, _ = e.registerRouting(taskID, prospectiveWorld, fresh, act, scoped, d, true)
+	default:
+		gated := scopedPreflight(t, df30Region(later, "APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"))
+		human := routeAuthorityForAction(gated, nil, act)
+		if !human.RequiresHuman() {
+			t.Fatalf("premise: the gate is asked first: %+v", human)
+		}
+		var err error
+		routed, act, _, err = e.afterHumanAuthorization(perFileSensei(t), certifiedStart{}, taskID,
+			"change the planned files", human, act, gated, d)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return routed, act
+}
+
+// df30QualifiedLaters are the later region answers: one reporting an
+// UNQUALIFIED coverage blind spot -- under which any recognised family would
+// settle a member, and whose own diagnostic differs -- and a clean one.
+var df30QualifiedLaters = map[string]string{
+	"unqualified": "coverage_insufficient: no direct anchors",
+	"clean":       "",
+}
+
+// df30AssertQualified checks one re-evaluation of the qualified episode
+// against want (nil: closed) and returns its outcome. The episode is the one
+// identity it opened as, still asking the question it opened with; when it is
+// open its scope, condition and the routing returned all name exactly want,
+// quote the episode's own blind spot and none of the later preflight's
+// diagnostics, and the exhausted-gap disposal consumes that recorded
+// disposition rather than the condition handed to it.
+func df30AssertQualified(t *testing.T, e *Engine, taskID, laterSpot string, opened, routed Routing, act Action, want []string) df30QualifiedOutcome {
+	t.Helper()
+	current := resolutionOf(e, taskID, opened.Gap)
+	if len(e.gapResolutions(taskID).order) != 1 || !sameSemantics(current.Gap.Semantics, opened.Gap.Semantics) {
+		t.Fatalf("the re-evaluation changed the episode's identity or its question: order %q semantics %+v",
+			e.gapResolutions(taskID).order, current.Gap.Semantics)
+	}
+	open := openCoverageGaps(e, taskID, prospectiveWorld)
+	if want == nil {
+		if len(open) != 0 || routed.ClosesGap() || current.Disposition == nil || current.Disposition.Open() ||
+			current.Disposition.Settled[df30Locked] != settledByDerivation || current.Disposition.Settled[df30Other] != settledByDerivation {
+			t.Fatalf("the matching derivation did not close the episode: routed=%+v disposition=%+v", routed, current.Disposition)
+		}
+		return df30QualifiedOutcome{}
+	}
+	if len(open) != 1 || open[0].Gap.Key() != opened.Gap.Key() || !sameFiles(open[0].Gap.Scope, want) ||
+		current.Disposition == nil || !sameFiles(current.Disposition.Unresolved, want) {
+		t.Fatalf("the episode is not open over exactly %v: open=%+v disposition=%+v", want, open, current.Disposition)
+	}
+	// The continuation is the episode itself, in its current form: the gap
+	// the live routing re-rendered.
+	if routed.Granted() || routed.Route != current.Routing.Route || routed.Gap.Key() != opened.Gap.Key() || !sameFiles(routed.Gap.Scope, want) {
+		t.Fatalf("the open episode did not stop the continuation over exactly %v: %+v", want, routed)
+	}
+	cond := current.Routing.Condition
+	if !strings.Contains(cond, df30QualifiedSpot) || (laterSpot != "" && strings.Contains(cond, laterSpot)) {
+		t.Fatalf("the condition is not the episode's own question: %q", cond)
+	}
+	if narrowed := !sameFiles(want, opened.Gap.Scope); narrowed {
+		for _, m := range []string{df30Locked, df30Other} {
+			if strings.Contains(strings.Join(want, "\n"), m) != strings.Contains(cond, m) {
+				t.Fatalf("scope %v and condition disagree about %s: %q", want, m, cond)
+			}
+		}
+		if routed.Condition != cond || escalationCondition(routed) != escalationCondition(current.Routing) {
+			t.Fatalf("the routing returned does not carry the re-rendered condition:\n%q\n%q", routed.Condition, cond)
+		}
+	} else if cond != opened.Condition {
+		t.Fatalf("an episode nothing settled was re-described: %q, opened as %q", cond, opened.Condition)
+	}
+	_, err := e.disposeExhaustedGap(taskID, "github.com/globulario/sensei-code",
+		Routing{Route: RouteCloseGap, Gap: current.Gap, Condition: "a later preflight's condition"}, act)
+	var limit *knowledgeLimitError
+	if !errors.As(err, &limit) || !sameFiles(limit.Missing, want) || limit.Condition != cond {
+		t.Fatalf("exhaustion did not consume the episode's recorded disposition: %v", err)
+	}
+	return df30QualifiedOutcome{open: true, scope: strings.Join(want, ","), condition: cond}
+}
+
+// df30RunQualified runs one fact through every later preflight and entry
+// route of one live process and requires one outcome across all of them.
+func df30RunQualified(t *testing.T, taskID string, anchors []CoverageAnchor, want []string) {
+	t.Helper()
+	results := map[string]df30QualifiedOutcome{}
+	for later, spot := range df30QualifiedLaters {
+		for _, entry := range []string{"ordinary", "post-authorization"} {
+			name := later + "/" + entry
+			t.Run(name, func(t *testing.T) {
+				e, opened, routed, act := df30ReEvaluateQualified(t, taskID, entry, spot, anchors)
+				results[name] = df30AssertQualified(t, e, taskID, spot, opened, routed, act, want)
+			})
+		}
+	}
+	var first string
+	for name, got := range results {
+		if first == "" {
+			first = name
+			continue
+		}
+		if got != results[first] {
+			t.Errorf("the later preflight or entry route changed the outcome:\n %s %+v\n %s %+v", first, results[first], name, got)
+		}
+	}
+}
+
+// W13 -- A NARROWED EPISODE IS RE-RENDERED FROM ITS OWN QUESTION. A lock
+// derivation settles one member of the qualified episode; the other is left
+// to no derivation, or to one of the wrong family. Under the unqualified
+// preflight the router itself reports the remaining member as its own gap,
+// rendered with ITS diagnostic; under the clean one it reports nothing. Either
+// way the episode narrows in place to the remaining member, and its scope, its
+// condition and every question rendered from it name exactly that member and
+// quote the episode's blind spot -- never the later preflight's diagnostic --
+// on every entry route.
+func TestDF30W13ANarrowedQualifiedEpisodeKeepsItsCondition(t *testing.T) {
+	for name, anchors := range map[string][]CoverageAnchor{
+		"matching derivation over one member":            lockAnchors(df30Locked),
+		"matching over one, wrong family over the other": append(lockAnchors(df30Locked), confinementAnchors(df30Other)...),
+	} {
+		t.Run(name, func(t *testing.T) {
+			df30RunQualified(t, "task-df30-w13-qualified", anchors, []string{df30Other})
+		})
+	}
+}
+
+// W14 -- AN EPISODE IS DECIDED BY ITS OWN REQUIREMENT. A recognised derivation
+// of the wrong family over every member settles nothing, though the later
+// unqualified preflight's own question would accept it and the clean one asks
+// none; the episode stays open, as it opened, through the production order on
+// every entry route. A lock derivation over every member
+// answers the episode's question and closes it, and the run continues.
+func TestDF30W14AQualifiedEpisodeIsDecidedByItsOwnRequirement(t *testing.T) {
+	t.Run("wrong family over every member", func(t *testing.T) {
+		df30RunQualified(t, "task-df30-w14-qualified", confinementAnchors(df30Locked, df30Other), []string{df30Locked, df30Other})
+	})
+	t.Run("matching derivation over every member", func(t *testing.T) {
+		df30RunQualified(t, "task-df30-w14-qualified", lockAnchors(df30Locked, df30Other), nil)
+	})
+}
+
+// df30ConfinementSpot is a coverage blind spot naming a DIFFERENT question than
+// df30QualifiedSpot: invocation confinement.
+const df30ConfinementSpot = "coverage_insufficient: invocation sites unknown"
+
+// W14 -- A DISTINCT QUALIFIED QUESTION IS NOT FOLDED INTO THE EPISODE (review
+// f1; DF-30A review f3). The lock-discipline episode is re-entered, on every
+// entry route, under a later preflight that asks the invocation-confinement
+// question over the same files. The episode is decided by its stored lock
+// requirement alone: lock anchors over every member close it although the later
+// question still reports every file, and confinement anchors -- which answer the
+// later question -- leave it open over both members, asking its own question.
+// The later question is neither folded into the episode nor lost, and it is
+// not acted upon outside the ledger either: it is its own canonical episode,
+// under its own identity, with its own recorded disposition, and the plan
+// stops on it on every entry route -- a human answer to the gate the
+// post-authorization route met settles no coverage question.
+func TestDF30W14ADistinctQualifiedQuestionIsNotFoldedIntoTheEpisode(t *testing.T) {
+	const taskID = "task-df30-w14-distinct"
+	planned := []string{df30Locked, df30Other}
+	for _, entry := range []string{"ordinary", "post-authorization"} {
+		name := entry
+		t.Run(name+"/lock anchors answer the episode only", func(t *testing.T) {
+			e, opened, routed, _ := df30ReEvaluateQualified(t, taskID, entry, df30ConfinementSpot, lockAnchors(planned...))
+			current := resolutionOf(e, taskID, opened.Gap)
+			if current.Gap.Key() != opened.Gap.Key() || !sameSemantics(current.Gap.Semantics, opened.Gap.Semantics) {
+				t.Fatalf("the later question changed the episode's identity or question: %+v", current.Gap)
+			}
+			if current.Disposition == nil || current.Disposition.Open() ||
+				current.Disposition.Settled[df30Locked] != settledByDerivation || current.Disposition.Settled[df30Other] != settledByDerivation {
+				t.Fatalf("the episode was not decided by its own lock requirement: disposition %+v", current.Disposition)
+			}
+			if routed.Granted() || !routed.ClosesGap() || routed.Gap.Semantics == nil ||
+				routed.Gap.Semantics.Requirement != RequirementInvocationConfinement ||
+				!strings.Contains(routed.Condition, df30ConfinementSpot) || !sameFiles(normalizeEpisodeScope(routed.Gap.Scope), normalizeEpisodeScope(planned)) {
+				t.Fatalf("the later, distinct question was folded or lost: %+v", routed)
+			}
+			// Its own canonical identity: never the episode's key, recorded
+			// after it, and the only identity open.
+			if routed.Gap.Key() == opened.Gap.Key() || routed.Gap.Question != RequirementInvocationConfinement {
+				t.Fatalf("the distinct question shares the episode's identity: %q", routed.Gap.Key())
+			}
+			if order := ledgerOf(e, taskID).order; len(order) != 2 || order[0] != opened.Gap.Key() || order[1] != routed.Gap.Key() {
+				t.Fatalf("the ledger does not hold exactly the episode and the distinct question: %q", order)
+			}
+			if open := openCoverageGaps(e, taskID, prospectiveWorld); len(open) != 1 || open[0].Gap.Key() != routed.Gap.Key() {
+				t.Fatalf("the open identities are not exactly the distinct question: %+v", open)
+			}
+			if authorized, settled := e.gapSettlement(taskID, routed); authorized || settled {
+				t.Fatal("the episode's state answered the later question")
+			}
+			cur, registered := e.currentResolution(taskID, routed.Gap)
+			if !registered || !cur.Open() || cur.Gap.Key() != routed.Gap.Key() || !sameSemantics(cur.Gap.Semantics, routed.Gap.Semantics) ||
+				cur.Disposition == nil || !sameFiles(normalizeEpisodeScope(cur.Disposition.Unresolved), normalizeEpisodeScope(planned)) {
+				t.Fatalf("the later question is not its own recorded episode: registered=%v %+v", registered, cur)
+			}
+		})
+		t.Run(name+"/confinement anchors leave the episode open", func(t *testing.T) {
+			e, opened, routed, _ := df30ReEvaluateQualified(t, taskID, entry, df30ConfinementSpot, confinementAnchors(planned...))
+			current := resolutionOf(e, taskID, opened.Gap)
+			open := openCoverageGaps(e, taskID, prospectiveWorld)
+			if len(open) != 1 || open[0].Gap.Key() != opened.Gap.Key() || !sameFiles(normalizeEpisodeScope(current.Gap.Scope), normalizeEpisodeScope(planned)) ||
+				!sameSemantics(current.Gap.Semantics, opened.Gap.Semantics) {
+				t.Fatalf("the episode was decided by the later question: open %+v", open)
+			}
+			if routed.Granted() || routed.Gap.Key() != opened.Gap.Key() ||
+				!strings.Contains(current.Routing.Condition, df30QualifiedSpot) || strings.Contains(current.Routing.Condition, df30ConfinementSpot) {
+				t.Fatalf("the open episode did not stop the plan on its own question: routed %+v condition %q", routed, current.Routing.Condition)
+			}
+		})
+	}
+}
+
+// W14 -- TWO DISTINCT QUALIFIED QUESTIONS ARE TWO CANONICAL EPISODES
+// (DF-30A review f3). The lock-discipline episode and a later
+// invocation-confinement question over the SAME paths are both recorded in the
+// task's ledger, each under its own identity and decided by its own
+// requirement, on every entry route. Facts that answer one never decide the
+// other: confinement anchors over one member narrow the confinement episode
+// alone, under its own key, while the lock episode keeps both members.
+// Exhaustion of each consumes its own recorded disposition, and an answer about
+// one settles nothing about the other.
+func TestDF30W14TwoDistinctQualifiedQuestionsKeepTheirOwnEpisodes(t *testing.T) {
+	const taskID = "task-df30-w14-two-questions"
+	planned := []string{df30Locked, df30Other}
+	d := architectureDecision{Decision: "proceed", Mode: ModeModify, Files: planned}
+	results := map[string]string{}
+	for _, entry := range []string{"ordinary", "post-authorization"} {
+		t.Run(entry, func(t *testing.T) {
+			// Nothing answers either question: both stand over both paths.
+			e, opened, asked, act := df30ReEvaluateQualified(t, taskID, entry, df30ConfinementSpot, nil)
+			if !asked.ClosesGap() || asked.Gap.Key() == opened.Gap.Key() || asked.Gap.Semantics == nil ||
+				asked.Gap.Semantics.Requirement != RequirementInvocationConfinement {
+				t.Fatalf("premise: the confinement question is routed as its own identity: %+v", asked)
+			}
+			lock, confine := opened.Gap, asked.Gap
+			if order := ledgerOf(e, taskID).order; len(order) != 2 || order[0] != lock.Key() || order[1] != confine.Key() {
+				t.Fatalf("both questions are not canonical ledger entries: %q", order)
+			}
+			if open := openCoverageGaps(e, taskID, prospectiveWorld); len(open) != 2 {
+				t.Fatalf("both questions are not open: %+v", open)
+			}
+
+			// Confinement anchors over df30Other answer the confinement
+			// question for that member only, and nothing of the lock one.
+			act.DerivedCoverage = confinementAnchors(df30Other)
+			routed, act := df30Enter(t, e, taskID, entry, df30ConfinementSpot, act, d)
+			if order := ledgerOf(e, taskID).order; len(order) != 2 || order[0] != lock.Key() || order[1] != confine.Key() {
+				t.Fatalf("narrowing one question changed the ledger's identities: %q", order)
+			}
+			l, c := resolutionOf(e, taskID, lock), resolutionOf(e, taskID, confine)
+			if !l.Open() || l.Disposition == nil || !sameFiles(normalizeEpisodeScope(l.Disposition.Unresolved), normalizeEpisodeScope(planned)) ||
+				!sameSemantics(l.Gap.Semantics, lock.Semantics) || !strings.Contains(l.Routing.Condition, df30QualifiedSpot) {
+				t.Fatalf("the confinement facts decided the lock episode: %+v %+v", l.Gap, l.Disposition)
+			}
+			if !c.Open() || c.Gap.Key() != confine.Key() || c.Disposition == nil || !sameFiles(c.Disposition.Unresolved, []string{df30Locked}) ||
+				!sameFiles(c.Gap.Scope, []string{df30Locked}) || !strings.Contains(c.Routing.Condition, df30ConfinementSpot) ||
+				strings.Contains(c.Routing.Condition, df30Other) || !sameSemantics(c.Gap.Semantics, confine.Semantics) {
+				t.Fatalf("the confinement episode did not narrow in place by its own requirement: %+v %+v", c.Gap, c.Disposition)
+			}
+			if routed.Granted() || !routed.ClosesGap() {
+				t.Fatalf("an open question did not stop the continuation: %+v", routed)
+			}
+
+			// Exhaustion consumes each one's own recorded disposition.
+			for _, g := range []struct {
+				r    AuthorityResolution
+				want []string
+			}{{l, planned}, {c, []string{df30Locked}}} {
+				_, err := e.disposeExhaustedGap(taskID, "github.com/globulario/sensei-code",
+					Routing{Route: RouteCloseGap, Gap: g.r.Gap, Condition: "a later preflight's condition"}, act)
+				var limit *knowledgeLimitError
+				if !errors.As(err, &limit) || !sameFiles(normalizeEpisodeScope(limit.Missing), normalizeEpisodeScope(g.want)) || limit.Condition != g.r.Routing.Condition {
+					t.Fatalf("exhaustion of %s did not consume its own disposition: %v", g.r.Gap.Key(), err)
+				}
+			}
+
+			// An answer about one settles nothing about the other.
+			e.settleGap(taskID, c.Gap, authority.Authorize)
+			if authorized, settled := e.gapSettlement(taskID, Routing{Route: RouteCloseGap, Gap: c.Gap}); !authorized || !settled {
+				t.Fatalf("premise: the answer settles the confinement episode: %v %v", authorized, settled)
+			}
+			if authorized, settled := e.gapSettlement(taskID, Routing{Route: RouteCloseGap, Gap: l.Gap}); authorized || settled {
+				t.Fatal("an answer about the confinement question settled the lock episode")
+			}
+			results[entry] = l.Routing.Condition + "\n" + c.Routing.Condition
+		})
+	}
+	if results["ordinary"] != results["post-authorization"] {
+		t.Errorf("the entry route changed the dispositions:\n%q\n%q", results["ordinary"], results["post-authorization"])
+	}
+}
+
+// W14 -- A MEMBER THE EPISODE ONCE HELD RETURNS TO IT (DF-30A review f2). The
+// qualified episode opens over A alone, widens to A+B, and narrows back to A
+// when a lock derivation settles B. That derivation then disappears while one
+// over A appears, so the routing reports B ALONE -- no file of the episode's
+// opening or of its current scope. B is still the episode's member: on every
+// entry route the routing is bound to the original key, which reopens over B,
+// and no second identity is opened for it.
+func TestDF30W14AHistoricallyHeldMemberReturnsToItsEpisode(t *testing.T) {
+	a, b := df30Locked, df30Other
+	both := []string{a, b}
+	for _, entry := range []string{"ordinary", "post-authorization"} {
+		t.Run(entry, func(t *testing.T) {
+			const taskID = "task-df30-w14-held"
+			e := df30Engine(t, taskID)
+			pinWorld(t, e, taskID, prospectiveWorld)
+			only := Action{Stage: StageCandidateEdit, Files: []string{a}, Present: []string{a}, Examined: []string{a}}
+			df30Enter(t, e, taskID, "ordinary", df30QualifiedSpot, only, architectureDecision{Decision: "proceed", Mode: ModeModify, Files: []string{a}})
+			open := openCoverageGaps(e, taskID, prospectiveWorld)
+			if len(open) != 1 || !sameFiles(open[0].Gap.Scope, []string{a}) {
+				t.Fatalf("premise: the episode opens over A alone: %+v", open)
+			}
+			key := open[0].Gap.Key()
+			d := architectureDecision{Decision: "proceed", Mode: ModeModify, Files: both}
+			plan := Action{Stage: StageCandidateEdit, Files: both, Present: both, Examined: both}
+			step := func(anchors []CoverageAnchor, want []string) Routing {
+				t.Helper()
+				act := plan
+				act.DerivedCoverage = anchors
+				routed, _ := df30Enter(t, e, taskID, entry, df30QualifiedSpot, act, d)
+				current := resolutionOf(e, taskID, open[0].Gap)
+				if order := ledgerOf(e, taskID).order; len(order) != 1 || order[0] != key {
+					t.Fatalf("a second identity was opened beside the episode %q: %q", key, order)
+				}
+				if !current.Open() || !sameFiles(normalizeEpisodeScope(current.Gap.Scope), normalizeEpisodeScope(want)) || current.Gap.Key() != key {
+					t.Fatalf("the episode is not open over exactly %v under its key: %+v", want, current.Gap)
+				}
+				return routed
+			}
+			step(nil, both)                   // widened to A+B
+			step(lockAnchors(b), []string{a}) // narrowed back to A
+			routed := step(lockAnchors(a), []string{b})
+			if routed.Granted() || routed.Gap.Key() != key || !sameFiles(routed.Gap.Scope, []string{b}) {
+				t.Fatalf("the routing of B alone was not bound to the episode B was once a member of: %+v", routed)
+			}
+		})
+	}
+}
+
+// W14 -- CURRENT PLAN MEMBERSHIP IS THE ACTION'S FACT (review f2). The open
+// qualified episode is re-evaluated through both production register paths
+// with a decision and an Action that disagree about which files the plan
+// names. Only the Action decides: a member it omits is withdrawn although the
+// decision still lists it, and a member it names is kept although the decision
+// does not.
+func TestDF30W14APlanMembershipIsTheActionsFact(t *testing.T) {
+	planned := []string{df30Locked, df30Other}
+	for _, entry := range []string{"ordinary", "post-authorization"} {
+		for name, c := range map[string]struct {
+			decision, action, want []string
+		}{
+			"the action withdraws a member the decision lists": {planned, []string{df30Locked}, []string{df30Locked}},
+			"the action keeps a member the decision omits":     {[]string{df30Locked}, planned, planned},
+		} {
+			t.Run(entry+"/"+name, func(t *testing.T) {
+				const taskID = "task-df30-w14-membership"
+				e := df30Engine(t, taskID)
+				pinWorld(t, e, taskID, prospectiveWorld)
+				base := Action{Stage: StageCandidateEdit, Files: planned, Present: planned, Examined: planned}
+				qualified := scopedPreflight(t, df30Region(df30QualifiedSpot, "APPROVAL_GATE_NONE"))
+				opened := routeAuthorityForAction(qualified, nil, base)
+				opened.Gap.World = prospectiveWorld
+				d := architectureDecision{Decision: "proceed", Mode: ModeModify, Files: planned}
+				if _, r := e.registerRouting(taskID, prospectiveWorld, opened, base, qualified, d, true); !r.Open() {
+					t.Fatalf("premise: the episode is open: %+v", r)
+				}
+				act := Action{Stage: StageCandidateEdit, Files: c.action, Present: c.action, Examined: c.action}
+				clean := scopedPreflight(t, df30Region("", "APPROVAL_GATE_NONE"))
+				fresh := routeAuthorityForAction(clean, nil, act)
+				if !fresh.Granted() {
+					t.Fatalf("premise: the clean later routing alone would grant: %+v", fresh)
+				}
+				later := architectureDecision{Decision: "proceed", Mode: ModeModify, Files: c.decision}
+				var routed Routing
+				if entry == "ordinary" {
+					routed, _ = e.registerRouting(taskID, prospectiveWorld, fresh, act, clean, later, true)
+				} else {
+					routed, _ = e.registerAuthorizedRouting(taskID, prospectiveWorld, fresh, act, clean, later)
+				}
+				current := resolutionOf(e, taskID, opened.Gap)
+				if routed.Granted() || !current.Open() || !sameFiles(normalizeEpisodeScope(current.Gap.Scope), normalizeEpisodeScope(c.want)) ||
+					current.Disposition == nil || !sameFiles(normalizeEpisodeScope(current.Disposition.Unresolved), normalizeEpisodeScope(c.want)) {
+					t.Fatalf("membership was not the Action's: want %v, routed %+v episode %+v disposition %+v", c.want, routed, current.Gap, current.Disposition)
+				}
+			})
+		}
+	}
+}
+
+// W13 -- A SETTLED MEMBER IS SETTLED ONLY WHILE ITS FACT STANDS (review f1).
+// The qualified episode narrows to df30Other when a lock derivation settles
+// df30Locked. A later Action still plans df30Locked but no longer carries that
+// derivation: on every entry route, under an unqualified or a clean later
+// preflight, df30Locked re-enters the SAME episode, whose scope and condition again name
+// both members. A lock derivation over df30Other alone then narrows the
+// episode to df30Locked -- it never closes it -- because no current fact
+// settles df30Locked.
+func TestDF30W13ASettledMemberReEntersWhenItsFactDisappears(t *testing.T) {
+	const taskID = "task-df30-w13-reentry"
+	planned := []string{df30Locked, df30Other}
+	d := architectureDecision{Decision: "proceed", Mode: ModeModify, Files: planned}
+	base := Action{Stage: StageCandidateEdit, Files: planned, Present: planned, Examined: planned}
+	for later, spot := range df30QualifiedLaters {
+		for _, entry := range []string{"ordinary", "post-authorization"} {
+			name := later + "/" + entry
+			t.Run(name, func(t *testing.T) {
+				e, opened, _, _ := df30ReEvaluateQualified(t, taskID, entry, spot, lockAnchors(df30Locked))
+				narrowed := resolutionOf(e, taskID, opened.Gap)
+				if !narrowed.Open() || !sameFiles(narrowed.Gap.Scope, []string{df30Other}) || narrowed.Gap.Opening == nil ||
+					!sameSemantics(narrowed.Gap.Opening.Semantics, opened.Gap.Semantics) {
+					t.Fatalf("premise: the episode narrows to the unsettled member, its opening binding its question: %+v", narrowed.Gap)
+				}
+				// The derivation that settled df30Locked is gone; the file
+				// is still planned, present and examined.
+				routed, _ := df30Enter(t, e, taskID, entry, spot, base, d)
+				current := resolutionOf(e, taskID, opened.Gap)
+				open := openCoverageGaps(e, taskID, prospectiveWorld)
+				if len(e.gapResolutions(taskID).order) != 1 || len(open) != 1 || open[0].Gap.Key() != opened.Gap.Key() ||
+					!sameFiles(normalizeEpisodeScope(current.Gap.Scope), normalizeEpisodeScope(planned)) ||
+					current.Disposition == nil || !sameFiles(normalizeEpisodeScope(current.Disposition.Unresolved), normalizeEpisodeScope(planned)) {
+					t.Fatalf("the member whose settling fact disappeared did not re-enter the episode: open %+v disposition %+v", open, current.Disposition)
+				}
+				if routed.Granted() || routed.Gap.Key() != opened.Gap.Key() ||
+					!sameFiles(normalizeEpisodeScope(routed.Gap.Scope), normalizeEpisodeScope(planned)) {
+					t.Fatalf("the re-entered episode did not stop the continuation over both members: %+v", routed)
+				}
+				cond := current.Routing.Condition
+				if cond != opened.Condition || !sameSemantics(current.Gap.Semantics, opened.Gap.Semantics) {
+					t.Fatalf("the re-entered episode is not described as it opened: %q, opened as %q", cond, opened.Condition)
+				}
+
+				// A lock derivation over df30Other alone narrows it to
+				// df30Locked; nothing currently settles df30Locked, so the
+				// episode does not close.
+				act := base
+				act.DerivedCoverage = lockAnchors(df30Other)
+				routed, _ = df30Enter(t, e, taskID, entry, spot, act, d)
+				current = resolutionOf(e, taskID, opened.Gap)
+				cond = current.Routing.Condition
+				if !current.Open() || !sameFiles(current.Gap.Scope, []string{df30Locked}) || routed.Granted() ||
+					!strings.Contains(cond, df30Locked) || strings.Contains(cond, df30Other) || !strings.Contains(cond, df30QualifiedSpot) ||
+					(spot != "" && strings.Contains(cond, spot)) {
+					t.Fatalf("the episode closed or mis-narrowed without a current fact settling %s: routed %+v episode %+v condition %q",
+						df30Locked, routed, current.Gap, cond)
+				}
+			})
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// RULING-181 59a FAIL-CLOSED RESTORE BOUNDARY. Objective 59a owns the live
+// coverage episode only; a coverage question read back from the durable record
+// is never an authorizable restored episode, because no canonical episode
+// encoding exists to authenticate it (objective 59b). These witnesses prove
+// only the refusal: none of them requires a successful restored authorization.
+// ---------------------------------------------------------------------------
+
+// df30LiveDeferral asks a live coverage episode's question through the one
+// rendezvous and defers it, returning the durable record it left and the
+// routing it was asked about. Asking LIVE is not refused: the boundary is
+// about restoration, not about coverage questions.
+func df30LiveDeferral(t *testing.T, store *session.Store, taskID string) (session.Interrupted, Routing) {
+	t.Helper()
+	_, _, out := df30Measured(t)
+	scoped := scopedPreflight(t, neighbourCovered)
+	d := architectureDecision{Decision: "proceed", Mode: ModeModify, Files: df30Planned()}
+	e := df30EngineOn(t, store, taskID)
+	if err := store.Append(event.New("s1", taskID, event.SourceUser, event.TaskCreated, "change the planned files", nil)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Append(event.New("s1", taskID, event.SourceSystem, event.PlanAttemptStarted, "started",
+		map[string]string{"plan_attempt_id": df30Attempt().ID})); err != nil {
+		t.Fatal(err)
+	}
+	action := df30Action(out, nil)
+	opened := routeAuthorityForAction(scoped, nil, action)
+	opened.Gap.World = prospectiveWorld
+	routed, r := e.registerRouting(taskID, prospectiveWorld, opened, action, scoped, d, true)
+	if !r.Open() || !isCoverageGapKind(routed.Gap.Kind) {
+		t.Fatalf("premise: a live coverage episode is open: %+v", r)
+	}
+	if refusal := e.unauthenticatedCoverageRestore(taskID, routed.Gap); refusal != nil {
+		t.Fatalf("a live episode's question was refused as a restoration: %v", refusal)
+	}
+	ctx := withPlanAttempt(withAuthorityGap(context.Background(), routed.Gap), e.questionOwner(taskID, routed.Gap))
+	errc := make(chan error, 1)
+	go func() {
+		_, err := e.awaitChoice(ctx, nil, taskID, routed.Condition, "github.com/globulario/sensei-code", prospectiveWorld,
+			authority.Decision{Level: authority.Human, Subject: "May the run proceed with the gap open?", Options: realOptions()},
+			realOptions(), d.Files...)
+		errc <- err
+	}()
+	waitForPending(t, e, taskID)
+	if !e.DeferAuthority(taskID) {
+		t.Fatal("the live question was not pending")
+	}
+	if err := <-errc; !errors.Is(err, errAuthorityDeferred) {
+		t.Fatalf("the live deferral produced %v", err)
+	}
+	history, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range session.FindInterrupted(history) {
+		if task.TaskID == taskID && len(task.AwaitingAuthority) != 0 {
+			return task, routed
+		}
+	}
+	t.Fatal("the deferred coverage question is not resumable")
+	return session.Interrupted{}, Routing{}
+}
+
+// assertResumeRefusedBeforeAsking resumes task on a fresh engine over store
+// and requires the typed restoration refusal for a coverage episode: no
+// question put to anyone, no answer recorded, nothing settled, and the task
+// still resumable.
+func assertResumeRefusedBeforeAsking(t *testing.T, store *session.Store, task session.Interrupted, gap GapIdentity) {
+	t.Helper()
+	bus := event.NewBus()
+	take, done := collect(t, bus)
+	defer done()
+	// No Repo and no Sensei: the refusal is decided before anything starts.
+	e := &Engine{Bus: bus, Store: store, SessionID: "s2", pending: map[string]chan string{}}
+	e.resumeAuthority(context.Background(), task)
+	evs := take()
+	for _, ev := range evs {
+		switch ev.Kind {
+		case event.AuthorityRequired, event.AuthorityResolved, event.WorkflowFailed:
+			t.Fatalf("the restored coverage question reached %s: %q\n%s", ev.Kind, ev.Summary, gapLoopTrace(evs))
+		}
+	}
+	var refusal RestorationRefusal
+	payloadOf(t, evs, event.WorkflowRestorationRefused, &refusal)
+	if refusal.Subject != restorationSubjectCoverageEpisode || refusal.TaskID != task.TaskID {
+		t.Fatalf("the resume was not refused as an unauthenticated coverage episode: %+v", refusal)
+	}
+	if _, err := ParseRestorationRefusal(mustJSON(t, refusal)); err != nil {
+		t.Fatalf("the refusal is not a valid typed restoration refusal: %v", err)
+	}
+	if authorized, settled := e.gapSettlement(task.TaskID, Routing{Gap: gap}); authorized || settled {
+		t.Fatalf("the refused resume settled the gap: authorized=%v settled=%v", authorized, settled)
+	}
+	history, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	resumable := false
+	for _, it := range session.FindInterrupted(history) {
+		resumable = resumable || (it.TaskID == task.TaskID && len(it.AwaitingAuthority) != 0)
+	}
+	if !resumable {
+		t.Fatal("the refusal consumed the preserved question")
+	}
+}
+
+// RESTORE BOUNDARY -- A COVERAGE QUESTION THIS ENGINE DEFERRED LIVE is refused
+// on resume before awaitChoice: its record holds the gap's identity but no
+// episode, so its opening semantics and pinned-world binding cannot be
+// authenticated. The live episode state never reaches the record.
+func TestDF30RestoreBoundaryALiveDeferredCoverageQuestionIsRefusedOnResume(t *testing.T) {
+	const taskID = "task-df30-restore-live"
+	store := sessionStore(t)
+	task, routed := df30LiveDeferral(t, store, taskID)
+	var q DeferredAuthority
+	if err := json.Unmarshal(task.AwaitingAuthority, &q); err != nil {
+		t.Fatal(err)
+	}
+	if q.Gap == nil || q.Gap.Key() != routed.Gap.Key() || q.Gap.Semantics != nil || q.Gap.Opening != nil {
+		t.Fatalf("premise: the record names the gap and carries no live episode state: %+v", q.Gap)
+	}
+	assertResumeRefusedBeforeAsking(t, store, task, *q.Gap)
+}
+
+// RESTORE BOUNDARY -- PAYLOAD-LESS LEGACY RECORDS of every coverage kind, with
+// and without a recorded authorizing answer, are refused before awaitChoice,
+// and the historical answer installs no authority. CONTROL: the same record
+// about a non-coverage gap is not stopped by this boundary -- it reaches the
+// next step, starting Sensei.
+func TestDF30RestoreBoundaryALegacyCoverageRecordIsRefusedBeforeAnyoneIsAsked(t *testing.T) {
+	for _, kind := range []string{gapCoverageUnexamined, gapCoverageAbsent, gapCoverageBlindSpot, "unverified-premise"} {
+		for _, answered := range []bool{false, true} {
+			name := kind
+			if answered {
+				name += "/answered"
+			}
+			t.Run(name, func(t *testing.T) {
+				taskID := "task-df30-restore-legacy"
+				store := storeWithTaskCreated(t, taskID, "change main.go")
+				gap := GapIdentity{Kind: kind, Scope: []string{"main.go"}, World: prospectiveWorld}
+				q := DeferredAuthority{Condition: "a bounded knowledge gap was not closed by investigation: graph coverage is absent",
+					Domain: "github.com/globulario/sensei-code", BaseSHA: prospectiveWorld, TaskID: taskID, SessionID: "s1",
+					Decision: authority.Decision{Level: authority.Human, Subject: "May main.go change?", Options: realOptions()},
+					Scope:    []string{"main.go"}, ScopeRecorded: true, Gap: &gap}
+				evs := []event.Event{}
+				if answered {
+					evs = append(evs, event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, "Authorize",
+						resolvedAuthority{Resolution: authority.Resolution{TaskID: taskID, SessionID: "s1", Condition: q.Condition,
+							OptionID: "1", OptionLabel: "Authorize", Scope: q.Scope, Outcome: authority.Authorize, DecidedAt: time.Now().UTC()},
+							Gap: &gap}))
+				}
+				evs = append(evs, event.New("s1", taskID, event.SourceUser, event.WorkflowAwaitingAuthority, q.Condition, q))
+				for _, ev := range evs {
+					if err := store.Append(ev); err != nil {
+						t.Fatal(err)
+					}
+				}
+				history, err := store.Load()
+				if err != nil {
+					t.Fatal(err)
+				}
+				tasks := session.FindInterrupted(history)
+				if len(tasks) != 1 || len(tasks[0].AwaitingAuthority) == 0 {
+					t.Fatalf("premise: the legacy question is resumable: %+v", tasks)
+				}
+				if kind != "unverified-premise" {
+					assertResumeRefusedBeforeAsking(t, store, tasks[0], gap)
+					return
+				}
+				bus := event.NewBus()
+				take, done := collect(t, bus)
+				defer done()
+				e := &Engine{Bus: bus, Store: store, SessionID: "s2", pending: map[string]chan string{}}
+				e.resumeAuthority(context.Background(), tasks[0])
+				for _, ev := range take() {
+					if ev.Kind == event.WorkflowRestorationRefused {
+						t.Fatalf("a non-coverage question was refused as a coverage episode: %q", ev.Summary)
+					}
+				}
+				if answered {
+					if authorized, settled := e.gapSettlement(taskID, Routing{Gap: gap}); !authorized || !settled {
+						t.Fatalf("control: a non-coverage answer is no longer restored: authorized=%v settled=%v", authorized, settled)
+					}
+				}
+			})
+		}
+	}
+}
+
+// RESTORE BOUNDARY AT THE RENDEZVOUS -- whichever route reaches it, the one
+// place a task waits on a person refuses a restored coverage identity before
+// the question is emitted: a restarted process that routes onto a coverage gap
+// it restored from the record cannot ask about it, and no answer binds to it.
+func TestDF30RestoreBoundaryTheRendezvousRefusesARestoredCoverageIdentity(t *testing.T) {
+	const taskID = "task-df30-restore-rendezvous"
+	store := sessionStore(t)
+	task, _ := df30LiveDeferral(t, store, taskID)
+	var q DeferredAuthority
+	if err := json.Unmarshal(task.AwaitingAuthority, &q); err != nil {
+		t.Fatal(err)
+	}
+	bus := event.NewBus()
+	take, done := collect(t, bus)
+	defer done()
+	e := df30EngineOn(t, store, taskID)
+	e.Bus = bus
+	r := resolutionOf(e, taskID, *q.Gap)
+	if !r.restored || !r.Open() {
+		t.Fatalf("premise: the identity is restored open and unauthenticated: %+v", r)
+	}
+	// Even a gap carrying a well-formed live payload is refused once its
+	// identity is the restored one: a later routing cannot lend a restored
+	// identity a replacement episode.
+	lent := *q.Gap
+	sem := coverageSemantics(lent.Kind, nil, "")
+	lent.Semantics = &sem
+	for _, gap := range []GapIdentity{*q.Gap, lent} {
+		// Bounded: a rendezvous that asked would block on an answer.
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_, err := e.awaitChoice(withAuthorityGap(ctx, gap), nil, taskID, q.Condition, q.Domain, q.BaseSHA,
+			q.Decision, q.Decision.Options, q.Scope...)
+		cancel()
+		var refusal *RestorationRefusal
+		if !errors.As(err, &refusal) || refusal.Subject != restorationSubjectCoverageEpisode {
+			t.Fatalf("the rendezvous did not refuse the restored coverage identity: %v", err)
+		}
+	}
+	for _, ev := range take() {
+		if ev.Kind == event.AuthorityRequired || ev.Kind == event.AuthorityResolved {
+			t.Fatalf("the restored coverage question was put to a person: %s %q", ev.Kind, ev.Summary)
+		}
+	}
+	if authorized, settled := e.gapSettlement(taskID, Routing{Gap: *q.Gap}); authorized || settled {
+		t.Fatal("a refused question settled the restored identity")
+	}
+}

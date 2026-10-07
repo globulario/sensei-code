@@ -774,6 +774,9 @@ func TestTheBlindSpotCoverageBranchHonoursOperationalAuthority(t *testing.T) {
 	// graph has no facts about the test file. Without it the plan asserts nothing about
 	// that file, and the typed classifier correctly finds nothing to report.
 	action.Unexamined = []string{"internal/workflow/authority_test.go"}
+	// The derivation owns a present source only: the pinned world confirms the
+	// production file exists, as a real run reads it. Unknown presence settles nothing.
+	action.Present = []string{"internal/workflow/premise.go"}
 	cold := routeAuthorityForAction(scoped, claims, action)
 	if !cold.ClosesGap() {
 		t.Fatalf("precondition: without the grant, the test file is an ungoverned planned file: %+v", cold)
@@ -794,11 +797,25 @@ func TestTheBlindSpotCoverageBranchHonoursOperationalAuthority(t *testing.T) {
 		t.Fatal("the granted test entered DerivedCoverage")
 	}
 	// A plan that is ONLY operational files has nothing architectural to
-	// cover, and is not thereby covered.
+	// cover. Its coverage disposition is zero-member and closes: no coverage
+	// identity is manufactured over a file that does not answer to coverage
+	// (DF-30 review f1). It is not thereby covered -- nothing enters
+	// DerivedCoverage -- and it is governed by the grant it holds.
 	only := plannedEdit("internal/workflow/authority_test.go")
 	only.OperationalAuthority = []string{"internal/workflow/authority_test.go"}
-	if r := routeAuthorityForAction(scoped, claims, only); !r.ClosesGap() {
-		t.Fatalf("a plan of only granted files was read as covered: %+v", r)
+	r := routeAuthorityForAction(scoped, claims, only)
+	if isCoverageGapKind(r.Gap.Kind) || r.ClosesGap() {
+		t.Fatalf("a plan of only granted files was asked a coverage question: %+v", r)
+	}
+	if len(only.DerivedCoverage) != 0 {
+		t.Fatal("the granted test was given derived coverage")
+	}
+	// Closing the empty coverage set is not silent admission: the same plan
+	// WITHOUT the grant keeps its test under test governance, not coverage.
+	bare := plannedEdit("internal/workflow/authority_test.go")
+	if r := routeAuthorityForAction(scoped, claims, bare); !r.ClosesGap() || r.Gap.Kind != gapTestGovernanceUnestablished ||
+		len(r.Gap.Scope) != 1 || r.Gap.Scope[0] != "internal/workflow/authority_test.go" {
+		t.Fatalf("an ungranted test alone was admitted or asked a coverage question: %+v", r)
 	}
 }
 
@@ -825,5 +842,65 @@ func TestAnUnidentifiedGapRepeatingItsConditionDoesNotBuyAFreshRound(t *testing.
 	other := Routing{Route: RouteCloseGap, Condition: "something else entirely"}
 	if r3 := e.premiseReceiptFor("t", other, ""); r3.ID == r1.ID || !e.spendClosure("t", r3.ID) {
 		t.Fatal("a different condition was denied its own round")
+	}
+}
+
+// DF-30 review f1: a plan with no architectural member has a zero-member
+// coverage disposition, in the coverage-absent branch and the blind-spot branch
+// alike, and that disposition closes the coverage concern. Neither branch may
+// manufacture a coverage identity over files that do not answer to coverage --
+// an operationally granted test, an ungranted test, an unsupported artifact --
+// and closing it is not silent admission: each non-architectural file stays
+// with its own evidence owner. An action naming no file at all keeps the
+// region's question whole.
+func TestDF30AZeroMemberRegionGapClosesWithoutAdmission(t *testing.T) {
+	const test = "internal/workflow/authority_test.go"
+	for name, body := range map[string]string{
+		gapCoverageAbsent: `{"status":"PREFLIGHT_STATUS_EMPTY",
+			"coverage":{"sufficient":false,"direct_anchor_count":0,"indexed_file_count":0},
+			"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},` + healthyAuthority + `}`,
+		gapCoverageBlindSpot: `{"status":"PREFLIGHT_STATUS_OK",
+			"coverage":{"sufficient":true,"direct_anchor_count":1,"indexed_file_count":1},
+			"blind_spots":["coverage_insufficient: no direct anchors and no indexed files"],
+			"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},` + healthyAuthority + `}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			scoped := scopedPreflight(t, body)
+
+			// Every planned file under an operational grant: no coverage
+			// question, and governed by the grant.
+			granted := plannedEdit(test)
+			granted.OperationalAuthority = []string{test}
+			if r := routeAuthorityForAction(scoped, nil, granted); isCoverageGapKind(r.Gap.Kind) || r.ClosesGap() || r.RequiresHuman() {
+				t.Fatalf("an all-operational plan was asked a coverage question: %+v", r)
+			}
+
+			// The same test without its grant is put to test governance, over
+			// exactly that file -- not admitted, not a coverage gap.
+			r := routeAuthorityForAction(scoped, nil, plannedEdit(test))
+			if r.Granted() || !r.ClosesGap() || r.Gap.Kind != gapTestGovernanceUnestablished || !sameFiles(r.Gap.Scope, []string{test}) {
+				t.Fatalf("an ungranted test alone was admitted or asked a coverage question: %+v", r)
+			}
+
+			// A granted test beside an ungranted one: only the ungranted one
+			// is asked, and by its own owner.
+			mixed := plannedEdit(test, "internal/workflow/blindspot_test.go")
+			mixed.OperationalAuthority = []string{test}
+			if r := routeAuthorityForAction(scoped, nil, mixed); r.Granted() || r.Gap.Kind != gapTestGovernanceUnestablished ||
+				!sameFiles(r.Gap.Scope, []string{"internal/workflow/blindspot_test.go"}) {
+				t.Fatalf("the ungranted test beside a granted one was admitted or mis-scoped: %+v", r)
+			}
+
+			// An artifact no evidence class governs is refused by its own
+			// owner, never as coverage.
+			if r := routeAuthorityForAction(scoped, nil, plannedEdit("Makefile")); r.Granted() || r.Gap.Kind != gapUnsupportedArtifact {
+				t.Fatalf("an unsupported artifact was admitted or asked a coverage question: %+v", r)
+			}
+
+			// No planned file at all: the region's question is kept whole.
+			if r := routeAuthorityForAction(scoped, nil, plannedEdit()); !r.ClosesGap() || r.Gap.Kind != name {
+				t.Fatalf("an action naming no file lost the region's coverage question: %+v", r)
+			}
+		})
 	}
 }

@@ -141,6 +141,9 @@ func TestOperationalAuthorityIsSubtractedFromTheCoverageQuestionNotAddedToIt(t *
 	// The per-file fact a real run establishes: the graph has no facts about the test
 	// file. This fixture predates per-file typing and asserted the conflated outcome.
 	action.Unexamined = []string{teF}
+	// The derivation owns a present source only: the pinned world confirms the
+	// production file exists. Only S is marked; the granted test is never an anchor.
+	action.Present = []string{teS}
 	cold := routeAuthorityForAction(scoped, claims, action)
 	if !cold.ClosesGap() {
 		t.Fatalf("a plan over a covered source and an ungranted test did not close a gap: %+v", cold)

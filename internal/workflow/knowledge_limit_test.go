@@ -91,7 +91,12 @@ func TestTheKnowledgeLimitNamesTheMissingFiles(t *testing.T) {
 // C — the stop names an actionable remedy, in the CLI's real shape.
 func TestTheKnowledgeLimitNamesAnActionableRemedy(t *testing.T) {
 	e := &Engine{SessionID: "s1", Repo: gitx.Repo{Root: "/src/sensei-code"}}
-	routed, limited := e.disposeUnclosedGap("task-1", "github.com/globulario/sensei-code", coverageGap(), coverageAction())
+	// The unexamined members are existing files the graph never examined, and the
+	// pinned world says so: a graph refresh is their remedy only once their
+	// presence is confirmed. (Unknown presence is a different remedy entirely.)
+	action := coverageAction()
+	action.Present = []string{unexaminedA, "internal/ghbridge/transport.go", unexaminedB}
+	routed, limited := e.disposeUnclosedGap("task-1", "github.com/globulario/sensei-code", coverageGap(), action)
 	if limited == nil {
 		t.Fatal("an unclosed coverage gap produced no knowledge limit, so it names no remedy")
 	}

@@ -60,9 +60,10 @@ func TestAWideTrueIrrelevantDerivationClosesNothing(t *testing.T) {
 	}
 
 	// Perfect subject overlap. Every planned file is covered by a DERIVED,
-	// independently checkable, true proposition — and it resolves nothing.
+	// independently checkable, true proposition over a file the pinned world
+	// confirms present — and it resolves nothing.
 	got := routeAuthorityForAction(scoped, nil, Action{
-		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: layeringAnchors(planned...)})
+		Stage: StageCandidateEdit, Files: planned, Present: planned, DerivedCoverage: layeringAnchors(planned...)})
 	if !got.ClosesGap() {
 		t.Fatalf("a wide true irrelevant derivation manufactured coverage: %+v", got)
 	}
@@ -73,7 +74,7 @@ func TestAWideTrueIrrelevantDerivationClosesNothing(t *testing.T) {
 	// And the working family over the same file still closes the gap it was
 	// introduced to answer. Refusing everything is not the fix.
 	lock := routeAuthorityForAction(scoped, nil, Action{
-		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: lockAnchors(planned...)})
+		Stage: StageCandidateEdit, Files: planned, Present: planned, DerivedCoverage: lockAnchors(planned...)})
 	if lock.ClosesGap() {
 		t.Fatalf("the lock-discipline closure for internal/event/bus.go stopped working: %+v", lock)
 	}
@@ -286,8 +287,9 @@ func TestDerivedCoverageThatResolvesTheGapAllowsRouting(t *testing.T) {
 	if bare := routeAuthorityForAction(scoped, nil, plannedEdit(planned...)); !bare.ClosesGap() {
 		t.Fatalf("the specimen is not a knowledge gap: %+v", bare)
 	}
+	// The derivation is over a file the pinned world confirms present.
 	closed := routeAuthorityForAction(scoped, nil, Action{
-		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: lockAnchors(planned...)})
+		Stage: StageCandidateEdit, Files: planned, Present: planned, DerivedCoverage: lockAnchors(planned...)})
 	if closed.ClosesGap() {
 		t.Fatalf("a derivation that resolves the gap did not close it: %+v", closed)
 	}

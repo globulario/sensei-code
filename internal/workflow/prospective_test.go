@@ -251,25 +251,34 @@ func TestAnAnchorNamingAnAbsentPlannedPathCannotCoverItWithoutADeclaration(t *te
 		t.Fatalf("the existing surface should be the only covered file, got %v", files)
 	}
 
-	// With an admissible declaration the same absent path is covered ONLY by
-	// the prospective anchor, which names S and says so.
+	// With an admissible declaration the same absent path is authorized ONLY by
+	// its prospective grant, whose anchor names S and says so.
+	//
+	// MIGRATED under DF-30 (objective 59, ruling 178): this asserted that the
+	// grant's anchor was projected into ordinary coverage. That projection is
+	// the superseded law -- it read as a derivation over a file that does not
+	// exist -- so the grant now stands beside the coverage, never inside it,
+	// and the absent file still takes no ordinary coverage at all.
 	grants, out = coverPlannedAtWorld(context.Background(), prospectiveWorld, planned,
 		[]ProspectiveSurface{gosumcheckDeclaration()}, anchors, world)
 	if len(grants) != 1 || grants[0].Covering != gosumcheckS {
 		t.Fatalf("an admissible declaration did not grant against S: %+v", grants)
 	}
+	if len(out) != 1 || out[0].File != gosumcheckS {
+		t.Fatalf("a declared absent file entered ordinary coverage: %+v", out)
+	}
 	n := 0
-	for _, a := range out {
+	for _, a := range grantAnchors(grants) {
 		if a.File != gosumcheckF {
 			continue
 		}
 		n++
 		if !strings.HasPrefix(a.Describe, "PROSPECTIVE") || a.Requirement != RequirementInvocationConfinement {
-			t.Fatalf("the absent file's coverage is not the prospective anchor: %+v", a)
+			t.Fatalf("the absent file's authority is not the prospective anchor: %+v", a)
 		}
 	}
 	if n != 1 {
-		t.Fatalf("the absent file carries %d anchors, want exactly the prospective one", n)
+		t.Fatalf("the absent file's grant carries %d anchors, want exactly the prospective one", n)
 	}
 
 	// An existence check that cannot be answered is neither presence nor
@@ -1320,12 +1329,23 @@ func TestObj57W1TheRecordLockPairIsGrantedThroughTheExistingPackageRole(t *testi
 	if env := strings.Join(got[existingWindows].Existing.Envelope, ","); env != "fmt,golang.org/x/sys/windows,os" {
 		t.Fatalf("the windows envelope is not exactly its declared dependencies: %s", env)
 	}
+	// MIGRATED under DF-30 (objective 59, ruling 178): the pair's prospective
+	// anchors were asserted to be in the router's ordinary coverage. They are
+	// the grants' own, kept beside it: the existing surface alone is covered,
+	// and each created file carries exactly one prospective anchor on its grant.
 	covered := map[string]int{}
 	for _, a := range out {
 		covered[a.File]++
 	}
-	if covered[existingUnix] != 1 || covered[existingWindows] != 1 || covered[existingS] == 0 {
-		t.Fatalf("the router output does not cover the created pair prospectively: %v", covered)
+	if covered[existingUnix] != 0 || covered[existingWindows] != 0 || covered[existingS] == 0 {
+		t.Fatalf("ordinary coverage is not exactly the existing surface's: %v", covered)
+	}
+	prospective := map[string]int{}
+	for _, a := range grantAnchors(grants) {
+		prospective[a.File]++
+	}
+	if prospective[existingUnix] != 1 || prospective[existingWindows] != 1 || len(prospective) != 2 {
+		t.Fatalf("the grants do not carry the created pair's prospective anchors: %v", prospective)
 	}
 	if err := matchGrantsToDeclarations(decl, grants); err != nil {
 		t.Fatalf("the issued grants are not a receipt for their declarations: %v", err)
@@ -1868,4 +1888,522 @@ func TestDF37W7RestorationUsesTheSameCanonicalMatcher(t *testing.T) {
 	if err := inspectProspectiveGrants(good, one, grants); err != nil {
 		t.Fatalf("inspection refused an intact grant: %v", err)
 	}
+}
+
+// DF-30 (objective 59): a planned CREATE absent at the pinned world whose
+// prospective surface was granted is governed for its own coverage question.
+//
+// The measured specimen (objective 49 runs 6 and 7): recordlock_unix.go,
+// recordlock_windows.go and repair_test.go held prospective grants covered by
+// internal/session/store.go, store.go and cmd/sensei-code/resume.go carried
+// derived anchors, and cmd/sensei-code/main.go and commands.go -- examined by
+// the graph, already governed -- carried none. The router required a
+// derivation over EVERY architectural file, so the gap never closed, and the
+// terminal prescribed `import --refresh` of files that do not exist.
+const (
+	df30Resume   = "cmd/sensei-code/resume.go"
+	df30Main     = "cmd/sensei-code/main.go"
+	df30Commands = "cmd/sensei-code/commands.go"
+	df30Repair   = "internal/session/repair_test.go"
+)
+
+// df30Attempt is the plan attempt the DF-30 witnesses route and record for.
+func df30Attempt() planAttempt {
+	return planAttempt{ID: "pa-df30-measured", TaskID: "task-df30", World: prospectiveWorld}
+}
+
+func df30World() map[string]string {
+	w := existingWorld()
+	for _, f := range []string{df30Resume, df30Main, df30Commands} {
+		w[f] = "package main\n"
+	}
+	return w
+}
+
+func df30Declarations() []ProspectiveSurface {
+	return append(existingDeclarations(),
+		ProspectiveSurface{Path: df30Repair, Package: "session", Role: roleGoRegressionTest, Covering: existingS, Dependencies: []string{"testing"}})
+}
+
+func df30Planned() []string {
+	return []string{existingS, df30Resume, df30Main, df30Commands, existingUnix, existingWindows, df30Repair}
+}
+
+// df30Measured derives the measured plan's grants and coverage through the
+// production predicate (coverPlannedAtWorld), over real derived anchors naming
+// store.go, journal.go and resume.go.
+func df30Measured(t *testing.T) ([]ProspectiveSurface, []prospectiveGrant, []CoverageAnchor) {
+	t.Helper()
+	decl := df30Declarations()
+	anchors := derivedAnchorNaming(t, existingS, existingSibling, df30Resume)
+	grants, out := coverPlannedAtWorld(context.Background(), prospectiveWorld, df30Planned(), decl, anchors, worldOf(df30World()))
+	if len(grants) != 3 {
+		t.Fatalf("premise: the measured plan's three creates are granted, got %+v", grants)
+	}
+	return decl, grants, out
+}
+
+// df30Recorded is the grant record routing writes for df30Attempt.
+func df30Recorded(grants []prospectiveGrant) prospectiveRecord {
+	return prospectiveRecord{PlanAttemptID: df30Attempt().ID, World: prospectiveWorld, Grants: grants}
+}
+
+// df30Action is the action the engine assembles for the measured plan once the
+// per-file probes ran: the present files examined, the creates unexamined and
+// confirmed absent at the pinned world.
+func df30Action(out []CoverageAnchor, units []prospectiveUnit) Action {
+	present := []string{existingS, df30Resume, df30Main, df30Commands}
+	return Action{
+		Stage: StageCandidateEdit, Files: df30Planned(), DerivedCoverage: out,
+		Unexamined: []string{existingUnix, existingWindows}, Examined: present,
+		Present: present, Absent: []string{existingUnix, existingWindows, df30Repair},
+		Prospective: units,
+	}
+}
+
+func withoutGrantFor(grants []prospectiveGrant, f string) []prospectiveGrant {
+	var out []prospectiveGrant
+	for _, g := range grants {
+		if g.Anchor.File != f {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+// mutateGrant returns grants with f's grant replaced by mut applied to a copy.
+func mutateGrant(grants []prospectiveGrant, f string, mut func(g *prospectiveGrant)) []prospectiveGrant {
+	out := append([]prospectiveGrant(nil), grants...)
+	for i := range out {
+		if out[i].Anchor.File == f {
+			g := out[i]
+			mut(&g)
+			out[i] = g
+		}
+	}
+	return out
+}
+
+func sameFiles(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// W1 -- THE MEASURED SHAPE. The objective-49 run-7 plan routes past
+// coverage-unexamined through the production router: each granted create is
+// settled by its own recorded prospective unit, and the examined files without
+// derived anchors are not asked to acquire one. Fails at base, where the
+// derivation had to cover every architectural file.
+func TestDF30W1TheMeasuredRecordLockPlanRoutesPastCoverageUnexamined(t *testing.T) {
+	decl, grants, out := df30Measured(t)
+	units := prospectiveAuthorityUnits(df30Attempt(), decl, df30Planned(), df30Recorded(grants))
+	for _, u := range units {
+		if !u.Valid {
+			t.Fatalf("premise: every recorded unit of the measured plan is valid, got %+v", u)
+		}
+	}
+	action := df30Action(out, units)
+	// The specimen is live: the examined command files carry no derived anchor,
+	// so a plan-wide derivation requirement cannot be met.
+	if closed, _ := derivationClosesGap(RequirementUnqualified, out, action.architecturalFiles()); closed {
+		t.Fatal("the specimen is not the measured shape: a derivation covers every architectural file")
+	}
+	if gap, open := unexaminedCoverageGap(action, blindSpotReading{}); open {
+		t.Fatalf("granted creates beside examined files kept coverage-unexamined open: %+v", gap)
+	}
+	if got := routeAuthorityForAction(scopedPreflight(t, neighbourCovered), nil, action); !got.Granted() {
+		t.Fatalf("the measured plan did not route past coverage-unexamined: %+v", got)
+	}
+}
+
+// W2 -- A DECLARATION IS NOT A GRANT. One create merely declared, or a recorded
+// grant that is stale or mismatched, keeps the gap open for exactly the creates
+// it fails to settle; no settled or examined file is reintroduced.
+func TestDF30W2AnUngrantedStaleOrMismatchedCreateKeepsItsGapOpen(t *testing.T) {
+	decl, grants, out := df30Measured(t)
+	stale, other := df30Recorded(grants), df30Recorded(grants)
+	stale.World = "fedcba9876543210fedcba9876543210fedcba98"
+	other.PlanAttemptID = "pa-another-attempt"
+	for name, c := range map[string]struct {
+		rec  prospectiveRecord
+		want []string
+	}{
+		"declared with no recorded grant":      {df30Recorded(withoutGrantFor(grants, existingWindows)), []string{existingWindows}},
+		"a grant recorded at another world":    {stale, []string{existingUnix, existingWindows}},
+		"a grant recorded for another attempt": {other, []string{existingUnix, existingWindows}},
+		"a grant issued for another declaration": {df30Recorded(mutateGrant(grants, existingWindows, func(g *prospectiveGrant) {
+			g.Surface.Dependencies = []string{"os"}
+		})), []string{existingWindows}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			action := df30Action(out, prospectiveAuthorityUnits(df30Attempt(), decl, df30Planned(), c.rec))
+			got := routeAuthorityForAction(scopedPreflight(t, neighbourCovered), nil, action)
+			if !got.ClosesGap() || got.Gap.Kind != gapCoverageUnexamined {
+				t.Fatalf("an unsettled create did not keep coverage-unexamined open: %+v", got)
+			}
+			if !sameFiles(got.Gap.Scope, c.want) {
+				t.Fatalf("gap scope = %v, want exactly %v", got.Gap.Scope, c.want)
+			}
+			for _, settled := range []string{existingS, df30Resume, df30Main, df30Commands} {
+				if strings.Contains(got.Condition, settled) {
+					t.Fatalf("a governed file was reintroduced into the gap: %q", got.Condition)
+				}
+			}
+		})
+	}
+}
+
+// W8 -- ATOMIC UNIT. A new-package directory is admitted whole, so one
+// malformed or missing member leaves EVERY member of it unsettled; an unrelated
+// valid existing-package create in the same plan stays settled.
+func TestDF30W8ANewPackageUnitSettlesWholeOrNotAtAll(t *testing.T) {
+	lib := prospectiveFor(t, newLibPlanned(), newLibDeclarations(), newPackageAnchors(), newPackageWorld())
+	if len(lib) != 3 {
+		t.Fatalf("premise: the new library package is granted whole, got %+v", lib)
+	}
+	unix, _ := existingGrants(t, []string{existingS, existingUnix}, existingDeclarations()[:1], existingWorld())
+	if len(unix) != 1 {
+		t.Fatalf("premise: the existing-package create is granted, got %+v", unix)
+	}
+	decl := append(newLibDeclarations(), existingDeclarations()[0])
+	planned := append(newLibPlanned(), existingS, existingUnix)
+	answerer, config := newLibDir+"/answerer.go", newLibDir+"/config.go"
+	creates := []string{answerer, config, existingUnix}
+	route := func(grants []prospectiveGrant) (Routing, []prospectiveUnit) {
+		units := prospectiveAuthorityUnits(df30Attempt(), decl, planned, df30Recorded(grants))
+		return routeAuthorityForAction(scopedPreflight(t, neighbourCovered), nil, Action{
+			Stage: StageCandidateEdit, Files: planned, Unexamined: creates,
+			Examined: []string{existingS}, Present: []string{existingS},
+			Absent: append(creates, newLibDir+"/answerer_test.go"), Prospective: units,
+		}), units
+	}
+	all := append(append([]prospectiveGrant(nil), lib...), unix...)
+	if got, _ := route(all); !got.Granted() {
+		t.Fatalf("control: the complete grant state did not settle every create: %+v", got)
+	}
+	for name, grants := range map[string][]prospectiveGrant{
+		"a missing member grant": withoutGrantFor(all, config),
+		"a malformed member grant": mutateGrant(all, config, func(g *prospectiveGrant) {
+			g.Facts.Imports = nil
+		}),
+		"a duplicate member grant": append(append([]prospectiveGrant(nil), all...), grantedPaths(lib)[config]),
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, units := route(grants)
+			for _, u := range units {
+				if sameFiles(u.Files, []string{existingUnix}) && !u.Valid {
+					t.Fatalf("the independent existing-package unit was revoked: %+v", u)
+				}
+			}
+			if !got.ClosesGap() || !sameFiles(got.Gap.Scope, []string{answerer, config}) {
+				t.Fatalf("the atomic unit did not stay unsettled as a whole: %+v", got)
+			}
+		})
+	}
+}
+
+// W9 -- INDEPENDENT UNITS. Two existing-package creates are admitted one
+// declaration at a time, so each settles on its own: one invalid grant does not
+// reopen the other.
+func TestDF30W9IndependentCreatesSettleIndependently(t *testing.T) {
+	decl, grants, out := df30Measured(t)
+	for _, broken := range []string{existingUnix, existingWindows} {
+		t.Run(broken, func(t *testing.T) {
+			malformed := mutateGrant(grants, broken, func(g *prospectiveGrant) { g.Existing = nil })
+			units := prospectiveAuthorityUnits(df30Attempt(), decl, df30Planned(), df30Recorded(malformed))
+			got := routeAuthorityForAction(scopedPreflight(t, neighbourCovered), nil, df30Action(out, units))
+			if !got.ClosesGap() || !sameFiles(got.Gap.Scope, []string{broken}) {
+				t.Fatalf("an invalid grant for %s settled or reopened more than itself: %+v", broken, got)
+			}
+		})
+	}
+}
+
+// W8 -- ATOMIC UNIT OVER PRESENCE. A valid recorded unit settles only when the
+// pinned world confirms EVERY member absent: one member of a new-package unit
+// present, or whose presence was never read, leaves every member unsettled,
+// and the independent existing-package create beside it still settles. The
+// same holds through a dependency: a command unit whose validity rests on a
+// same-plan library settles only while that library's creates are confirmed
+// absent too.
+func TestDF30W8AUnitSettlesOnlyWhenTheWorldConfirmsItWhollyAbsent(t *testing.T) {
+	lib := prospectiveFor(t, newLibPlanned(), newLibDeclarations(), newPackageAnchors(), newPackageWorld())
+	unix, _ := existingGrants(t, []string{existingS, existingUnix}, existingDeclarations()[:1], existingWorld())
+	decl := append(newLibDeclarations(), existingDeclarations()[0])
+	planned := append(newLibPlanned(), existingS, existingUnix)
+	answerer, config, libTest := newLibDir+"/answerer.go", newLibDir+"/config.go", newLibDir+"/answerer_test.go"
+	units := prospectiveAuthorityUnits(df30Attempt(), decl, planned, df30Recorded(append(append([]prospectiveGrant(nil), lib...), unix...)))
+	for _, u := range units {
+		if !u.Valid {
+			t.Fatalf("premise: every recorded unit is valid, got %+v", u)
+		}
+	}
+	route := func(present, absent []string) Routing {
+		return routeAuthorityForAction(scopedPreflight(t, neighbourCovered), nil, Action{
+			Stage: StageCandidateEdit, Files: planned, Unexamined: []string{answerer, config, existingUnix},
+			Examined: []string{existingS}, Present: append([]string{existingS}, present...),
+			Absent: absent, Prospective: units,
+		})
+	}
+	if got := route(nil, []string{answerer, config, libTest, existingUnix}); !got.Granted() {
+		t.Fatalf("control: a valid unit confirmed wholly absent did not settle: %+v", got)
+	}
+	for name, c := range map[string]struct{ present, absent []string }{
+		"one production member present":              {[]string{answerer}, []string{config, libTest, existingUnix}},
+		"one production member of unknown presence":  {nil, []string{config, libTest, existingUnix}},
+		"the traced test member of unknown presence": {nil, []string{answerer, config, existingUnix}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := route(c.present, c.absent)
+			if !got.ClosesGap() || !sameFiles(got.Gap.Scope, []string{answerer, config}) {
+				t.Fatalf("a unit only partly confirmed absent settled a member, or the independent create was reopened: %+v", got)
+			}
+		})
+	}
+
+	grants := prospectiveFor(t, edgePlanned(), edgeDeclarations(), newPackageAnchors(), newPackageWorld())
+	command := newCmdDir + "/main.go"
+	edgeUnits := prospectiveAuthorityUnits(df30Attempt(), edgeDeclarations(), edgePlanned(), df30Recorded(grants))
+	for _, u := range edgeUnits {
+		if !u.Valid {
+			t.Fatalf("premise: every recorded edge unit is valid, got %+v", u)
+		}
+	}
+	routeCmd := func(absent []string) Routing {
+		return routeAuthorityForAction(scopedPreflight(t, neighbourCovered), nil, Action{
+			Stage: StageCandidateEdit, Files: edgePlanned(), Unexamined: []string{command},
+			Absent: absent, Prospective: edgeUnits,
+		})
+	}
+	if got := routeCmd([]string{command, answerer, config, libTest}); !got.Granted() {
+		t.Fatalf("control: the command beside its wholly absent library did not settle: %+v", got)
+	}
+	if got := routeCmd([]string{command, config, libTest}); !got.ClosesGap() || !sameFiles(got.Gap.Scope, []string{command}) {
+		t.Fatalf("the command settled while a library create it depends on was of unknown presence: %+v", got)
+	}
+}
+
+// DF-30 review f2: several command members bound to ONE same-plan library
+// form one valid command unit. The admission predicate forbids only different
+// library bindings; projecting the shared edge once per member handed the
+// library's declarations and grants to the predicate again as duplicates, so a
+// valid command unit read invalid and its absent creates stayed unresolved.
+// The unit is still atomic: a missing or malformed command member leaves the
+// whole command unit unresolved, and the library unit it depends on stands.
+func TestDF30ACommandUnitSharingOneLibraryEdgeSettlesAtomically(t *testing.T) {
+	command, two := newCmdDir+"/main.go", newCmdDir+"/two.go"
+	twoDecl := ProspectiveSurface{Path: two, Package: "main", Role: roleGoCommandPackage, Covering: cmdS,
+		Dependencies: []string{"fmt", answererImport}}
+	decl := append(edgeDeclarations(), twoDecl)
+	planned := append(edgePlanned(), two)
+	grants := prospectiveFor(t, planned, decl, newPackageAnchors(), newPackageWorld())
+	edged := 0
+	for _, g := range grants {
+		if g.Edge != nil && g.Edge.Library == newLibDir {
+			edged++
+		}
+	}
+	if edged != 2 {
+		t.Fatalf("premise: both command members are granted over the one library edge, got %+v", grants)
+	}
+	if err := matchGrantsToDeclarations(decl, grants); err != nil {
+		t.Fatalf("premise: the canonical predicate admits the plan: %v", err)
+	}
+	route := func(units []prospectiveUnit) Routing {
+		return routeAuthorityForAction(scopedPreflight(t, neighbourCovered), nil, Action{
+			Stage: StageCandidateEdit, Files: planned, Unexamined: []string{command, two},
+			Absent: planned, Prospective: units,
+		})
+	}
+	commandUnit := func(units []prospectiveUnit) prospectiveUnit {
+		for _, u := range units {
+			if containsPath(u.Files, command) {
+				return u
+			}
+		}
+		t.Fatalf("no unit holds %s: %+v", command, units)
+		return prospectiveUnit{}
+	}
+
+	units := prospectiveAuthorityUnits(df30Attempt(), decl, planned, df30Recorded(grants))
+	for _, u := range units {
+		if !u.Valid {
+			t.Fatalf("a unit of a canonically admitted plan projected invalid: %+v", u)
+		}
+	}
+	if u := commandUnit(units); !sameFiles(u.Files, []string{command, two}) || !sameFiles(u.Requires, []string{newLibDir + "/answerer.go", newLibDir + "/answerer_test.go", newLibDir + "/config.go"}) {
+		t.Fatalf("the command unit is not the two members over the one library: %+v", u)
+	}
+	if got := route(units); !got.Granted() {
+		t.Fatalf("two command members sharing one valid library edge did not settle: %+v", got)
+	}
+
+	var missing, malformed []prospectiveGrant
+	for _, g := range grants {
+		if g.Anchor.File == two {
+			bad := g
+			bad.Surface.Package = "other"
+			malformed = append(malformed, bad)
+			continue
+		}
+		missing = append(missing, g)
+		malformed = append(malformed, g)
+	}
+	for name, rec := range map[string][]prospectiveGrant{"missing": missing, "malformed": malformed} {
+		t.Run(name, func(t *testing.T) {
+			units := prospectiveAuthorityUnits(df30Attempt(), decl, planned, df30Recorded(rec))
+			if u := commandUnit(units); u.Valid {
+				t.Fatalf("a command unit with a %s member projected valid: %+v", name, u)
+			}
+			for _, u := range units {
+				if containsPath(u.Files, newLibDir+"/answerer.go") && !u.Valid {
+					t.Fatalf("the library unit fell with the command member: %+v", u)
+				}
+			}
+			if got := route(units); !got.ClosesGap() || !sameFiles(got.Gap.Scope, []string{command, two}) {
+				t.Fatalf("a command unit with a %s member settled any member: %+v", name, got)
+			}
+		})
+	}
+}
+
+// pinWorld binds taskID's candidate to world in a fresh repository root, as
+// candidate.Establish records it, so the engine's governedBase -- the world
+// every production routing site completes a gap identity with -- is world.
+func pinWorld(t *testing.T, e *Engine, taskID, world string) {
+	t.Helper()
+	e.Repo.Root = t.TempDir()
+	dir := filepath.Join(e.Repo.Root, ".sensei-code", "candidates")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(map[string]string{"task_id": taskID, "base_sha": world})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, taskID+".json"), body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.governedBase(taskID); got != world {
+		t.Fatalf("premise: the candidate is pinned to %s, got %q", world, got)
+	}
+}
+
+// df30Production is a governed run's production surroundings for the DF-30
+// lifecycle witness (W14): a pinned Git world holding the planned files that
+// exist, the task's candidate bound to it, a `sensei derive` that answers the
+// recipe with the subjects the case supplies, and a Sensei MCP answering the
+// scoped region preflight and every per-file probe from state the case can
+// change between routings. Nothing here calls the router, a reconciler or the
+// ledger directly: an engine built on it is driven only through its entry
+// points, and the facts a gap is decided on arrive the way production reads
+// them -- presence from Git, grants from the derivation routing records,
+// examination from the probe.
+//
+// The Sensei MCP itself is started by df30Sensei over this fixture's state.
+type df30Production struct {
+	e     *Engine
+	root  string
+	state string
+	world string
+}
+
+// newDF30Production pins taskID to a fresh world holding files, installs the
+// derivation stub and returns an engine over them with a durable record.
+func newDF30Production(t *testing.T, taskID string, files map[string]string) *df30Production {
+	t.Helper()
+	root, state := t.TempDir(), t.TempDir()
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git("init", "-q")
+	for rel, content := range files {
+		write(filepath.Join(root, rel), content)
+	}
+	git("add", "-A")
+	git("commit", "-q", "-m", "the pinned world")
+	world := git("rev-parse", "HEAD")
+	// Recipes, the derivation binary and the candidate pin are this run's
+	// workflow state, outside the world's tree.
+	write(filepath.Join(root, ownedRecipesPath),
+		`{"recipes":[{"kind":"command_invocation_confined_to","command":"go","owner":"gosumcheck","search_paths":["."]}]}`)
+	bin := filepath.Join(state, "sensei")
+	write(bin, "#!/bin/sh\ncat '"+filepath.Join(state, "receipt.json")+"'\n")
+	if err := os.Chmod(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SENSEI_BIN", bin)
+	pin, err := json.Marshal(map[string]string{"task_id": taskID, "base_sha": world})
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(filepath.Join(root, ".sensei-code", "candidates", taskID+".json"), string(pin))
+
+	w := &df30Production{root: root, state: state, world: world}
+	write(filepath.Join(state, "examined.json"), df30ExaminedProbe)
+	write(filepath.Join(state, "unexamined.json"), df30UnexaminedProbe)
+	w.probes(nil, nil)
+	store, err := session.New(t.TempDir(), "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.e = &Engine{Bus: event.NewBus(), Store: store, SessionID: "s1", pending: map[string]chan string{}}
+	w.e.Repo.Root = root
+	if got := w.e.governedBase(taskID); got != world {
+		t.Fatalf("premise: the candidate is pinned to %s, got %q", world, got)
+	}
+	return w
+}
+
+func (w *df30Production) put(t *testing.T, name, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(w.state, name), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// region sets the scoped region preflight's structured answer.
+func (w *df30Production) region(t *testing.T, structured string) {
+	t.Helper()
+	w.put(t, "region.json", `{"content":[{"type":"text","text":"region"}],"structuredContent":`+structured+`}`)
+}
+
+// probes sets which files a per-file probe reports examined and unexamined.
+func (w *df30Production) probes(examined, unexamined []string) {
+	_ = os.WriteFile(filepath.Join(w.state, "examined"), []byte(strings.Join(examined, "\n")+"\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(w.state, "unexamined"), []byte(strings.Join(unexamined, "\n")+"\n"), 0o644)
+}
+
+// derives sets the subjects the recipe derives over at the pinned world.
+func (w *df30Production) derives(t *testing.T, subjects ...string) {
+	t.Helper()
+	var subj []string
+	for _, s := range subjects {
+		subj = append(subj, fmt.Sprintf(`{"file":%q,"entity":"x","role":"subject"}`, s))
+	}
+	w.put(t, "receipt.json", fmt.Sprintf(`{"result":"DERIVED","pinned_commit":%q,"subjects":[%s],"completeness_scope":["nothing"]}`,
+		w.world, strings.Join(subj, ",")))
 }

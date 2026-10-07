@@ -302,7 +302,9 @@ func (e *Engine) spendClosure(taskID, gap string) bool {
 		e.closures = map[string]int{}
 	}
 	key := taskID + "\x00" + gap
-	if e.closures[key] >= closureBudget {
+	// A receipt with no ID was issued to no episode (an ambiguous coverage
+	// observation, premiseReceiptFor): it has no budget to spend.
+	if gap == "" || e.closures[key] >= closureBudget {
 		return false
 	}
 	e.closures[key]++
@@ -354,19 +356,31 @@ func (e *Engine) gapResolutions(taskID string) *taskResolutions {
 		switch ev.Kind {
 		case event.AuthorityResolved:
 			var res resolvedAuthority
-			if json.Unmarshal(ev.Payload, &res) == nil && res.Gap != nil && res.Gap.Identified() {
+			// A recorded answer about a coverage gap installs no historical
+			// authority: no canonical episode is recorded with it, so nothing
+			// proves which question it answered (RULING-181). It stays in the
+			// record as evidence and settles nothing here.
+			if json.Unmarshal(ev.Payload, &res) == nil && res.Gap != nil && res.Gap.Identified() && !isCoverageGapKind(res.Gap.Kind) {
 				tr.settle(*res.Gap, res.Outcome, res.PlanAttemptID, epochAt[i])
 			}
 		case event.WorkflowAwaitingAuthority:
 			var q DeferredAuthority
 			if json.Unmarshal(ev.Payload, &q) == nil && q.Gap != nil && q.Gap.Identified() {
 				r := tr.entry(*q.Gap)
+				// A deferred coverage question restores its identity as open,
+				// so it still stands against every other route, and as
+				// restored: it carries no episode this process can
+				// authenticate, so it is preserved unresolved and never asked
+				// (unauthenticatedCoverageRestore).
+				if isCoverageGapKind(q.Gap.Kind) {
+					r.restored = true
+				}
 				// The deferred question is already the human-owned form of the
 				// gap, so that is what a consumer re-asks.
 				r.Routing = Routing{Route: RouteHuman, Condition: q.Condition, Gap: *q.Gap}
 				r.Observed = true
 				if q.PlanAttemptID != "" {
-					tr.observe(q.Gap.Key(), q.PlanAttemptID)
+					tr.observe(*q.Gap, q.PlanAttemptID)
 				}
 			}
 		}
@@ -404,25 +418,48 @@ func (e *Engine) noteOperativeTransition(taskID, attempt string) {
 // An unsettled identity becomes open again here even if a later plan had
 // stopped reporting it; a settled one stays settled.
 func (e *Engine) observeGap(taskID string, routing Routing) AuthorityResolution {
-	if !routing.ClosesGap() || !routing.Gap.Identified() {
+	if !routing.ClosesGap() || !routing.Gap.Identified() || !routing.Gap.validBinding() {
 		return AuthorityResolution{}
 	}
 	tr := e.gapResolutions(taskID)
 	pending := e.pendingPlanAttempt(taskID).ID
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	// A distinct qualified question over an episode's identity neither
+	// rewrites the episode's state nor is recorded as it: it is recorded under
+	// its own canonical identity (canonicalQuestion), which bindEpisode has
+	// already given every routing register observes. No coverage question is
+	// acted upon without a ledger entry of its own.
+	routing.Gap = canonicalQuestion(routing.Gap)
 	r := tr.entry(routing.Gap)
+	if routing.Gap.Opening != nil {
+		// A later form of the episode: its current state is this one, asking
+		// the question the episode opened with.
+		semantics := r.Gap.Semantics
+		r.hold()
+		r.Gap = routing.Gap
+		r.Gap.Semantics = semantics
+	}
 	r.Routing = routing
 	r.Observed = true
-	tr.observe(routing.Gap.Key(), pending)
+	if isCoverageGapKind(routing.Gap.Kind) && r.Disposition == nil {
+		// A coverage episode opened by this routing: the router rendered its
+		// scope from the typed disposition, whose unresolved members it is.
+		r.Disposition = &GapDisposition{Kind: routing.Gap.Kind, Unresolved: append([]string(nil), routing.Gap.Scope...),
+			Settled: map[string]gapSettlement{}}
+	}
+	tr.observe(routing.Gap, pending)
 	return tr.view(routing.Gap.Key(), pending)
 }
 
 // questionOwner is the plan attempt a question about gap is ABOUT, and so the
-// one that owns its answer: the attempt whose routing raised that gap -- which
-// is not the pending attempt when a differently shaped plan (an escalation the
-// graph certifies) is routed while the gap stands and the gap's own question is
-// asked. A question about no gap, or about one no attempt in this record
+// one that owns its answer: the attempt whose routing raised that gap last --
+// which is not the pending attempt when a differently shaped plan (an
+// escalation the graph certifies) is routed while a non-coverage gap stands
+// and the gap's own question is asked. A coverage episode is re-evaluated, and
+// so observed, by every routing that decides it (reconcileCoverageGaps), so
+// its question is about the attempt currently routing it -- never the one that
+// opened it. A question about no gap, or about one no attempt in this record
 // raised, is about the attempt routing has pending.
 func (e *Engine) questionOwner(taskID string, gap GapIdentity) string {
 	pending := e.pendingPlanAttempt(taskID).ID
@@ -444,7 +481,13 @@ func (e *Engine) questionOwner(taskID string, gap GapIdentity) string {
 // settled, and the next observation of it opens it again.
 //
 // An inspect plan re-evaluates nothing it would change, so it records nothing.
-func (e *Engine) observeGapAbsence(taskID, world string, routing Routing, d architectureDecision) {
+//
+// reconciled are the identities a same-identity typed re-evaluation has
+// already disposed of in this routing (reconcileCoverageGaps). Their
+// disposition stands and is not projected over: absence observation must not
+// erase an identity before -- or instead of -- the re-evaluation that decides
+// whether it is settled, narrowed or still open (DF-30, ruling 177).
+func (e *Engine) observeGapAbsence(taskID, world string, routing Routing, d architectureDecision, reconciled ...string) {
 	if planMode(d.Mode) != ModeModify {
 		return
 	}
@@ -452,13 +495,17 @@ func (e *Engine) observeGapAbsence(taskID, world string, routing Routing, d arch
 	for _, f := range normalizeEpisodeScope(d.Files) {
 		planned[f] = true
 	}
+	skip := make(map[string]bool, len(reconciled))
+	for _, key := range reconciled {
+		skip[key] = true
+	}
 	tr := e.gapResolutions(taskID)
 	pending := e.pendingPlanAttempt(taskID).ID
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for _, key := range tr.order {
 		r := tr.byKey[key]
-		if !tr.view(key, pending).Open() || r.Gap.World != world || (routing.ClosesGap() && routing.Gap.Key() == key) {
+		if skip[key] || !tr.view(key, pending).Open() || r.Gap.World != world || (routing.ClosesGap() && routing.Gap.Key() == key) {
 			continue
 		}
 		scope := normalizeEpisodeScope(r.Gap.Scope)
@@ -472,6 +519,337 @@ func (e *Engine) observeGapAbsence(taskID, world string, routing Routing, d arch
 	}
 }
 
+// registerRouting is the one P9 sequence every routing site runs on a routing
+// it has just obtained, in the order the DF-30 lifecycle requires (ruling 177):
+//
+//  1. the routing's own coverage gap, if any, is bound to the episode it
+//     continues (bindEpisode);
+//  2. every coverage episode of this task this routing can decide -- each
+//     still open, and the one step 1 bound -- is re-evaluated as the same
+//     identity, from this routing's facts, by the one typed owner
+//     (reconcileCoverageGaps);
+//  3. the routing's own gap, in its re-evaluated form, is observed
+//     (observeGap);
+//  4. only then, where the site projects absence at all, are identities the
+//     plan no longer reports made inactive -- never one step 2 disposed of.
+//
+// A routing that would grant while a re-evaluated coverage identity is still
+// open is contradictory route state, and the canonical decision is the open
+// gap: the same answer the escalation route gives through openGap.
+func (e *Engine) registerRouting(taskID, world string, routing Routing, action Action, scoped sensei.PreflightDecision, d architectureDecision, projectAbsence bool) (Routing, AuthorityResolution) {
+	return e.register(taskID, world, routing, action, scoped, d, projectAbsence, routing.Granted())
+}
+
+// registerAuthorizedRouting is registerRouting for the routing a recorded human
+// authorization leaves: every route that does not itself close a gap continues
+// to a worker, whatever it was before the answer -- a human-owned route the
+// answer satisfied included. So a re-evaluated coverage identity still open
+// outranks it exactly as it outranks a grant; the pre-authorization route value
+// never decides continuation (DF-30, ruling 80).
+func (e *Engine) registerAuthorizedRouting(taskID, world string, routing Routing, action Action, scoped sensei.PreflightDecision, d architectureDecision) (Routing, AuthorityResolution) {
+	return e.register(taskID, world, routing, action, scoped, d, false, !routing.ClosesGap())
+}
+
+// register is the sequence both share; continues says whether routing, as
+// obtained, would let the plan reach a worker.
+//
+// A coverage gap the routing reports is first bound to the episode it
+// continues (bindEpisode), so the re-evaluation below decides that episode --
+// narrowed, widened, reopened or closed in place -- and never opens a second
+// identity for the same unresolved condition.
+func (e *Engine) register(taskID, world string, routing Routing, action Action, scoped sensei.PreflightDecision, d architectureDecision, projectAbsence, continues bool) (Routing, AuthorityResolution) {
+	routing = e.bindEpisode(taskID, routing)
+	routing, reconciled, open, stillOpen := e.reconcileCoverageGaps(taskID, world, routing, action, scoped, d)
+	resolution := e.observeGap(taskID, routing)
+	if projectAbsence {
+		e.observeGapAbsence(taskID, world, routing, d, reconciled...)
+	}
+	if continues && stillOpen {
+		return open.Routing, open
+	}
+	return routing, resolution
+}
+
+// reconcileCoverageGaps re-evaluates, as the SAME identity, every coverage
+// episode of this task at this world that this routing can decide: each one
+// still open, and the one this routing's own coverage gap continues
+// (bindEpisode), through disposeCoverageGap and renderCoverageGap (DF-30,
+// rulings 79 C, 80, 176 and 177). It is the one place an episode's membership
+// changes:
+//
+//   - a member the modifying plan no longer names is withdrawn -- not settled;
+//     the plan stopped depending on it -- and a plan naming none of an
+//     episode's members leaves that episode inactive, never settled;
+//   - every other member is decided by the one typed owner, from this
+//     routing's facts; for the routing's own episode the members it reports
+//     are joined to the ones the episode still holds, so a narrower or wider
+//     report narrows or widens the episode and never drops an unresolved
+//     member it did not re-decide;
+//   - every member settled or withdrawn: the episode closes (inactive);
+//   - otherwise its current Gap, Routing and Disposition are re-rendered here,
+//     under the key it opened with, and its live question is about the
+//     attempt routing it now (observe).
+//
+// Missing probe, presence or grant data settles nothing, so a re-evaluation
+// over an unprobed action preserves every member. The routing returned is the
+// routing's own gap in its re-rendered form; the keys returned are the
+// identities disposed of here; open is the first OTHER one left open.
+func (e *Engine) reconcileCoverageGaps(taskID, world string, routing Routing, action Action, _ sensei.PreflightDecision, d architectureDecision) (_ Routing, reconciled []string, open AuthorityResolution, stillOpen bool) {
+	if planMode(d.Mode) != ModeModify || world == "" {
+		return routing, nil, AuthorityResolution{}, false
+	}
+	// Which files the modifying plan currently names is the Action's fact,
+	// like every other fact this re-evaluation applies: the decision supplies
+	// only the mode.
+	planned := make(map[string]bool, len(action.Files))
+	for _, f := range normalizeEpisodeScope(action.Files) {
+		planned[cleanPlannedPath(f)] = true
+	}
+	tr := e.gapResolutions(taskID)
+	pending := e.pendingPlanAttempt(taskID).ID
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	ownKey := ""
+	if routing.ClosesGap() && isCoverageGapKind(routing.Gap.Kind) && routing.Gap.World == world {
+		// The routing's gap is this episode observed again only when it asks
+		// the episode's question (bindEpisode); a distinct qualified question
+		// over the same identity leaves the episode to be decided as any
+		// other, by its own requirement over its own members.
+		if _, ok := tr.episodeEntry(routing.Gap); ok {
+			ownKey = routing.Gap.Key()
+		}
+	}
+	var left []string
+	for _, key := range tr.order {
+		r := tr.byKey[key]
+		own := key == ownKey
+		if !isCoverageGapKind(r.Gap.Kind) || r.Gap.World != world {
+			continue
+		}
+		if v := tr.view(key, pending); v.Settled || (!own && !v.Open()) {
+			continue
+		}
+		sem, ok := r.Gap.episodeSemantics()
+		if !ok {
+			// No question of its own to decide it by: preserved exactly as
+			// it stands -- nothing settled, narrowed, withdrawn or
+			// re-rendered -- and disposed of here, so absence projection
+			// cannot deactivate it either.
+			reconciled = append(reconciled, key)
+			if !own {
+				left = append(left, key)
+			}
+			continue
+		}
+		// The episode's members are its own, not the routing's disposition:
+		// for its own routing, the members that routing reports (in its
+		// order), then every member the episode has held -- its current
+		// scope, its opening and each recorded step -- that the plan names.
+		// ALL of them are decided below, from this routing's facts, by the
+		// episode's requirement: a member an earlier Action settled is not
+		// settled now unless this Action settles it again, and none is
+		// carried into Unresolved because a later preflight's question left
+		// it open.
+		var members, withdrawn []string
+		seen := map[string]bool{}
+		if own {
+			for _, f := range routing.Gap.Scope {
+				if c := cleanPlannedPath(f); c != "." && !seen[c] {
+					seen[c] = true
+					members = append(members, c)
+				}
+			}
+		}
+		for _, c := range r.members() {
+			if seen[c] {
+				continue
+			}
+			seen[c] = true
+			if planned[c] {
+				members = append(members, c)
+			} else {
+				withdrawn = append(withdrawn, c)
+			}
+		}
+		if own && r.Gap.Kind != gapCoverageUnexamined {
+			// A region episode the routing observes again is about the
+			// region's architectural files, and which of them it still lacks
+			// is the episode's question, not the routing's: the ones the
+			// routing settled under its own requirement are decided again
+			// under the episode's, so a member only a looser question settled
+			// stays in the episode, and a member settled under both narrows
+			// it -- and its condition -- exactly as at the opening.
+			for _, f := range action.architecturalFiles() {
+				if c := cleanPlannedPath(f); c != "." && !seen[c] {
+					seen[c] = true
+					members = append(members, c)
+				}
+			}
+		}
+		if !own && len(members) == 0 && len(withdrawn) == 0 {
+			continue
+		}
+		// Every member is decided from this routing's facts -- presence,
+		// examination, derivation, prospective units -- against the episode's
+		// OWN requirement: the routing's preflight never supplies the
+		// question. A routing bound to the episode asks it no question of its
+		// own (an unqualified one, or the episode's), and any derivation that
+		// satisfies a qualified requirement satisfies an unqualified one, so a
+		// member that routing reports unresolved is unresolved here too.
+		disposition := disposeCoverageGap(r.Gap.Kind, members, action, sem.Requirement)
+		disposition.Withdrawn = withdrawn
+		reconciled = append(reconciled, key)
+		r.Disposition = &disposition
+		if !disposition.Open() {
+			r.Observed = false
+			continue
+		}
+		current := r.Routing
+		if own || disposition.Narrowed() || !scopesEqual(normalizeEpisodeScope(disposition.Unresolved), normalizeEpisodeScope(r.Gap.Scope)) {
+			current = renderCoverageGap(disposition, sem)
+			current.Gap.Subject, current.Gap.World, current.Gap.Question = r.Gap.Subject, world, r.Gap.Question
+			current.Gap.Opening = episodeOf(current.Gap, r)
+			if own {
+				current.Blast, current.Gate, current.ClaimGap = routing.Blast, routing.Gate, routing.ClaimGap
+			}
+			r.hold()
+			r.Gap, r.Routing = current.Gap, current
+		}
+		if own {
+			routing = current
+			continue
+		}
+		// Re-evaluated by this routing and still open: the attempt routing
+		// it now is the one its live question is about (observe).
+		tr.observe(r.Gap, pending)
+		left = append(left, key)
+	}
+	for _, key := range left {
+		if v := tr.view(key, pending); v.Open() {
+			return routing, reconciled, v, true
+		}
+	}
+	return routing, reconciled, AuthorityResolution{}, false
+}
+
+// episodeOf is the opening a form of the episode r carries: nil when the form
+// is the one the episode opened as, the episode's opening otherwise.
+func episodeOf(g GapIdentity, r *AuthorityResolution) *GapOpening {
+	opening := r.opening()
+	g.Opening = nil
+	if g.Key() == opening.identity().Key() {
+		return nil
+	}
+	return &opening
+}
+
+// opening is the immutable form the episode r opened as.
+func (r *AuthorityResolution) opening() GapOpening {
+	if r.Gap.Opening != nil {
+		return *r.Gap.Opening
+	}
+	scope := append([]string(nil), r.Gap.Scope...)
+	sort.Strings(scope)
+	// The episode's question is bound into its opening, so every later form
+	// of it carries the payload it must ask by (validBinding).
+	return GapOpening{Kind: r.Gap.Kind, Subject: r.Gap.Subject, Scope: scope, World: r.Gap.World, Question: r.Gap.Question, Semantics: r.Gap.Semantics}
+}
+
+// bindEpisode is routing with its coverage gap bound to the episode it
+// continues, BEFORE any ledger entry is looked up for it.
+//
+// The rule is the one continuation discriminator (episodeLineage.continuation)
+// the closure budget also selects by: the retried actor may change its plan;
+// it may not thereby change the episode's identity. Its qualified question is
+// canonical first (canonicalQuestion), so a distinct qualified requirement is
+// never folded into another's episode. Among the task's unsettled episodes:
+//
+//   - a gap whose own key is an episode's is that episode, as it opened;
+//   - otherwise the first episode it continues -- the same members, fewer,
+//     more, or moved onto one the episode has ever held -- is that episode
+//     observed again: its key, its ledger position, its budget;
+//   - a gap naming NO files continues the one compatible episode only when
+//     there is exactly one; with several it is Ambiguous -- bound to none,
+//     opening none, merging none -- and fails closed (validBinding).
+//
+// An episode a human answer settled is terminal and is not continued by a
+// different scope; a gap over files no episode concerns is a different
+// question.
+func (e *Engine) bindEpisode(taskID string, routing Routing) Routing {
+	if !routing.ClosesGap() || !isCoverageGapKind(routing.Gap.Kind) || routing.Gap.Opening != nil {
+		return routing
+	}
+	tr := e.gapResolutions(taskID)
+	pending := e.pendingPlanAttempt(taskID).ID
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	routing.Gap = canonicalQuestion(routing.Gap)
+	bind := func(r *AuthorityResolution) Routing {
+		// The episode's question, not this routing's: a later preflight
+		// observes the episode again; it does not re-ask it.
+		routing.Gap.Question = r.opening().Question
+		routing.Gap.Semantics = r.Gap.Semantics
+		routing.Gap.Opening = episodeOf(routing.Gap, r)
+		return routing
+	}
+	degenerate := len(normalizeEpisodeScope(routing.Gap.Scope)) == 0
+	if r, own := tr.byKey[routing.Gap.Key()]; own && !degenerate {
+		return bind(r)
+	}
+	var compatible []*AuthorityResolution
+	for _, key := range tr.order {
+		r := tr.byKey[key]
+		if !isCoverageGapKind(r.Gap.Kind) || tr.view(key, pending).Settled {
+			continue
+		}
+		switch r.lineage().continuation(routing.Gap) {
+		case episodeUnrelated:
+		case episodeDegenerate:
+			compatible = append(compatible, r)
+		default:
+			return bind(r)
+		}
+	}
+	switch len(compatible) {
+	case 0:
+		return routing
+	case 1:
+		return bind(compatible[0])
+	}
+	routing.Gap.Ambiguous = true
+	return routing
+}
+
+// plannedPresence is which planned files the pinned world's tree confirms
+// present, and which it confirms absent. A file whose read fails for any other
+// reason is in neither: an unanswered read is not absence (errNotAtWorld).
+func (e *Engine) plannedPresence(ctx context.Context, taskID string, planned []string) (present, absent []string) {
+	world := strings.TrimSpace(e.governedBase(taskID))
+	if world == "" || strings.TrimSpace(e.Repo.Root) == "" {
+		return nil, nil
+	}
+	read := gitShowAt(e.Repo.Root)
+	for _, f := range planned {
+		c := cleanPlannedPath(f)
+		_, err := read(ctx, world, c)
+		switch {
+		case err == nil:
+			present = append(present, c)
+		case confirmedMissing(err):
+			absent = append(absent, c)
+		}
+	}
+	return present, absent
+}
+
+// prospectiveUnitsFor is the prospective authority RECORDED for the plan
+// attempt routing has pending, projected into its canonical authority units.
+func (e *Engine) prospectiveUnitsFor(taskID string, d architectureDecision) []prospectiveUnit {
+	attempt := e.pendingPlanAttempt(taskID)
+	rec, _ := e.recordedGrants(taskID, attempt.ID)
+	return prospectiveAuthorityUnits(attempt, d.ProspectiveSurfaces, d.Files, rec)
+}
+
 // settleGap is an explicit authority answer about exactly this identity, given
 // about the attempt routing has pending.
 func (e *Engine) settleGap(taskID string, gap GapIdentity, outcome authority.Outcome) {
@@ -481,13 +859,75 @@ func (e *Engine) settleGap(taskID string, gap GapIdentity, outcome authority.Out
 // settleGapFor is an explicit authority answer about exactly this identity,
 // owned by the plan attempt the question was asked about.
 func (e *Engine) settleGapFor(taskID string, gap GapIdentity, outcome authority.Outcome, owner string) {
-	if !gap.Identified() {
+	if !gap.Identified() || !gap.validBinding() {
 		return
 	}
 	tr := e.gapResolutions(taskID)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	tr.settle(gap, outcome, owner, tr.answerScope.epoch)
+}
+
+// restorationSubjectCoverageEpisode names a coverage-gap resolution episode a
+// resume could not re-establish.
+const restorationSubjectCoverageEpisode = "coverage-gap-resolution-episode"
+
+// unauthenticatedCoverageRestore is the RULING-181 fail-closed restore
+// boundary (objective 59a): the typed refusal for a question about a coverage
+// gap whose governing episode this process cannot authenticate, or nil.
+//
+// A coverage gap is decided by the episode it opened as -- its requirement,
+// its rendering context, its identity, its pinned world (GapIdentity). Only a
+// live episode this process opened holds those. A gap read back from a durable
+// record holds none of them: no canonical episode encoding or session-lineage
+// owner exists yet (objective 59b), so neither a payload-less legacy record nor
+// any other recorded coverage gap can prove which question it was. Nothing is
+// recomputed in its place -- not from the current preflight, the current
+// Action, the graph or the prompt text -- because a replacement episode would
+// be a different question wearing the recorded identity.
+//
+// So the question is never put to a person, and no answer can bind to it: the
+// refusal is returned before anything is asked, and the resume ends under the
+// existing typed restoration owner (refuseRestoration), which preserves the
+// task and its record. Nothing is granted, settled, synthesized or authorized.
+func (e *Engine) unauthenticatedCoverageRestore(taskID string, gap GapIdentity) *RestorationRefusal {
+	if !isCoverageGapKind(gap.Kind) {
+		return nil
+	}
+	refuse := func(detail string) *RestorationRefusal {
+		return &RestorationRefusal{TaskID: taskID, Subject: restorationSubjectCoverageEpisode,
+			Instrument: RestorationInstrumentRecord, Binding: RestorationRecordUnreadable,
+			Detail: "coverage gap " + gap.Kind + " over " + orNone(strings.Join(gap.Scope, ", "), "no files") + ": " + detail +
+				"; the question is not asked, no answer is bound to it and no authority is reconstructed from it"}
+	}
+	if _, ok := gap.episodeSemantics(); !ok || !gap.validBinding() {
+		return refuse("the question carries no authenticated episode -- the requirement, rendering context and binding " +
+			"it opened with -- so what it asks cannot be proven")
+	}
+	tr := e.gapResolutions(taskID)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if r, ok := tr.byKey[gap.Key()]; ok && r.restored {
+		return refuse("its identity was restored from the durable record, which holds no canonical episode for it, " +
+			"so neither its opening semantics nor its pinned-world binding can be authenticated")
+	}
+	return nil
+}
+
+// currentResolution is the current state of the episode gap belongs to: its
+// ledger entry after its latest same-identity re-evaluation, or gap itself,
+// unresolved over its scope, when no entry records it; registered reports
+// whether one does.
+func (e *Engine) currentResolution(taskID string, gap GapIdentity) (_ AuthorityResolution, registered bool) {
+	if gap.Identified() {
+		tr := e.gapResolutions(taskID)
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		if r, ok := tr.episodeEntry(gap); ok {
+			return *r, true
+		}
+	}
+	return AuthorityResolution{Gap: gap}, false
 }
 
 // openGap returns the first identity open for this task at this world.
@@ -517,7 +957,7 @@ func (e *Engine) gapSettlement(taskID string, routing Routing) (authorized, sett
 	pending := e.pendingPlanAttempt(taskID).ID
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if _, ok := tr.byKey[routing.Gap.Key()]; !ok {
+	if _, ok := tr.episodeEntry(routing.Gap); !ok {
 		return false, false
 	}
 	r := tr.view(routing.Gap.Key(), pending)
@@ -5345,15 +5785,21 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 		return architectureDecision{}, err
 	}
 	e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
+	// The same P9 sequence the architect's proceed route runs (DF-30, ruling
+	// 177): a prior coverage gap of this task is re-evaluated as the same
+	// identity from this routing's facts before absence projection, and one
+	// still open outranks a grant.
+	routing, _ = e.registerRouting(taskID, strings.TrimSpace(e.governedBase(taskID)), routing, action, scoped, d, true)
 	// The human's answer is about the consequence, never about coverage: a
 	// supplied plan naming a file the graph never examined is refused after
-	// the answer exactly as it would be refused before a gate existed.
+	// the answer exactly as it would be refused before a gate existed. The one
+	// post-authorization continuation decides it, from the refreshed action.
 	unexaminedAfterAnswer := func() error {
-		gap, open, err := e.afterHumanAuthorization(sc, start, taskID, task, routing, action, scoped)
+		gap, _, _, err := e.afterHumanAuthorization(sc, start, taskID, task, routing, action, scoped, d)
 		if err != nil {
 			return err
 		}
-		if open {
+		if gap.ClosesGap() {
 			return refusePlanAdmission(refusalSuppliedPlan, nil, errSuppliedPlanCannotBeRevised("a bounded knowledge gap must be closed first: "+gap.Condition))
 		}
 		return nil
@@ -5776,8 +6222,12 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			// already given about exactly this identity is consumed here. A gap
 			// this modifying plan re-evaluated and no longer reports becomes
 			// inactive, never settled.
-			resolution := e.observeGap(taskID, routing)
-			e.observeGapAbsence(taskID, strings.TrimSpace(e.governedBase(taskID)), routing, d)
+			//
+			// The ORDER is the DF-30 lifecycle (ruling 177): a prior coverage gap
+			// of this task is re-evaluated, as the same identity, from this
+			// routing's facts BEFORE absence projection may deactivate anything
+			// -- see registerRouting.
+			routing, resolution := e.registerRouting(taskID, strings.TrimSpace(e.governedBase(taskID)), routing, action, scoped, d, true)
 			var receipt *premiseReceipt
 			if routing.ClosesGap() {
 				receipt = e.premiseReceiptFor(taskID, routing, routing.ClaimGap)
@@ -5837,13 +6287,17 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 					// The answer was about the consequence. Files the graph
 					// never examined are asked about now, and an open gap
 					// takes the same closure round any coverage gap takes.
-					gap, open, err := e.afterHumanAuthorization(sc, start, taskID, task, routing, action, scoped)
+					// The same P9 sequence every routing site runs, over the
+					// examination facts the answer's probes just refreshed: a
+					// prior coverage gap is re-evaluated as the same identity
+					// before another decision is taken about it, and the
+					// reconciled routing alone decides whether the plan
+					// continues.
+					gap, probed, gapResolution, err := e.afterHumanAuthorization(sc, start, taskID, task, routing, action, scoped, d)
 					if err != nil {
 						return architectureDecision{}, err
 					}
-					if open {
-						// The same P9 observation every gap route makes.
-						gapResolution := e.observeGap(taskID, gap)
+					if gap.ClosesGap() {
 						receipt := e.premiseReceiptFor(taskID, gap, gap.ClaimGap)
 						if gapResolution.Settled || !e.spendClosure(taskID, receipt.ID) {
 							// The budget is spent and the gap the answer did not
@@ -5855,9 +6309,12 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 									"the knowledge gap did not close; escalating with it open: "+gap.Condition, nil))
 								e.recordClosureQuestion(taskID, gap.Condition, d, start, architect.Label, rounds.count())
 							}
-							stillOpen := gap
-							stillOpen.Route = RouteHuman
-							stillOpen.Condition = "a bounded knowledge gap was not closed by investigation: " + gap.Condition
+							// The one typed disposal of an exhausted gap, as on the
+							// proceed and escalate routes: never a manual conversion.
+							stillOpen, limited := e.disposeExhaustedGap(taskID, start.Domain(), gap, probed)
+							if limited != nil {
+								return architectureDecision{}, limited
+							}
 							authorized, asked := e.gapSettlement(taskID, stillOpen)
 							if !asked {
 								authorized, asked = e.applyAnsweredCondition(taskID, stillOpen.Condition, d.Files...)
@@ -5939,8 +6396,10 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			e.applyPremiseResolutions(taskID, d.PremiseResolutions)
 			// P9 FIRST, at the same point as the proceed route: a gap this
 			// escalation itself reaches is registered, or its settlement
-			// consumed, before closure budget or condition text is read.
-			resolution := e.observeGap(taskID, routing)
+			// consumed, before closure budget or condition text is read. A
+			// prior coverage gap is re-evaluated from these facts as the same
+			// identity; an escalation projects no absence.
+			routing, resolution := e.registerRouting(taskID, strings.TrimSpace(e.governedBase(taskID)), routing, action, scoped, d, false)
 			if routing.Granted() {
 				// THE CERTIFICATION ANSWERS THE PLAN IT WAS ASKED ABOUT, NOT THE
 				// TASK'S GAP. A differently shaped plan -- an inspect plan, a
@@ -7120,6 +7579,12 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		return Routing{}, sensei.PreflightDecision{}, Action{}, err
 	}
 	action.OperationalAuthority = operationalFiles(e.testEditGrants(taskID))
+	// THE FACTS A COVERAGE GAP IS DECIDED ON (DF-30): which planned files the
+	// pinned world confirms present or absent, and the prospective authority
+	// RECORDED for this attempt, projected into its canonical units. The router
+	// consumes them; it never infers a grant or reads presence for itself.
+	action.Present, action.Absent = e.plannedPresence(ctx, taskID, d.Files)
+	action.Prospective = e.prospectiveUnitsFor(taskID, d)
 	// RECORDED AUTHORITY BEFORE ARCHITECT PROSE. A premise that only claims a
 	// grant recorded above for this attempt is unestablished is contradicted by
 	// the record, and is not read as a knowledge gap.
@@ -7158,6 +7623,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		// which world a grant built from it is bound to.
 		authored := authoredEvidence{World: e.coverageWorld(taskID), ByFile: prod}
 		action.Unexamined = unexamined
+		action.Examined = examinedOf(action, unexamined)
 		action.DocumentEvidence = docs
 		// AUTHORED PRODUCTION GOVERNANCE arrives only now, because the per-file probe is
 		// deliberately gated on the router wanting to grant -- probing a plan that will
@@ -7433,12 +7899,16 @@ func probeNeeded(pre Routing, authorized bool) bool {
 // an outward action -- and not about coverage, and the router asks the gate
 // before coverage, so a human-owned route says nothing about files the graph
 // never examined. Those are asked here, with the same relation the router
-// uses, before the plan can reach a worker (#115 review).
-func afterAuthorization(routing Routing, authorized bool, action Action, spots blindSpotReading) Routing {
+// uses, before the plan can reach a worker (#115 review) -- and so is the
+// region's own coverage question, coverage-absent or coverage-blind-spot,
+// which the gate also stopped the router from asking: a gated region gap is
+// decided by the same typed disposition whether or not an earlier, ungated
+// routing ever opened it (coverageAfterAuthorization, DF-30A review f1).
+func afterAuthorization(routing Routing, authorized bool, action Action, scoped sensei.PreflightDecision) Routing {
 	if !authorized || !routing.RequiresHuman() {
 		return routing
 	}
-	if gap, open := unexaminedCoverageGap(action, spots); open {
+	if gap, open := coverageAfterAuthorization(scoped, action); open {
 		return gap
 	}
 	return routing
@@ -7476,24 +7946,55 @@ func (e *Engine) unexaminedPlannedFiles(sc *sensei.Client, start certifiedStart,
 // the consequence, and the router asks the gate before coverage, so the
 // planned files the graph never examined are asked about now, before the
 // plan reaches a worker. Returns the open coverage gap, if any.
-func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart, taskID, task string, routing Routing, action Action, scoped sensei.PreflightDecision) (Routing, bool, error) {
-	if !probeNeeded(routing, true) {
-		return routing, false, nil
+//
+// It is also the ONE post-authorization continuation both callers -- the
+// architect loop and a supplied plan -- take: the routing it returns has
+// already been through registerAuthorizedRouting, over the examination facts
+// refreshed here, so every prior coverage gap of this task was re-evaluated as
+// the same identity and an identity still open is what is returned. The plan
+// continues to a worker exactly when that routing does not close a gap; no
+// caller decides continuation from the route the answer was about, which for a
+// region gap (coverage-absent, coverage-blind-spot) says nothing about coverage
+// at all; the region's coverage question is asked again here, after the
+// answer, by the same disposition (afterAuthorization). The action returned
+// carries the refreshed facts.
+func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart, taskID, task string, routing Routing, action Action, scoped sensei.PreflightDecision, d architectureDecision) (Routing, Action, AuthorityResolution, error) {
+	after := routing
+	if probeNeeded(routing, true) {
+		unexamined, docs, _, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
+		if err != nil {
+			return Routing{}, action, AuthorityResolution{}, err
+		}
+		action.Unexamined = unexamined
+		action.Examined = examinedOf(action, unexamined)
+		action.DocumentEvidence = docs
+		after = afterAuthorization(routing, true, action, scoped)
 	}
-	unexamined, docs, _, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
-	if err != nil {
-		return Routing{}, false, err
-	}
-	action.Unexamined = unexamined
-	action.DocumentEvidence = docs
-	after := afterAuthorization(routing, true, action, readBlindSpots(scoped.BlindSpots))
 	// The same gap identity routePlan would have built: completed with the
 	// pinned world, or the closure budget would treat the question this
 	// answer left open as a new one and issue a fresh receipt for it.
+	world := strings.TrimSpace(e.governedBase(taskID))
 	if after.Gap.Identified() {
-		after.Gap.World = strings.TrimSpace(e.governedBase(taskID))
+		after.Gap.World = world
 	}
-	return after, after.ClosesGap(), nil
+	after, resolution := e.registerAuthorizedRouting(taskID, world, after, action, scoped, d)
+	return after, action, resolution, nil
+}
+
+// examinedOf are the probed production files the per-file preflight did not
+// report unexamined: the examination fact, which exists only where a probe ran.
+func examinedOf(action Action, unexamined []string) []string {
+	un := map[string]bool{}
+	for _, f := range unexamined {
+		un[cleanPlannedPath(f)] = true
+	}
+	out := []string{}
+	for _, f := range action.probeSet() {
+		if classifyArtifact(f) == classProductionGo && !un[f] {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // committedRecipesPath is the PUBLISHED question corpus: recipes a human
@@ -7653,7 +8154,7 @@ func (e *Engine) coverageAtWorld(ctx context.Context, taskID string, planned []s
 	recipes = derived.ExcludingTask(recipes, taskID)
 	anchors, _ := derived.AnchorsFor(ctx, derived.CLI{Bin: senseiBinary()}, e.Repo.Root, world, recipes)
 	grants, out := coverPlannedAtWorld(ctx, world, planned, declarations, anchors, gitShowAt(e.Repo.Root))
-	edits, reasons := testEditGrants(ctx, world, planned, out, authoredEvidence{}, gitShowAt(e.Repo.Root))
+	edits, reasons := testEditGrants(ctx, world, planned, append(append([]CoverageAnchor(nil), out...), grantAnchors(grants)...), authoredEvidence{}, gitShowAt(e.Repo.Root))
 	return coverageComputation{world: world, coverage: out, prospective: grants, edits: edits, reasons: reasons}, true
 }
 
@@ -7866,7 +8367,22 @@ func coverPlannedAtWorld(ctx context.Context, world string, planned []string, de
 			surfaces = append(surfaces, CoverageAnchor{File: f, Requirement: requirementOfFamily(a.Kind()), Describe: a.Describe()})
 		}
 	}
-	grants := prospectiveAnchors(ctx, world, planned, declarations, surfaces, read)
+	//
+	// The grants are returned BESIDE the coverage, never inside it (DF-30). A
+	// prospective grant is the canonical authority of an absent create, settled
+	// by its own authority unit (prospectiveAuthorityUnits); projected into
+	// ordinary coverage it read as a derivation over a file that does not exist,
+	// and a coverage gap was then told to close by examining it (objective 49,
+	// run 7).
+	return prospectiveAnchors(ctx, world, planned, declarations, surfaces, read), out
+}
+
+// grantAnchors are the anchors the prospective grants carry, for the one reader
+// that takes a granted create as a governed neighbour: the existing-test edit
+// grant (testEditGrants), whose input they joined before DF-30 kept them out
+// of ordinary coverage. Operational authority, unchanged; never coverage.
+func grantAnchors(grants []prospectiveGrant) []CoverageAnchor {
+	var out []CoverageAnchor
 	for _, g := range grants {
 		if len(g.Anchors) == 0 {
 			out = append(out, g.Anchor)
@@ -7874,7 +8390,7 @@ func coverPlannedAtWorld(ctx context.Context, world string, planned []string, de
 		}
 		out = append(out, g.Anchors...)
 	}
-	return grants, out
+	return out
 }
 
 // setProspectiveGrants records what prospective authority the router read for
@@ -7946,6 +8462,14 @@ func (e *Engine) governedBase(taskID string) string {
 }
 
 func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, condition, domain, baseSHA string, decision authority.Decision, options []authority.Option, scope ...string) (string, error) {
+	// The one rendezvous every question uses is where a coverage question
+	// with no authenticated episode is refused: before it is asked, so no
+	// answer can bind to it, whichever route reached it (RULING-181).
+	if gap, ok := authorityGapFrom(ctx); ok {
+		if refusal := e.unauthenticatedCoverageRestore(taskID, gap); refusal != nil {
+			return "", refusal
+		}
+	}
 	ch := make(chan string, 1)
 	e.mu.Lock()
 	e.pending[taskID] = ch
@@ -10109,6 +10633,15 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 			"the preserved question names plan attempt "+short12(id)+", which this task never recorded as started; it cannot be answered here", nil)
 		return
+	}
+	// A coverage-gap question whose episode cannot be authenticated is not
+	// restored as an authorizable question (RULING-181): refused, typed, before
+	// anything starts and before anyone is asked.
+	if deferred.Gap != nil {
+		if refusal := e.unauthenticatedCoverageRestore(task.TaskID, *deferred.Gap); refusal != nil {
+			e.terminateRun(ctx, task.TaskID, task.Task, refusal)
+			return
+		}
 	}
 	// A refusal decidable before the answer is consumed is decided before it.
 	// The candidate's base and the checkout it governs are read now, so a

@@ -136,6 +136,52 @@ type Action struct {
 	// region's authority onto it (M25 §1). A file under an operational grant
 	// is not asked to be examined and is ignored here by the router.
 	Unexamined []string
+	// Examined are planned files the same per-file preflight found examined.
+	// Nil when nothing was probed: missing probe data is never examination,
+	// so a coverage gap re-evaluated over an unprobed action keeps its members.
+	Examined []string
+	// Present and Absent are planned files the pinned world's tree confirmed
+	// present and confirmed absent. A file in neither could not be read there,
+	// and is neither: an unanswered read establishes nothing (errNotAtWorld).
+	Present []string
+	Absent  []string
+	// Prospective are the RECORDED prospective grants of the plan attempt being
+	// routed, projected into their canonical authority units
+	// (prospectiveAuthorityUnits). Engine-owned; the router consumes the units
+	// and never infers or recreates prospective authority.
+	Prospective []prospectiveUnit
+}
+
+// settledByProspective reports whether f is a member of a VALID prospective
+// authority unit whose whole authority is confirmed absent at the pinned world.
+// Only a valid unit settles anything, and only as a whole: every member of the
+// unit, and every member of a library unit it depends on, must be a create the
+// world confirms absent. One member present, or whose presence was never read,
+// leaves every member of the unit unsettled (DF-30, ruling 80); an independent
+// unit is decided on its own facts.
+func (a Action) settledByProspective(f string, absent map[string]bool) bool {
+	for _, u := range a.Prospective {
+		if !u.Valid || !containsPath(u.Files, f) {
+			continue
+		}
+		whole := len(u.Files) != 0
+		for _, m := range append(append([]string(nil), u.Files...), u.Requires...) {
+			whole = whole && absent[m]
+		}
+		if whole {
+			return true
+		}
+	}
+	return false
+}
+
+func containsPath(files []string, f string) bool {
+	for _, m := range files {
+		if m == f {
+			return true
+		}
+	}
+	return false
 }
 
 // unexaminedArchitecturalFiles are the planned files the graph has not
