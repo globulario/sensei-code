@@ -5,16 +5,22 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/globulario/sensei-code/internal/authority"
 	"github.com/globulario/sensei-code/internal/candidate"
@@ -269,6 +275,11 @@ func (s *Store) CreateTaskRoot(ctx context.Context, lease *TaskLease, e event.Ev
 	if e.Kind != event.TaskCreated {
 		return fmt.Errorf("%w: a %s record of task %s is not a task root", ErrSessionAppendRefused, e.Kind, e.TaskID)
 	}
+	// The caller's identity, before encoding: JSON would replace invalid
+	// UTF-8 and so make a noncanonical identity look canonical.
+	if err := canonicalTaskID(e.TaskID); err != nil {
+		return fmt.Errorf("%w: the TaskCreated root of task %q: %w", ErrSessionAppendRefused, e.TaskID, err)
+	}
 	var buf bytes.Buffer
 	line, err := encodeBounded(&buf, e)
 	if err != nil {
@@ -299,7 +310,7 @@ func (s *Store) CreateTaskRoot(ctx context.Context, lease *TaskLease, e event.Ev
 	if err := authorizeAppend(record, w); err != nil {
 		return err
 	}
-	if err := s.soleTaskLedger(w.TaskID); err != nil {
+	if err := s.soleTaskLedger(ctx, w.TaskID, true); err != nil {
 		return fmt.Errorf("%w: the TaskCreated root of task %s: %w", ErrSessionAppendRefused, w.TaskID, err)
 	}
 	if err := s.commitRecordAppend(line, true); err != nil {
@@ -801,47 +812,43 @@ func FreshID(t time.Time) (string, error) {
 	return ID(t) + "-" + hex.EncodeToString(entropy[:]), nil
 }
 
-// readableSessions is every session record this repository holds, oldest first.
+// readableSessions is every ORDINARY, REUSABLE session record this repository
+// holds, oldest first: the records a conversation may be continued in.
 //
 // ONE definition of what counts as a record, because two of them disagreed. The
 // question "is this session readable" is asked by Latest and by FindActive, and
 // each had its own answer; both treated EVERY stat error as "no record here", so
 // a permission failure, an I/O error or a symlink loop SHRANK the world being
 // searched instead of stopping the search. A history nobody could open was
-// reported as a history that holds nothing.
+// reported as a history that holds nothing. So it is read from the one task-claim
+// inventory admission and discovery share (claimInventory), not from a listing
+// of its own.
 //
-// A record is skipped ONLY when it does not exist: a session directory created
-// and never written to. That is absence, and absence is answerable. Every other
-// failure is returned, because "I could not look" is not "there is nothing
-// there".
+// A record is skipped ONLY when it does not exist -- a session directory created
+// and never written to, which is absence, and answerable -- or when a valid
+// quarantine manifest excludes it. A quarantined record stays authoritative
+// evidence: its claims stay reserved at admission and it stays visible to
+// discovery (FindActive) and the operator (QuarantineStatus); it is simply never
+// an ordinary conversation to continue. Every other failure -- a record that
+// cannot be read and is not validly quarantined, a malformed, stale or orphan
+// manifest -- is returned, typed, because "I could not look" is not "there is
+// nothing there".
 //
 // Session ids sort chronologically (see ID), so the result reads in the order
 // things happened.
 func readableSessions(repo string) ([]string, error) {
-	dir := filepath.Join(repo, ".sensei-code", "sessions")
-	entries, err := os.ReadDir(dir)
+	// No caller context reaches selection; the locked re-read of a damaged
+	// record is bounded by recordLockWait alone.
+	records, err := claimInventory(context.Background(), filepath.Join(repo, ".sensei-code", "sessions"), "")
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			// No sessions directory is ABSENCE: this repository has begun no
-			// task. An unreadable one is not.
-			return nil, nil
-		}
-		return nil, fmt.Errorf("the session records of %s could not be listed, so what this repository holds is "+
-			"unknown rather than absent: %w", repo, err)
+		return nil, err
 	}
 	var ids []string
-	for _, entry := range entries {
-		if !entry.IsDir() {
+	for _, r := range records {
+		if r.quarantine != nil {
 			continue
 		}
-		if _, err := os.Stat(recordPath(repo, entry.Name())); err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				continue
-			}
-			return nil, fmt.Errorf("the event record of session %s in %s could not be examined, so the tasks it "+
-				"holds are unknown rather than absent: %w", entry.Name(), repo, err)
-		}
-		ids = append(ids, entry.Name())
+		ids = append(ids, r.sessionID)
 	}
 	sort.Strings(ids)
 	return ids, nil
@@ -855,6 +862,10 @@ func readableSessions(repo string) ([]string, error) {
 // prechecked this and stopped on false stated absence from ignorance -- and the
 // caller that did not stop started a fresh session inside storage it had already
 // failed to list.
+//
+// It is the newest ORDINARY record (readableSessions): a validly quarantined
+// record is never reopened as a conversation, however recent, and a damaged
+// record no valid manifest excludes is a typed refusal, never skipped.
 func Latest(repo string) (string, bool, error) {
 	ids, err := readableSessions(repo)
 	if err != nil {
@@ -1452,6 +1463,29 @@ type Discovery struct {
 	// failure is returned as an error and this struct is not.
 	Records []string
 	Active  []Active
+	// Quarantined is every record excluded from task reconstruction by a
+	// valid quarantine manifest (claimInventory), oldest first. Its tasks are
+	// visible here and never in Active: a quarantined task is never an
+	// ordinary resumable one, and every identity it claims stays reserved.
+	Quarantined []QuarantinedRecord
+}
+
+// QuarantinedRecord is one quarantined session record as discovery reports
+// it: the session and the manifest that asserts its recovery.
+type QuarantinedRecord struct {
+	SessionID string
+	Manifest  QuarantineManifest
+}
+
+// QuarantinedTask is the quarantined record that claims taskID, if one does:
+// the typed discovery outcome of a task that is visible but never resumable.
+func (d Discovery) QuarantinedTask(taskID string) (QuarantinedRecord, bool) {
+	for _, q := range d.Quarantined {
+		if slices.Contains(q.Manifest.Claims, taskID) {
+			return q, true
+		}
+	}
+	return QuarantinedRecord{}, false
 }
 
 // ScopedTo narrows an already-validated inventory to the tasks of ONE session
@@ -1484,6 +1518,13 @@ func (d Discovery) ScopedTo(sessionID string) ([]Active, error) {
 		return nil, fmt.Errorf("session %s is not among the %d session records this repository holds, so nothing "+
 			"can be said about what it left active", sessionID, len(d.Records))
 	}
+	for _, q := range d.Quarantined {
+		if q.SessionID == sessionID {
+			return nil, fmt.Errorf("%w: session %s is excluded from task reconstruction by its quarantine manifest; "+
+				"the tasks it claims (%s) are reserved and are not resumable", ErrSessionQuarantined, sessionID,
+				strings.Join(q.Manifest.Claims, ", "))
+		}
+	}
 	var out []Active
 	for _, entry := range d.Active {
 		if entry.SessionID == sessionID {
@@ -1507,8 +1548,9 @@ func (d Discovery) ScopedTo(sessionID string) ([]Active, error) {
 // task being looked for may be inside it, and reporting "no such task" from a
 // history nobody could open states absence where the truth is ignorance. That is
 // how a resumable task becomes an unrecoverable one: not by being lost, but by
-// being confidently declared gone. readableSessions makes that policy one
-// definition rather than a habit repeated at each call site.
+// being confidently declared gone. claimInventory makes that policy one
+// definition, shared with admission (soleTaskLedger), rather than a habit
+// repeated at each call site.
 //
 // Two records claiming the same task id are refused rather than merged or
 // ordered. There is no honest way to pick which account of that task is the one
@@ -1521,7 +1563,7 @@ func (d Discovery) ScopedTo(sessionID string) ([]Active, error) {
 // and another holding the SAME identity followed by completed passed the check,
 // because only one of the two accounts was ever offered for comparison. The
 // identity was split and nothing said so, and a continuation could be appended
-// to an account describing different work. createdIdentities reads the creations
+// to an account describing different work. rootClaims reads the creations
 // themselves -- terminal or not -- so a split identity is caught by the fact that
 // makes it one, which is that two records both claim to have begun it.
 //
@@ -1532,87 +1574,97 @@ func (d Discovery) ScopedTo(sessionID string) ([]Active, error) {
 // one record -- so obligations reconstructed per record are the whole account of
 // the task. The duplicate refusal above is what catches a world where that
 // stopped being true, rather than quietly reading half a history as all of it.
+//
+// A RECORD THAT CANNOT BE READ is excluded only by a valid quarantine manifest
+// (claimInventory). It is then reported in Quarantined, never in Active, and
+// every identity it claims counts as created there: FindActive and admission
+// (soleTaskLedger) read the same inventory, so they agree on those claims.
 func FindActive(repo string) (Discovery, error) {
-	ids, err := readableSessions(repo)
+	// No caller context reaches discovery; the locked re-read of a damaged
+	// record is bounded by recordLockWait alone.
+	records, err := claimInventory(context.Background(), filepath.Join(repo, ".sensei-code", "sessions"), "")
 	if err != nil {
 		return Discovery{}, err
 	}
-	found := Discovery{Records: ids}
+	var found Discovery
 	// Where each task identity was CREATED, which is the only claim to owning
 	// that task's history. It is filled from every record, whatever lifecycle
 	// state the task reached there.
 	createdIn := map[string]string{}
-	for _, id := range ids {
-		history, err := loadRecord(repo, id)
-		if err != nil {
-			return Discovery{}, err
+	claim := func(taskID, id string) error {
+		if other, ok := createdIn[taskID]; ok {
+			return fmt.Errorf("task %s is recorded as created in two session records, %s and %s; "+
+				"which of them is the account to continue cannot be decided from the records themselves, so "+
+				"neither is chosen", taskID, other, id)
 		}
-		created, err := createdIdentities(id, history)
-		if err != nil {
-			return Discovery{}, err
-		}
-		for _, taskID := range created {
-			if other, ok := createdIn[taskID]; ok {
-				return Discovery{}, fmt.Errorf("task %s is recorded as created in two session records, %s and %s; "+
-					"which of them is the account to continue cannot be decided from the records themselves, so "+
-					"neither is chosen", taskID, other, id)
+		createdIn[taskID] = id
+		return nil
+	}
+	for _, r := range records {
+		id := r.sessionID
+		found.Records = append(found.Records, id)
+		// A record that creates one identity twice never reaches here: the
+		// inventory refuses it (rootClaims, ErrDuplicateTaskRoot) for every
+		// reader alike.
+		for _, taskID := range r.claims {
+			if err := claim(taskID, id); err != nil {
+				return Discovery{}, err
 			}
-			createdIn[taskID] = id
 		}
-		for _, task := range FindInterrupted(history) {
+		if r.quarantine != nil {
+			found.Quarantined = append(found.Quarantined, QuarantinedRecord{SessionID: id, Manifest: *r.quarantine})
+			continue
+		}
+		for _, task := range FindInterrupted(r.events) {
 			found.Active = append(found.Active, Active{SessionID: id, Task: task})
 		}
 	}
 	return found, nil
 }
 
-// createdIdentities is every task identity whose CREATION one record states, in
-// the order the creations appear.
+// rootClaims is THE ONE EXTRACTION of the task identities a record's events
+// claim, read by the inventory that admission and discovery share
+// (claimInventory): the task identity of each TaskCreated root, sorted and
+// distinct.
 //
 // Terminal tasks included, deliberately: this answers "which tasks does this
 // record claim to have begun", and a task that has since ended was still begun
-// here. That is what makes it usable as the identity inventory FindActive
-// compares across records.
+// here.
 //
-// A record that creates one identity twice is refused rather than reconciled.
-// task.created is written once per task, so a second one means either two
-// different pieces of work were given one name or a record was concatenated from
-// two histories; FindInterrupted would fold both into a single reconstruction
-// and report one task whose obligations are a mixture of the two, and there is
-// no rule that recovers which events belong to which.
-func createdIdentities(sessionID string, history []event.Event) ([]string, error) {
+// Identities are taken EXACTLY as written -- never trimmed, folded or
+// otherwise normalized -- because admission compares them exactly: an identity
+// discovery read one way and admission another would be reserved under one
+// spelling and free under the other. A creation whose identity is not
+// canonical -- an empty or absent task id included -- is refused
+// (ErrNoncanonicalTaskID) rather than read as claiming nothing, or as
+// claiming some other spelling: what it claims is unknown, and an unknown
+// claim fails closed.
+//
+// A record that creates one identity twice is refused (ErrDuplicateTaskRoot)
+// rather than reconciled, here, so admission, discovery, selection and
+// quarantine all refuse it alike. task.created is written once per task, so
+// a second one means either two different pieces of work were given one name
+// or a record was concatenated from two histories; FindInterrupted would fold
+// both into a single reconstruction whose obligations are a mixture of the
+// two, and there is no rule that recovers which events belong to which.
+func rootClaims(events []event.Event) (claims []string, err error) {
 	seen := map[string]bool{}
-	var out []string
-	for _, e := range history {
+	for _, e := range events {
 		if e.Kind != event.TaskCreated {
 			continue
 		}
-		// A creation with no task id names nothing, and FindInterrupted
-		// already ignores it; it is not an identity anyone can claim twice.
-		id := strings.TrimSpace(e.TaskID)
-		if id == "" {
-			continue
+		if err := canonicalTaskID(e.TaskID); err != nil {
+			return nil, fmt.Errorf("a task.created root names a task identity that is not canonical: %w", err)
 		}
-		if seen[id] {
-			return nil, fmt.Errorf("session record %s states the creation of task %s more than once, so the events "+
-				"it holds cannot be attributed to one task; no account of that task is offered", sessionID, id)
+		if seen[e.TaskID] {
+			return nil, fmt.Errorf("%w: the record states the creation of task %s more than once, so the events it "+
+				"holds cannot be attributed to one task; no account of that task is offered", ErrDuplicateTaskRoot, e.TaskID)
 		}
-		seen[id] = true
-		out = append(out, id)
+		seen[e.TaskID] = true
+		claims = append(claims, e.TaskID)
 	}
-	return out, nil
-}
-
-// loadRecord reads one session record, naming what the failure means.
-func loadRecord(repo, sessionID string) ([]event.Event, error) {
-	// The Store is built directly rather than through New, which creates
-	// directories. A read must not bring into existence the thing it reports on.
-	history, err := (&Store{path: recordPath(repo, sessionID)}).Load()
-	if err != nil {
-		return nil, fmt.Errorf("the session record of %s could not be read, so the tasks it left active are "+
-			"unknown rather than absent: %w", sessionID, err)
-	}
-	return history, nil
+	sort.Strings(claims)
+	return claims, nil
 }
 
 // THERE IS DELIBERATELY NO PER-RECORD DISCOVERY FUNCTION HERE.
@@ -2216,8 +2268,8 @@ func (s *Store) AcquireTaskInvocation(ctx context.Context, taskID string) (*Task
 	if s == nil {
 		return nil, fmt.Errorf("%w: task %s", ErrNoStore, taskID)
 	}
-	if taskID == "" {
-		return nil, fmt.Errorf("%w: an invocation names no task", ErrTaskInvocationLeased)
+	if err := canonicalTaskID(taskID); err != nil {
+		return nil, fmt.Errorf("an invocation of task %q is refused: %w", taskID, err)
 	}
 	lease := s.taskLeasePath(taskID)
 	if err := os.MkdirAll(filepath.Dir(lease), 0o755); err != nil {
@@ -2230,7 +2282,7 @@ func (s *Store) AcquireTaskInvocation(ctx context.Context, taskID string) (*Task
 	if err != nil {
 		return nil, err
 	}
-	if err := s.soleTaskLedger(taskID); err != nil {
+	if err := s.soleTaskLedger(ctx, taskID, false); err != nil {
 		release()
 		return nil, err
 	}
@@ -2433,37 +2485,50 @@ func (s *Store) taskLeasePath(taskID string) string {
 // other than this Store's holds a TaskCreated root of it
 // (ErrTaskLedgerAmbiguous): a task has one physical ledger, and which of two
 // is the account to continue cannot be decided from the records. A record
-// that cannot be read is an error, never absence.
-func (s *Store) soleTaskLedger(taskID string) error {
-	own := filepath.Dir(s.path)
-	sessions := filepath.Dir(own)
-	entries, err := os.ReadDir(sessions)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("the session records beside %s could not be listed, so whether another claims task %s is unknown: %w",
-			s.path, taskID, err)
+// that cannot be read is an error, never absence -- unless a valid quarantine
+// manifest asserts its recovery (claimInventory), and then every task
+// identity it claims stays reserved (ErrTaskQuarantined) while unrelated
+// tasks proceed. A Store whose own record is quarantined admits no task at
+// all (ErrSessionQuarantined): quarantine grants no authority to resume or
+// repair the account it excludes. Its callers hold the task's invocation
+// lease, and any record lock it takes is taken after it (lease before record
+// lock), bounded by recordLockWait and ended by ctx.
+//
+// THIS STORE'S OWN RECORD IS VALIDATED, NOT SKIPPED: it is read by the same
+// inventory reader (readLedgerRecord), so a torn or corrupt own record that no
+// valid manifest excludes, a noncanonical own root, and a malformed, stale or
+// readable-record manifest beside it fail closed with their own typed errors,
+// exactly as discovery sees them, and only a manifest valid for the own
+// record's exact bytes makes it ErrSessionQuarantined. Its own claims are not
+// a competing ledger. locked says the caller already holds this Store's
+// record lock (CreateTaskRoot, BindSessionLineage): the own record is then
+// read under that lock and never locked again.
+func (s *Store) soleTaskLedger(ctx context.Context, taskID string, locked bool) error {
+	held := ""
+	if locked {
+		held = s.path
 	}
-	for _, entry := range entries {
-		dir := filepath.Join(sessions, entry.Name())
-		if !entry.IsDir() || dir == own {
+	records, err := claimInventory(ctx, filepath.Dir(filepath.Dir(s.path)), held)
+	if err != nil {
+		return fmt.Errorf("whether another session record claims task %s is unknown: %w", taskID, err)
+	}
+	own := func(r ledgerRecord) bool { return filepath.Clean(r.path) == filepath.Clean(s.path) }
+	for _, r := range records {
+		if own(r) && r.quarantine != nil {
+			return fmt.Errorf("%w: %w: session record %s is quarantined, so no task is admitted through it",
+				ErrSessionLineage, ErrSessionQuarantined, s.path)
+		}
+	}
+	for _, r := range records {
+		if own(r) || !slices.Contains(r.claims, taskID) {
 			continue
 		}
-		path := filepath.Join(dir, filepath.Base(s.path))
-		history, err := (&Store{path: path}).Load()
-		if errors.Is(err, os.ErrNotExist) {
-			continue
+		if r.quarantine != nil {
+			return fmt.Errorf("%w: %w: task %s is claimed by quarantined session record %s; the identity is never "+
+				"minted or admitted again", ErrSessionLineage, ErrTaskQuarantined, taskID, r.path)
 		}
-		if err != nil {
-			return fmt.Errorf("the session record %s could not be read, so whether it claims task %s is unknown: %w", path, taskID, err)
-		}
-		for _, e := range history {
-			if e.Kind == event.TaskCreated && e.TaskID == taskID {
-				return fmt.Errorf("%w: %w: task %s is claimed by %s as well as %s; neither is chosen",
-					ErrSessionLineage, ErrTaskLedgerAmbiguous, taskID, path, s.path)
-			}
-		}
+		return fmt.Errorf("%w: %w: task %s is claimed by %s as well as %s; neither is chosen",
+			ErrSessionLineage, ErrTaskLedgerAmbiguous, taskID, r.path, s.path)
 	}
 	return nil
 }
@@ -2507,6 +2572,9 @@ func (s *Store) HolderSessionID(taskID string) (string, error) {
 func (s *Store) BindSessionLineage(ctx context.Context, lease *TaskLease, b SessionLineageBinding) (SessionLineage, error) {
 	if s == nil {
 		return SessionLineage{}, fmt.Errorf("%w: task %s", ErrNoStore, b.TaskID)
+	}
+	if err := canonicalTaskID(b.TaskID); err != nil {
+		return SessionLineage{}, fmt.Errorf("%w: a transition of task %q: %w", ErrSessionLineage, b.TaskID, err)
 	}
 	e := event.New(b.CurrentSessionID, b.TaskID, event.SourceSystem, SessionLineageBound,
 		"session "+b.CurrentSessionID+" continues task "+b.TaskID+" from session "+b.ParentSessionID, b)
@@ -2556,7 +2624,7 @@ func (s *Store) BindSessionLineage(ctx context.Context, lease *TaskLease, b Sess
 	}
 	// The unique canonical holder ledger is proven before the transition is
 	// written: a task another record also claims binds nothing.
-	if err := s.soleTaskLedger(b.TaskID); err != nil {
+	if err := s.soleTaskLedger(ctx, b.TaskID, true); err != nil {
 		return SessionLineage{}, err
 	}
 	// Staged: the record this commit would leave, verified before it exists.
@@ -2738,4 +2806,1193 @@ func (s *Store) ReadCheckpoint(id string) ([]byte, error) {
 
 func (s *Store) checkpointDir() string {
 	return filepath.Join(filepath.Dir(s.path), "checkpoints")
+}
+
+// THE DURABLE QUARANTINE (70B2a1R, DF-41 D5; RULING-223/224, Design B).
+//
+// One unreadable historical session record used to deny task creation and
+// discovery for every task in the repository: admission (soleTaskLedger) and
+// discovery (FindActive) refuse a record they cannot read, because the task
+// being asked about may be inside it. Fail-closed is right; its scope was not.
+//
+// A damaged record is excluded from task-state reconstruction ONLY by an
+// authenticated, durable quarantine assertion -- a manifest beside it,
+// sessions/<id>/quarantine.json -- that preserves its bytes and keeps every
+// task identity it claims, or may claim, permanently reserved. The record is
+// never moved, truncated, rewritten or replaced by synthesized events. The
+// manifest is a recovery assertion, not an event ledger and not a second task
+// registry: it is valid only while it matches the record's current bytes
+// exactly -- size, SHA-256, and a classification recomputed from those bytes
+// -- and a missing, malformed, conflicting, stale or orphan one fails closed,
+// exactly as the unreadable record did. A manifest beside a record that reads
+// is never a recovery. Nothing here deletes or modifies historical events, and
+// nothing here runs on its own: a manifest is written only by
+// ActivateQuarantine, at the explicit request of the human owner, who names
+// the exact size and digest they authorized.
+
+var (
+	// ErrNoncanonicalTaskID is a task identity refused at the admission
+	// boundary because it is not canonical: empty, with surrounding space,
+	// not valid UTF-8, or holding a control character. Nothing was recorded.
+	ErrNoncanonicalTaskID = errors.New("the task identity is not canonical")
+	// ErrTaskQuarantined is a task identity a quarantined session record
+	// claims: it is reserved, and never minted or admitted again. It is
+	// always reported wrapped in ErrSessionLineage.
+	ErrTaskQuarantined = errors.New("the task identity is reserved by a quarantined session record")
+	// ErrSessionQuarantined is a session record excluded from task
+	// reconstruction by its quarantine manifest: nothing of it is resumed,
+	// and no task is admitted through it.
+	ErrSessionQuarantined = errors.New("the session record is quarantined")
+	// ErrRecordUnreadable is a session record that could not be read and that
+	// no valid quarantine manifest excludes: the tasks it holds are unknown
+	// rather than absent.
+	ErrRecordUnreadable = errors.New("the session record could not be read")
+	// ErrQuarantineInvalid is a quarantine manifest that is not a valid
+	// recovery assertion for the record beside it: malformed, of another
+	// record, stale, orphaned, under- or over-claiming, or beside a record
+	// that reads. It excludes nothing; the record fails closed.
+	ErrQuarantineInvalid = errors.New("the quarantine manifest is not a valid recovery assertion")
+	// ErrQuarantineRefused is an activation refused before any manifest was
+	// published: the record is not a torn record whose every claim is known,
+	// the authorization is incomplete, or a manifest already exists.
+	ErrQuarantineRefused = errors.New("the session record cannot be quarantined")
+	// ErrQuarantineMismatch is an activation whose record is not the exact
+	// bytes -- size and SHA-256 -- the human owner authorized. Nothing was
+	// published.
+	ErrQuarantineMismatch = errors.New("the session record is not the bytes the owner authorized")
+	// ErrQuarantineIndeterminate is an activation whose manifest was
+	// published but whose durability or read-back could not be confirmed.
+	// Whatever it left is either a valid manifest, whose claims are reserved,
+	// or none or an invalid one, which fails closed: no outcome releases a
+	// claim.
+	ErrQuarantineIndeterminate = errors.New("the quarantine manifest was published but not confirmed")
+	// ErrQuarantineSync is a real Sync of the manifest's file or of its
+	// directory that failed, so its durability is not established. It is
+	// always reported wrapped in ErrQuarantineRefused (the file's, before
+	// publication) or ErrQuarantineIndeterminate (the directory's, after it),
+	// and never as a successful activation.
+	ErrQuarantineSync = errors.New("the quarantine manifest could not be synchronized")
+	// ErrDuplicateTaskRoot is a session record whose events create one task
+	// identity more than once (rootClaims). Its events cannot be attributed
+	// to one task, so every reader of the inventory refuses it alike and it
+	// is never quarantinable.
+	ErrDuplicateTaskRoot = errors.New("the session record creates one task identity more than once")
+)
+
+// canonicalTaskID refuses a task identity that is not canonical
+// (ErrNoncanonicalTaskID). Identities are compared exactly; one that is
+// already canonical is unchanged, and none is migrated.
+func canonicalTaskID(id string) error {
+	if reason := noncanonical(id); reason != "" {
+		return fmt.Errorf("%w: %q %s", ErrNoncanonicalTaskID, id, reason)
+	}
+	return nil
+}
+
+// noncanonical says why s is not a canonical identity or text, "" when it
+// is: not empty, no surrounding space, valid UTF-8, no control character.
+func noncanonical(s string) string {
+	switch {
+	case s == "":
+		return "is empty"
+	case !utf8.ValidString(s):
+		return "is not valid UTF-8"
+	case strings.TrimSpace(s) != s:
+		return "has surrounding space"
+	case strings.IndexFunc(s, unicode.IsControl) >= 0:
+		return "holds a control character"
+	}
+	return ""
+}
+
+// RecordClass is what a session record's exact bytes are, decided from the
+// bytes alone (classifyRecord).
+type RecordClass string
+
+const (
+	// RecordReadable is a record every line of which is terminated and
+	// decodes: the record Load reads.
+	RecordReadable RecordClass = "readable"
+	// RecordTorn is a record whose terminated lines all decode and whose
+	// unterminated final segment does not: an append interrupted mid-write.
+	RecordTorn RecordClass = "torn"
+	// RecordAmbiguous is a record whose unterminated final segment decodes:
+	// whether that event was completed cannot be told. It fails closed.
+	RecordAmbiguous RecordClass = "ambiguous"
+	// RecordCorrupt is a record holding a terminated line that does not
+	// decode, or a line over the bound an event may occupy. It fails closed.
+	RecordCorrupt RecordClass = "corrupt"
+)
+
+// QuarantineTail is the bounded classification of a torn record's
+// unterminated final segment: its length, the event kind its top-level
+// members legibly name, and the task identity they legibly name, if any.
+type QuarantineTail struct {
+	Size   int64  `json:"size"`
+	Kind   string `json:"kind"`
+	TaskID string `json:"task_id,omitempty"`
+}
+
+// recordScan is one record's exact bytes, classified.
+type recordScan struct {
+	class  RecordClass
+	size   int64
+	sha256 string
+	// events are the complete prefix's events, each decoded exactly as Load
+	// decodes it; prefixEnd is the byte at which that prefix ends.
+	events    []event.Event
+	prefixEnd int64
+	// claims is every task identity the record claims or may claim, sorted
+	// and distinct: each TaskCreated root of the prefix, and a torn tail's
+	// legible task identity, reserved conservatively.
+	claims []string
+	// claimErr is a prefix root whose identity is not canonical, or one
+	// created more than once (rootClaims).
+	claimErr error
+	tail     QuarantineTail
+	// refusal says why the record cannot be quarantined; "" only for a torn
+	// record whose every claim is known.
+	refusal string
+}
+
+// quarantinable reports whether the record may be quarantined: torn, its
+// every prefix event classified and every claim collected, its tail bounded,
+// understood and hiding no further claim.
+func (sc recordScan) quarantinable() bool { return sc.class == RecordTorn && sc.refusal == "" }
+
+// classifyRecord classifies a record's exact bytes. Every terminated line is
+// decoded as Load decodes it and bounded as Load bounds it; the remainder, if
+// any, is the unterminated final segment. A segment that decodes is
+// ambiguous; one that does not is torn, and is quarantinable only when every
+// prefix line and the segment itself are structurally understood
+// (walkEventIdentity) and every claim is canonical.
+func classifyRecord(raw []byte) recordScan {
+	sum := sha256.Sum256(raw)
+	sc := recordScan{size: int64(len(raw)), sha256: hex.EncodeToString(sum[:]), claims: []string{}}
+	off := 0
+	var lines [][]byte
+	// rawErr is the first TaskCreated root whose task identity the decoder
+	// would read under an identity its bytes do not hold (losslessTaskID).
+	var rawErr error
+	for {
+		nl := bytes.IndexByte(raw[off:], '\n')
+		if nl < 0 {
+			break
+		}
+		line := raw[off : off+nl]
+		if len(line) > maxSessionEvent {
+			sc.class, sc.prefixEnd = RecordCorrupt, int64(off)
+			sc.refusal = fmt.Sprintf("the line at byte %d is %d bytes, over the %d-byte maximum a single event may occupy",
+				off, len(line), maxSessionEvent)
+			return sc
+		}
+		var e event.Event
+		if err := json.Unmarshal(line, &e); err != nil {
+			sc.class, sc.prefixEnd = RecordCorrupt, int64(off)
+			sc.refusal = fmt.Sprintf("the terminated line at byte %d does not decode as a session event, so it is corrupt "+
+				"rather than torn: %v", off, err)
+			return sc
+		}
+		if e.Kind == event.TaskCreated && rawErr == nil {
+			rawErr = losslessTaskID(line)
+		}
+		sc.events = append(sc.events, e)
+		lines = append(lines, line)
+		off += nl + 1
+	}
+	sc.prefixEnd = int64(off)
+	prefixClaims, claimErr := rootClaims(sc.events)
+	if claimErr == nil {
+		claimErr = rawErr
+	}
+	sc.claimErr = claimErr
+	claims := map[string]bool{}
+	for _, id := range prefixClaims {
+		claims[id] = true
+	}
+	tail := raw[off:]
+	var e event.Event
+	switch {
+	case len(tail) == 0:
+		sc.class, sc.refusal = RecordReadable, "the record is readable, so nothing about it is recovered by a quarantine"
+	case json.Unmarshal(tail, &e) == nil:
+		sc.class = RecordAmbiguous
+		sc.refusal = fmt.Sprintf("the unterminated final segment at byte %d decodes, so whether that event was completed is "+
+			"ambiguous", off)
+	default:
+		sc.class = RecordTorn
+		sc.tail.Size = int64(len(tail))
+		if sc.refusal = prefixRefusal(lines, sc.events, claimErr); sc.refusal != "" {
+			break
+		}
+		if len(tail) > maxSessionEvent {
+			sc.refusal = fmt.Sprintf("the unterminated final segment at byte %d is %d bytes, over the %d-byte bound a torn "+
+				"event is inspected within", off, len(tail), maxSessionEvent)
+			break
+		}
+		kind, taskID, err := walkEventIdentity(tail, false)
+		if err == nil && taskID != "" {
+			err = canonicalTaskID(taskID)
+		}
+		if err != nil {
+			sc.refusal = fmt.Sprintf("the unterminated final segment at byte %d is not understood: %v", off, err)
+			break
+		}
+		sc.tail.Kind, sc.tail.TaskID = kind, taskID
+		if taskID != "" {
+			claims[taskID] = true
+		}
+	}
+	for id := range claims {
+		sc.claims = append(sc.claims, id)
+	}
+	sort.Strings(sc.claims)
+	return sc
+}
+
+// prefixRefusal proves every complete prefix line of a torn record was
+// classified and every claim it makes collected, or says why not: each line
+// is walked structurally under the closed event vocabulary
+// (walkEventIdentity), and must name exactly the kind and task identity it
+// decoded as, so no member the decoder folded, overwrote or unescaped hides
+// a TaskCreated root; and every root's identity must be canonical. Only a
+// record that is not readable is walked: a readable record is the account
+// Load reads, and quarantine never applies to it.
+func prefixRefusal(lines [][]byte, events []event.Event, claimErr error) string {
+	for i, line := range lines {
+		kind, taskID, err := walkEventIdentity(line, true)
+		if err == nil && (kind != string(events[i].Kind) || taskID != events[i].TaskID) {
+			err = fmt.Errorf("it names kind %q and task %q, and decodes as kind %q and task %q", kind, taskID,
+				events[i].Kind, events[i].TaskID)
+		}
+		if err != nil {
+			return fmt.Sprintf("complete prefix event %d is not classified, so the claims it makes are unknown: %v", i+1, err)
+		}
+	}
+	if claimErr != nil {
+		return claimErr.Error()
+	}
+	return ""
+}
+
+// walkEventIdentity inspects one event's bytes STRUCTURALLY -- by its JSON
+// tokens, never by a substring test -- as the decoder reads them: one object
+// whose top-level members it matches with its own case-insensitive key
+// matching (strings.EqualFold is bytes.EqualFold, which encoding/json folds
+// keys by). complete says whether raw is a terminated line, which must be one
+// whole object, or a torn segment, which must be one object truncated before
+// it closes. It returns the event kind and the task identity raw legibly
+// names, and refuses -- an unknown claim fails closed -- bytes that are not
+// that one object; a kind or task identity member that is repeated, spelled
+// in any way but exactly as the event encodes it (another case, or escaped),
+// not a string, or truncated; a kind that is absent or not a registered kind;
+// a kind or task identity whose bytes the decoder would replace (lossless);
+// and in a torn segment, a TaskCreated whose task identity is not legible, or
+// a top-level member name cut before it can be proven distinct from kind and
+// task_id (mayNameIdentity): a claim that could hide there.
+func walkEventIdentity(raw []byte, complete bool) (kind, taskID string, err error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return "", "", errors.New("it does not begin one JSON object")
+	}
+	tracked := func(key string) bool { return strings.EqualFold(key, "kind") || strings.EqualFold(key, "task_id") }
+	var kinds, ids []string
+	pending, depth, expectKey, closed := "", 1, true, false
+	for !closed {
+		before := dec.InputOffset()
+		tok, err := dec.Token()
+		if err != nil {
+			if complete || (!errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF)) {
+				return "", "", fmt.Errorf("it is malformed, not truncated: %v", err)
+			}
+			if depth == 1 && expectKey && mayNameIdentity(raw[before:]) {
+				return "", "", errors.New("it is truncated inside a top-level member name that cannot be proven " +
+					"distinct from kind or task_id, so a further kind or task identity may hide there")
+			}
+			break
+		}
+		if d, ok := tok.(json.Delim); ok {
+			switch d {
+			case '{', '[':
+				if depth == 1 && tracked(pending) {
+					return "", "", fmt.Errorf("its member %q is not a string", pending)
+				}
+				depth++
+			default:
+				depth--
+				if depth == 0 {
+					if !complete {
+						return "", "", errors.New("it closes its object: a complete value that does not decode is not torn")
+					}
+					closed = true
+				}
+				if depth == 1 {
+					pending, expectKey = "", true
+				}
+			}
+			continue
+		}
+		if depth != 1 {
+			continue
+		}
+		if expectKey {
+			pending, _ = tok.(string)
+			if tracked(pending) && (pending != "kind" && pending != "task_id" ||
+				bytes.IndexByte(raw[before:dec.InputOffset()], '\\') >= 0) {
+				return "", "", fmt.Errorf("its member %q is not spelled exactly as an event encodes it, so which "+
+					"member the decoder reads as it is not legible", pending)
+			}
+			expectKey = false
+			continue
+		}
+		s, isString := tok.(string)
+		if tracked(pending) && !isString {
+			return "", "", fmt.Errorf("its member %q is not a string", pending)
+		}
+		if tracked(pending) && !lossless(raw[before:dec.InputOffset()]) {
+			return "", "", fmt.Errorf("%w: its member %q is not written byte-faithfully (invalid UTF-8 or an unpaired "+
+				"surrogate escape), so the decoder would read it as an identity its bytes do not hold",
+				ErrNoncanonicalTaskID, pending)
+		}
+		switch pending {
+		case "kind":
+			kinds = append(kinds, s)
+		case "task_id":
+			ids = append(ids, s)
+		}
+		pending, expectKey = "", true
+	}
+	if !complete && depth == 1 && !expectKey && tracked(pending) {
+		return "", "", fmt.Errorf("its member %q is truncated, so what it names is illegible", pending)
+	}
+	switch {
+	case len(kinds) == 0:
+		return "", "", errors.New("it names no legible kind, and an unknown kind is never harmless")
+	case len(kinds) > 1:
+		return "", "", errors.New("it names its kind more than once")
+	case len(ids) > 1:
+		return "", "", errors.New("it names its task more than once")
+	}
+	if _, ok := governedKinds[event.Kind(kinds[0])]; !ok {
+		return "", "", fmt.Errorf("its kind %q is not a registered session event kind", kinds[0])
+	}
+	if len(ids) == 1 {
+		taskID = ids[0]
+	}
+	if !complete && event.Kind(kinds[0]) == event.TaskCreated && taskID == "" {
+		return "", "", errors.New("it is a TaskCreated root whose task identity is not legible, so its claim is unknown")
+	}
+	return kinds[0], taskID, nil
+}
+
+// mayNameIdentity reports whether rest -- the bytes after the last complete
+// top-level member of a torn segment -- begins a member name that could still
+// be kind or task_id: one that is escaped, not valid UTF-8, or a prefix of
+// either under the decoder's case folding. Only a name proven distinct from
+// both, or no name at all, hides no identity.
+func mayNameIdentity(rest []byte) bool {
+	rest = bytes.TrimLeft(rest, " \t\r\n,")
+	if len(rest) == 0 {
+		return false
+	}
+	if rest[0] != '"' {
+		return true
+	}
+	name := rest[1:]
+	if bytes.ContainsAny(name, `\"`) || !utf8.Valid(name) {
+		return true
+	}
+	return foldPrefix(string(name), "kind") || foldPrefix(string(name), "task_id")
+}
+
+// foldPrefix reports whether p is a prefix of target, rune by rune, under the
+// case folding the decoder matches member names with.
+func foldPrefix(p, target string) bool {
+	ps, ts := []rune(p), []rune(target)
+	if len(ps) > len(ts) {
+		return false
+	}
+	for i, r := range ps {
+		if !strings.EqualFold(string(r), string(ts[i])) {
+			return false
+		}
+	}
+	return true
+}
+
+// losslessTaskID refuses (ErrNoncanonicalTaskID) a terminated line one of
+// whose top-level task identity members, under any spelling the decoder
+// matches, is not written byte-faithfully: encoding/json replaces invalid
+// UTF-8 and unpaired surrogate escapes with U+FFFD, so the identity it would
+// decode is not the one the record holds, and exact comparison is lost.
+func losslessTaskID(line []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(line))
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return fmt.Errorf("%w: the line does not begin one JSON object", ErrNoncanonicalTaskID)
+	}
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return fmt.Errorf("%w: the line's members are not legible: %v", ErrNoncanonicalTaskID, err)
+		}
+		name, _ := tok.(string)
+		var v json.RawMessage
+		if err := dec.Decode(&v); err != nil {
+			return fmt.Errorf("%w: the line's members are not legible: %v", ErrNoncanonicalTaskID, err)
+		}
+		if strings.EqualFold(name, "task_id") && !lossless(v) {
+			return fmt.Errorf("%w: the task identity %q is not written byte-faithfully (invalid UTF-8 or an "+
+				"unpaired surrogate escape), so it would be read as an identity its bytes do not hold",
+				ErrNoncanonicalTaskID, []byte(v))
+		}
+	}
+	return nil
+}
+
+// lossless reports whether raw JSON bytes decode without replacement: valid
+// UTF-8, and every \u escape of a surrogate one half of a well-formed pair.
+func lossless(b []byte) bool {
+	if !utf8.Valid(b) {
+		return false
+	}
+	for i := 0; i < len(b); i++ {
+		if b[i] != '\\' {
+			continue
+		}
+		i++
+		if i >= len(b) || b[i] != 'u' {
+			continue
+		}
+		r, ok := hex4(b[i+1:])
+		if !ok {
+			return false
+		}
+		i += 4
+		switch {
+		case r >= 0xDC00 && r <= 0xDFFF:
+			return false
+		case r >= 0xD800 && r <= 0xDBFF:
+			if i+2 >= len(b) || b[i+1] != '\\' || b[i+2] != 'u' {
+				return false
+			}
+			if lo, ok := hex4(b[i+3:]); !ok || lo < 0xDC00 || lo > 0xDFFF {
+				return false
+			}
+			i += 6
+		}
+	}
+	return true
+}
+
+// hex4 decodes the four hexadecimal digits a \u escape carries.
+func hex4(b []byte) (rune, bool) {
+	if len(b) < 4 {
+		return 0, false
+	}
+	var r rune
+	for _, c := range b[:4] {
+		switch {
+		case '0' <= c && c <= '9':
+			r = r<<4 | rune(c-'0')
+		case 'a' <= c && c <= 'f':
+			r = r<<4 | rune(c-'a'+10)
+		case 'A' <= c && c <= 'F':
+			r = r<<4 | rune(c-'A'+10)
+		default:
+			return 0, false
+		}
+	}
+	return r, true
+}
+
+// The manifest's schema, version and the one status it may assert.
+const (
+	QuarantineSchema  = "sensei-code.session-quarantine"
+	QuarantineVersion = 1
+	// QuarantineAsserted is the status of a manifest: the record is excluded
+	// from task reconstruction and its claims are reserved.
+	QuarantineAsserted = "quarantined"
+)
+
+// QuarantineManifest is the durable, authenticated recovery assertion beside
+// a torn session record. Every field is required; its bytes are its canonical
+// encoding (encodeManifest) and nothing else.
+type QuarantineManifest struct {
+	Schema    string `json:"schema"`
+	Version   int    `json:"version"`
+	Status    string `json:"status"`
+	SessionID string `json:"session_id"`
+	// Record is the record's path relative to the repository, slash-separated.
+	Record string `json:"record"`
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256"`
+	// PrefixEnd is the complete-prefix boundary, and PrefixEvents the number
+	// of events that prefix holds.
+	PrefixEnd    int64 `json:"prefix_end"`
+	PrefixEvents int   `json:"prefix_events"`
+	// Claims is every task identity the record claims or may claim, sorted.
+	Claims []string       `json:"claims"`
+	Tail   QuarantineTail `json:"tail"`
+	// AuthorizedBy is the recovery authorization identity, Provenance where
+	// that authorization came from, and CreatedAt when the manifest was made
+	// (RFC 3339, UTC).
+	AuthorizedBy string `json:"authorized_by"`
+	Provenance   string `json:"provenance"`
+	CreatedAt    string `json:"created_at"`
+}
+
+// quarantinePath is the manifest beside the record at path.
+func quarantinePath(path string) string {
+	return filepath.Join(filepath.Dir(path), "quarantine.json")
+}
+
+// quarantineRecord is the record of sessionID relative to the repository, as
+// a manifest names it.
+func quarantineRecord(sessionID string) string {
+	return ".sensei-code/sessions/" + sessionID + "/events.jsonl"
+}
+
+// encodeManifest is a manifest's one canonical encoding.
+func encodeManifest(m QuarantineManifest) ([]byte, error) {
+	raw, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(raw, '\n'), nil
+}
+
+// decodeManifest decodes exactly one manifest with no unknown member, and
+// refuses bytes that are not its canonical encoding.
+func decodeManifest(raw []byte) (QuarantineManifest, error) {
+	var m QuarantineManifest
+	if err := DecodeExactlyOne(raw, &m); err != nil {
+		return QuarantineManifest{}, fmt.Errorf("%w: it does not decode as one manifest: %v", ErrQuarantineInvalid, err)
+	}
+	canonical, err := encodeManifest(m)
+	if err != nil {
+		return QuarantineManifest{}, err
+	}
+	if !bytes.Equal(canonical, raw) {
+		return QuarantineManifest{}, fmt.Errorf("%w: its bytes are not its canonical encoding", ErrQuarantineInvalid)
+	}
+	return m, nil
+}
+
+// validFor proves m is the recovery assertion of sessionID's record as sc
+// classifies its current bytes: the schema, version, status and identity it
+// must carry, an authorization and provenance, and the exact size, digest and
+// classification of those bytes.
+func (m QuarantineManifest) validFor(sessionID string, sc recordScan) error {
+	created, terr := time.Parse(time.RFC3339Nano, m.CreatedAt)
+	var fault string
+	switch {
+	case m.Schema != QuarantineSchema || m.Version != QuarantineVersion:
+		fault = fmt.Sprintf("its schema is %q version %d, not %q version %d", m.Schema, m.Version, QuarantineSchema, QuarantineVersion)
+	case m.Status != QuarantineAsserted:
+		fault = fmt.Sprintf("its status is %q, not %q", m.Status, QuarantineAsserted)
+	case m.SessionID != sessionID || m.Record != quarantineRecord(sessionID):
+		fault = fmt.Sprintf("it names session %q at %q, not session %q at %q", m.SessionID, m.Record, sessionID, quarantineRecord(sessionID))
+	case noncanonical(m.AuthorizedBy) != "":
+		fault = "its recovery authorization identity " + noncanonical(m.AuthorizedBy)
+	case noncanonical(m.Provenance) != "":
+		fault = "its provenance " + noncanonical(m.Provenance)
+	case terr != nil || created.UTC().Format(time.RFC3339Nano) != m.CreatedAt:
+		fault = fmt.Sprintf("its creation time %q is not an RFC 3339 UTC instant", m.CreatedAt)
+	case !sc.quarantinable():
+		fault = fmt.Sprintf("the record beside it is %s, and %s", sc.class, sc.refusal)
+	case m.Size != sc.size || m.SHA256 != sc.sha256:
+		fault = fmt.Sprintf("it asserts %d bytes with SHA-256 %s, and the record is %d bytes with SHA-256 %s: it is stale",
+			m.Size, m.SHA256, sc.size, sc.sha256)
+	case m.PrefixEnd != sc.prefixEnd || m.PrefixEvents != len(sc.events):
+		fault = fmt.Sprintf("it asserts a complete prefix of %d events ending at byte %d, and the record's is %d events ending at byte %d",
+			m.PrefixEvents, m.PrefixEnd, len(sc.events), sc.prefixEnd)
+	case m.Claims == nil || !slices.Equal(m.Claims, sc.claims):
+		fault = fmt.Sprintf("it claims %q, and the record claims %q", m.Claims, sc.claims)
+	case m.Tail != sc.tail:
+		fault = fmt.Sprintf("it classifies the tail as %+v, and the record's is %+v", m.Tail, sc.tail)
+	}
+	if fault != "" {
+		return fmt.Errorf("%w: the manifest of session %s: %s", ErrQuarantineInvalid, sessionID, fault)
+	}
+	return nil
+}
+
+// ledgerRecord is one session record as the task-claim inventory reads it:
+// its events when it reads, its manifest when it is validly quarantined.
+type ledgerRecord struct {
+	sessionID  string
+	path       string
+	events     []event.Event
+	quarantine *QuarantineManifest
+	// claims is every task identity the record claims, exactly as admission
+	// and discovery both compare it: a readable record's roots (rootClaims),
+	// or a quarantined record's manifest claims.
+	claims []string
+}
+
+// claimInventory is THE ONE INVENTORY of the task claims of every session
+// record in the sessions directory: what admission (soleTaskLedger) and
+// discovery (FindActive) both read, oldest first. A directory that holds no
+// record holds nothing, unless a manifest is there (an orphan, which fails
+// closed). Every record is read (readLedgerRecord), and one that cannot be
+// read and is not validly quarantined is an error: never absence. held is the
+// record whose lock the caller already holds, "" when none: it is read under
+// that lock rather than locked again.
+func claimInventory(ctx context.Context, sessions, held string) ([]ledgerRecord, error) {
+	entries, err := os.ReadDir(sessions)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			// No sessions directory is ABSENCE: this repository has begun no
+			// task. An unreadable one is not.
+			return nil, nil
+		}
+		return nil, fmt.Errorf("the session records in %s could not be listed, so what this repository holds is "+
+			"unknown rather than absent: %w", sessions, err)
+	}
+	var out []ledgerRecord
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		path := filepath.Join(sessions, entry.Name(), "events.jsonl")
+		r, present, err := readLedgerRecord(ctx, path, held != "" && path == filepath.Clean(held))
+		if err != nil {
+			return nil, err
+		}
+		if present {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
+// readLedgerRecord reads the record at path for the inventory. A record that
+// reads is its events, and a manifest beside it is refused: it never
+// overrides a readable record. A record that does not read on this unlocked
+// read may be an append in flight, so it is RE-READ UNDER ITS OWN RECORD LOCK
+// (bounded by recordLockWait, ended by ctx): readable then, it is used;
+// still unreadable, it is excluded only by a manifest that is valid for the
+// bytes read under that lock, and is otherwise refused (ErrRecordUnreadable).
+// locked says the caller already holds the record's lock, so the first read
+// is already the locked one and the lock is not taken again.
+func readLedgerRecord(ctx context.Context, path string, locked bool) (ledgerRecord, bool, error) {
+	r := ledgerRecord{sessionID: filepath.Base(filepath.Dir(path)), path: path}
+	readable := func(sc recordScan) (ledgerRecord, bool, error) {
+		if sc.claimErr != nil {
+			return r, false, fmt.Errorf("session record %s: %w", path, sc.claimErr)
+		}
+		r.events, r.claims = sc.events, sc.claims
+		return r, true, nil
+	}
+	sc, present, err := scanLedgerRecord(path)
+	if err != nil || !present {
+		return r, false, err
+	}
+	if sc.class == RecordReadable {
+		return readable(sc)
+	}
+	if !locked {
+		release, err := lockRecordFile(ctx, path, recordLockWait)
+		if err != nil {
+			return r, false, fmt.Errorf("%w: session record %s did not read (%s), and it could not be re-read under its lock, "+
+				"so the tasks it holds are unknown rather than absent: %w", ErrRecordUnreadable, path, sc.refusal, err)
+		}
+		defer release()
+		sc, present, err = scanLedgerRecord(path)
+		if err != nil || !present {
+			return r, false, err
+		}
+		if sc.class == RecordReadable {
+			return readable(sc)
+		}
+	}
+	raw, err := os.ReadFile(quarantinePath(path))
+	if errors.Is(err, os.ErrNotExist) {
+		return r, false, fmt.Errorf("%w: session record %s is %s -- %s -- so the tasks it holds are unknown rather "+
+			"than absent", ErrRecordUnreadable, path, sc.class, sc.refusal)
+	}
+	if err != nil {
+		return r, false, fmt.Errorf("%w: session record %s is %s, and its quarantine manifest could not be read: %w",
+			ErrRecordUnreadable, path, sc.class, err)
+	}
+	m, err := decodeManifest(raw)
+	if err == nil {
+		err = m.validFor(r.sessionID, sc)
+	}
+	if err != nil {
+		return r, false, fmt.Errorf("%w: session record %s is %s, and it is not quarantined: %w", ErrRecordUnreadable, path, sc.class, err)
+	}
+	r.quarantine, r.claims = &m, m.Claims
+	return r, true, nil
+}
+
+// scanLedgerRecord reads and classifies the record at path. An absent record
+// is absent only when no manifest stands beside it; a readable record with a
+// manifest beside it is refused.
+func scanLedgerRecord(path string) (recordScan, bool, error) {
+	raw, err := os.ReadFile(path)
+	manifest, merr := os.Lstat(quarantinePath(path))
+	if merr != nil && !errors.Is(merr, os.ErrNotExist) {
+		return recordScan{}, false, fmt.Errorf("whether session record %s is quarantined is unknown: %w", path, merr)
+	}
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		if manifest != nil {
+			return recordScan{}, false, fmt.Errorf("%w: %s stands beside no session record: an orphan asserts nothing",
+				ErrQuarantineInvalid, quarantinePath(path))
+		}
+		return recordScan{}, false, nil
+	case err != nil:
+		return recordScan{}, false, fmt.Errorf("%w: session record %s, so the tasks it holds are unknown rather than absent: %w",
+			ErrRecordUnreadable, path, err)
+	}
+	sc := classifyRecord(raw)
+	if sc.class == RecordReadable && manifest != nil {
+		return recordScan{}, false, fmt.Errorf("%w: %s stands beside a session record that reads, and never overrides it",
+			ErrQuarantineInvalid, quarantinePath(path))
+	}
+	return sc, true, nil
+}
+
+// QuarantineState is what a session record is with respect to quarantine.
+type QuarantineState string
+
+const (
+	// QuarantineNone is a readable record with no manifest.
+	QuarantineNone QuarantineState = "none"
+	// QuarantineEligible is a torn record whose every claim is known and that
+	// no manifest excludes yet: it still fails closed until activation.
+	QuarantineEligible QuarantineState = "eligible"
+	// QuarantineIneligible is an unreadable record that cannot be
+	// quarantined: it fails closed.
+	QuarantineIneligible QuarantineState = "ineligible"
+	// QuarantineActive is a record a valid manifest excludes: its claims are
+	// reserved and its tasks are visible but never resumable.
+	QuarantineActive QuarantineState = "quarantined"
+	// QuarantineInvalid is a manifest that is not a valid recovery assertion:
+	// it excludes nothing, and the repository fails closed.
+	QuarantineInvalid QuarantineState = "invalid"
+)
+
+// QuarantineInspection is one session record's quarantine condition, read
+// without changing anything.
+type QuarantineInspection struct {
+	SessionID    string
+	State        QuarantineState
+	Class        RecordClass
+	Size         int64
+	SHA256       string
+	PrefixEnd    int64
+	PrefixEvents int
+	Claims       []string
+	Tail         QuarantineTail
+	Manifest     *QuarantineManifest
+	// Detail says why the record is not readable, cannot be quarantined, or
+	// why its manifest is invalid.
+	Detail string
+}
+
+// validSessionName refuses a session identity that is not one plain
+// directory name.
+func validSessionName(sessionID string) error {
+	if reason := noncanonical(sessionID); reason != "" {
+		return fmt.Errorf("session identity %q %s", sessionID, reason)
+	}
+	if sessionID == "." || sessionID == ".." || strings.ContainsAny(sessionID, `/\`) || filepath.Base(sessionID) != sessionID {
+		return fmt.Errorf("session identity %q is not one session record's name", sessionID)
+	}
+	return nil
+}
+
+// InspectQuarantine is the read-only inspection of sessionID's record: its
+// exact size, digest and classification, and its manifest's validity. It
+// takes no lock and writes nothing.
+func InspectQuarantine(repo, sessionID string) (QuarantineInspection, error) {
+	if err := validSessionName(sessionID); err != nil {
+		return QuarantineInspection{}, err
+	}
+	path := recordPath(repo, sessionID)
+	in := QuarantineInspection{SessionID: sessionID}
+	mraw, merr := os.ReadFile(quarantinePath(path))
+	if merr != nil && !errors.Is(merr, os.ErrNotExist) {
+		return in, merr
+	}
+	raw, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) && merr == nil {
+		in.State, in.Detail = QuarantineInvalid, "the manifest stands beside no session record: an orphan asserts nothing"
+		return in, nil
+	}
+	if err != nil {
+		return in, err
+	}
+	sc := classifyRecord(raw)
+	in.Class, in.Size, in.SHA256 = sc.class, sc.size, sc.sha256
+	in.PrefixEnd, in.PrefixEvents, in.Claims, in.Tail = sc.prefixEnd, len(sc.events), sc.claims, sc.tail
+	switch {
+	case merr == nil:
+		m, err := decodeManifest(mraw)
+		if err == nil {
+			in.Manifest = &m
+			err = m.validFor(sessionID, sc)
+		}
+		if err != nil {
+			in.State, in.Detail = QuarantineInvalid, err.Error()
+		} else {
+			in.State = QuarantineActive
+		}
+	case sc.class == RecordReadable:
+		in.State = QuarantineNone
+	case sc.quarantinable():
+		in.State = QuarantineEligible
+	default:
+		in.State, in.Detail = QuarantineIneligible, sc.refusal
+	}
+	return in, nil
+}
+
+// QuarantineStatus is the inspection of every session record of the
+// repository that is not simply readable, or has a manifest beside it: what
+// is damaged, what is quarantined, and what fails closed. Read-only.
+func QuarantineStatus(repo string) ([]QuarantineInspection, error) {
+	sessions := filepath.Join(repo, ".sensei-code", "sessions")
+	entries, err := os.ReadDir(sessions)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []QuarantineInspection
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		path := recordPath(repo, entry.Name())
+		_, rerr := os.Lstat(path)
+		_, merr := os.Lstat(quarantinePath(path))
+		if errors.Is(rerr, os.ErrNotExist) && errors.Is(merr, os.ErrNotExist) {
+			continue
+		}
+		if err := validSessionName(entry.Name()); err != nil {
+			out = append(out, QuarantineInspection{SessionID: entry.Name(), State: QuarantineIneligible, Detail: err.Error()})
+			continue
+		}
+		in, err := InspectQuarantine(repo, entry.Name())
+		if err != nil {
+			return nil, fmt.Errorf("session record %s could not be inspected: %w", entry.Name(), err)
+		}
+		if in.State != QuarantineNone {
+			out = append(out, in)
+		}
+	}
+	return out, nil
+}
+
+// QuarantineAuthorization is what the human owner authorizes: the exact
+// size and SHA-256 of the record they examined, who authorizes the recovery,
+// and where that authorization came from.
+type QuarantineAuthorization struct {
+	ExpectedSize   int64
+	ExpectedSHA256 string
+	AuthorizedBy   string
+	Provenance     string
+}
+
+// publishSeam is the test-observable seam of a manifest's publication
+// (publishManifest). It is consulted at each step, BEFORE that step's real
+// operation, which runs regardless: "write" once the manifest's bytes are
+// written to the temporary file (f is that file); "sync" immediately before
+// that file's real Sync (f is that file); "publish" before it is published
+// (f is nil); "dirsync" immediately before the parent directory's real Sync
+// (f is that directory); and "verify" before the published manifest is read
+// back (f is nil). A non-nil error interrupts that step. The seam never
+// stands in for a sync: it can only observe, or fail, the real one. It is a
+// parameter, not shared state; production (ActivateQuarantine) passes none.
+type publishSeam func(step string, f *os.File) error
+
+// ActivateQuarantine is THE ONE WRITER of a quarantine manifest, at the
+// explicit request of the human owner; nothing calls it on its own, and
+// soleTaskLedger never does.
+//
+// The record is read once to learn its claims. Then, LEASE BEFORE RECORD
+// LOCK -- the order every admission takes them in -- it takes the invocation
+// lease of every claimed task, in sorted order, each bounded by
+// taskLeaseWait, and then the record's own lock, bounded by recordLockWait;
+// every wait ends with ctx. Under them it re-reads the record, and refuses
+// unless it is torn with every claim known, its claims are exactly the ones
+// leased, its size and SHA-256 are exactly the authorized ones, and no
+// manifest exists. The manifest is published durably and exclusively
+// (publishManifest) and read back and validated, all before the lock and
+// leases are released. THE PUBLICATION IS THE LINEARIZATION POINT: before
+// it, the record fails closed as it always did; after it, its claims are
+// reserved and unrelated tasks proceed. No step releases a claim.
+func ActivateQuarantine(ctx context.Context, repo, sessionID string, auth QuarantineAuthorization) (QuarantineManifest, error) {
+	return activateQuarantine(ctx, repo, sessionID, auth, nil)
+}
+
+// activateQuarantine is ActivateQuarantine, its publication observed by seam
+// when one is given (publishSeam); nil is production.
+func activateQuarantine(ctx context.Context, repo, sessionID string, auth QuarantineAuthorization, seam publishSeam) (QuarantineManifest, error) {
+	refuse := func(format string, args ...any) (QuarantineManifest, error) {
+		return QuarantineManifest{}, fmt.Errorf("%w: session %s: %s", ErrQuarantineRefused, sessionID, fmt.Sprintf(format, args...))
+	}
+	if ctx == nil {
+		return refuse("no caller context bounds the wait")
+	}
+	if err := validSessionName(sessionID); err != nil {
+		return refuse("%v", err)
+	}
+	switch {
+	case auth.ExpectedSize < 0:
+		return refuse("no expected size is authorized")
+	case len(auth.ExpectedSHA256) != sha256.Size*2 || strings.ToLower(auth.ExpectedSHA256) != auth.ExpectedSHA256:
+		return refuse("the expected SHA-256 %q is not 64 lowercase hexadecimal digits", auth.ExpectedSHA256)
+	case noncanonical(auth.AuthorizedBy) != "":
+		return refuse("the recovery authorization identity %s", noncanonical(auth.AuthorizedBy))
+	case noncanonical(auth.Provenance) != "":
+		return refuse("the provenance %s", noncanonical(auth.Provenance))
+	}
+	if _, err := hex.DecodeString(auth.ExpectedSHA256); err != nil {
+		return refuse("the expected SHA-256 %q is not hexadecimal", auth.ExpectedSHA256)
+	}
+	path := recordPath(repo, sessionID)
+	s := &Store{path: path}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return refuse("the record could not be read: %v", err)
+	}
+	sc := classifyRecord(raw)
+	if !sc.quarantinable() {
+		return refuse("the record is %s: %s", sc.class, sc.refusal)
+	}
+	leased := sc.claims
+	for _, taskID := range leased {
+		lease := s.taskLeasePath(taskID)
+		if err := os.MkdirAll(filepath.Dir(lease), 0o755); err != nil {
+			return QuarantineManifest{}, err
+		}
+		release, err := lockFileWithin(ctx, lease, taskLeaseWait)
+		if errors.Is(err, ErrRecordLockTimeout) {
+			return QuarantineManifest{}, fmt.Errorf("%w: session %s: claimed task %s: %w: %w", ErrQuarantineRefused, sessionID,
+				taskID, ErrTaskInvocationLeased, err)
+		}
+		if err != nil {
+			return QuarantineManifest{}, fmt.Errorf("%w: session %s: claimed task %s: %w", ErrQuarantineRefused, sessionID, taskID, err)
+		}
+		defer release()
+	}
+	release, err := lockRecordFile(ctx, path, recordLockWait)
+	if err != nil {
+		return QuarantineManifest{}, fmt.Errorf("%w: session %s: %w", ErrQuarantineRefused, sessionID, err)
+	}
+	defer release()
+	if raw, err = os.ReadFile(path); err != nil {
+		return refuse("the record could not be re-read under its lock: %v", err)
+	}
+	sc = classifyRecord(raw)
+	switch {
+	case !sc.quarantinable():
+		return refuse("the record, re-read under its lock, is %s: %s", sc.class, sc.refusal)
+	case !slices.Equal(sc.claims, leased):
+		return refuse("the record, re-read under its lock, claims %q, not the %q whose leases are held", sc.claims, leased)
+	case sc.size != auth.ExpectedSize || sc.sha256 != auth.ExpectedSHA256:
+		return QuarantineManifest{}, fmt.Errorf("%w: session %s is %d bytes with SHA-256 %s, and %d bytes with SHA-256 %s "+
+			"were authorized; nothing was published", ErrQuarantineMismatch, sessionID, sc.size, sc.sha256,
+			auth.ExpectedSize, auth.ExpectedSHA256)
+	}
+	final := quarantinePath(path)
+	if _, err := os.Lstat(final); err == nil {
+		return refuse("a manifest already stands beside the record, and a manifest is never overwritten")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return refuse("whether a manifest already stands beside the record is unknown: %v", err)
+	}
+	m := QuarantineManifest{
+		Schema: QuarantineSchema, Version: QuarantineVersion, Status: QuarantineAsserted,
+		SessionID: sessionID, Record: quarantineRecord(sessionID), Size: sc.size, SHA256: sc.sha256,
+		PrefixEnd: sc.prefixEnd, PrefixEvents: len(sc.events), Claims: sc.claims, Tail: sc.tail,
+		AuthorizedBy: auth.AuthorizedBy, Provenance: auth.Provenance,
+		CreatedAt: time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	encoded, err := encodeManifest(m)
+	if err != nil {
+		return QuarantineManifest{}, err
+	}
+	published, err := publishManifest(final, encoded, seam)
+	if err != nil && !published {
+		return QuarantineManifest{}, fmt.Errorf("%w: session %s: the manifest was not published: %w", ErrQuarantineRefused, sessionID, err)
+	}
+	if err == nil {
+		err = verifyManifest(final, encoded, sessionID, sc, seam)
+	}
+	if err != nil {
+		return QuarantineManifest{}, fmt.Errorf("%w: session %s: %w", ErrQuarantineIndeterminate, sessionID, err)
+	}
+	return m, nil
+}
+
+// publishManifest publishes data at final DURABLY AND EXCLUSIVELY: written
+// to a temporary file created exclusively beside it, synced and closed, then
+// hard-linked to final -- which fails, in any process, when final already
+// exists, so no manifest is ever replaced -- and the directory synced. The
+// file's Sync precedes the publication, and the directory's Sync precedes
+// success; a failure of either is ErrQuarantineSync. published reports that
+// final was created; an error after it leaves a manifest whose durability is
+// unconfirmed. seam, when given, observes each step (publishSeam).
+func publishManifest(final string, data []byte, seam publishSeam) (published bool, err error) {
+	if seam == nil {
+		seam = func(string, *os.File) error { return nil }
+	}
+	dir := filepath.Dir(final)
+	tmp, err := os.CreateTemp(dir, "quarantine.*.tmp")
+	if err != nil {
+		return false, err
+	}
+	defer os.Remove(tmp.Name())
+	n, err := tmp.Write(data)
+	if err == nil && n != len(data) {
+		err = fmt.Errorf("short write: %d of %d bytes", n, len(data))
+	}
+	if err == nil {
+		err = seam("write", tmp)
+	}
+	if err == nil {
+		if err = seam("sync", tmp); err == nil {
+			if err = tmp.Sync(); err != nil {
+				err = fmt.Errorf("%w: the manifest file: %w", ErrQuarantineSync, err)
+			}
+		}
+	}
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = seam("publish", nil)
+	}
+	if err != nil {
+		return false, err
+	}
+	if err := os.Link(tmp.Name(), final); err != nil {
+		return false, err
+	}
+	if err := os.Remove(tmp.Name()); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return true, err
+	}
+	d, err := os.Open(dir)
+	if err != nil {
+		return true, fmt.Errorf("%w: the manifest's directory: %w", ErrQuarantineSync, err)
+	}
+	defer d.Close()
+	if err := seam("dirsync", d); err != nil {
+		return true, err
+	}
+	if err := d.Sync(); err != nil {
+		return true, fmt.Errorf("%w: the manifest's directory: %w", ErrQuarantineSync, err)
+	}
+	return true, nil
+}
+
+// verifyManifest reads the published manifest back and requires it to be
+// exactly data, and valid for the record as sc classifies it.
+func verifyManifest(final string, data []byte, sessionID string, sc recordScan, seam publishSeam) error {
+	if seam != nil {
+		if err := seam("verify", nil); err != nil {
+			return err
+		}
+	}
+	raw, err := os.ReadFile(final)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(raw, data) {
+		return fmt.Errorf("%w: the published manifest is not the bytes that were written", ErrQuarantineInvalid)
+	}
+	m, err := decodeManifest(raw)
+	if err != nil {
+		return err
+	}
+	return m.validFor(sessionID, sc)
+}
+
+// QuarantineCommand is the operator's `sensei-code quarantine` command:
+// inspect one record, activate its quarantine with the owner's exact
+// authorization, or report the status of every damaged or quarantined
+// record. It parses and renders; every decision is the Store's.
+func QuarantineCommand(ctx context.Context, repo string, args []string, out io.Writer) error {
+	const usage = "usage: sensei-code quarantine status | inspect --session <id> | activate --session <id> " +
+		"--expected-size <bytes> --expected-sha256 <hex> --authorized-by <identity> --provenance <text>"
+	if len(args) == 0 {
+		return errors.New(usage)
+	}
+	fs := flag.NewFlagSet("quarantine "+args[0], flag.ContinueOnError)
+	fs.SetOutput(out)
+	sessionID := fs.String("session", "", "the session record")
+	size := fs.Int64("expected-size", -1, "the record's exact size the owner authorized, in bytes")
+	digest := fs.String("expected-sha256", "", "the record's exact SHA-256 the owner authorized")
+	by := fs.String("authorized-by", "", "the recovery authorization identity")
+	provenance := fs.String("provenance", "", "where the authorization came from")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("unexpected arguments %q; %s", fs.Args(), usage)
+	}
+	switch args[0] {
+	case "status":
+		list, err := QuarantineStatus(repo)
+		if err != nil {
+			return err
+		}
+		if len(list) == 0 {
+			fmt.Fprintln(out, "No session record of this repository is damaged or quarantined.")
+		}
+		for _, in := range list {
+			renderInspection(out, in)
+		}
+		return nil
+	case "inspect":
+		if *sessionID == "" {
+			return errors.New(usage)
+		}
+		in, err := InspectQuarantine(repo, *sessionID)
+		if err != nil {
+			return err
+		}
+		renderInspection(out, in)
+		return nil
+	case "activate":
+		if *sessionID == "" || *size < 0 || *digest == "" || *by == "" || *provenance == "" {
+			return errors.New(usage)
+		}
+		m, err := ActivateQuarantine(ctx, repo, *sessionID, QuarantineAuthorization{
+			ExpectedSize: *size, ExpectedSHA256: *digest, AuthorizedBy: *by, Provenance: *provenance})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Session %s is quarantined: %d bytes, SHA-256 %s, preserved in place.\n", m.SessionID, m.Size, m.SHA256)
+		fmt.Fprintf(out, "Reserved task claims: %s. They are never minted or resumed again.\n", strings.Join(m.Claims, ", "))
+		return nil
+	}
+	return errors.New(usage)
+}
+
+// renderInspection writes one inspection for the operator.
+func renderInspection(out io.Writer, in QuarantineInspection) {
+	fmt.Fprintf(out, "session %s: %s\n", in.SessionID, in.State)
+	if in.Class != "" {
+		fmt.Fprintf(out, "  record: %s, %d bytes, SHA-256 %s\n", in.Class, in.Size, in.SHA256)
+		fmt.Fprintf(out, "  complete prefix: %d events, %d bytes\n", in.PrefixEvents, in.PrefixEnd)
+		fmt.Fprintf(out, "  task claims: %s\n", strings.Join(in.Claims, ", "))
+	}
+	if in.Tail.Size > 0 {
+		fmt.Fprintf(out, "  torn tail: %d bytes, kind %q, task %q\n", in.Tail.Size, in.Tail.Kind, in.Tail.TaskID)
+	}
+	if m := in.Manifest; m != nil {
+		fmt.Fprintf(out, "  manifest: authorized by %s at %s (%s)\n", m.AuthorizedBy, m.CreatedAt, m.Provenance)
+	}
+	if in.State == QuarantineActive {
+		fmt.Fprintln(out, "  its tasks are reserved and are not resumable")
+	}
+	if in.Detail != "" {
+		fmt.Fprintf(out, "  %s\n", in.Detail)
+	}
 }

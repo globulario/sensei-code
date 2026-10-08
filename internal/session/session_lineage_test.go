@@ -3135,3 +3135,758 @@ func TestB2a1F1MalformedPostRootHistoryLeavesNoLineage(t *testing.T) {
 		}
 	})
 }
+
+// Objective 70B2a1R (DF-41 D5) witnesses: a damaged historical session record
+// is excluded from task reconstruction only through an authenticated, durable
+// quarantine manifest that preserves its bytes and keeps every task identity
+// it claims reserved. Every record here is synthetic, written in a temporary
+// repository: the shape of a torn append, never the canonical specimen.
+
+const (
+	d5Claimed   = "task-d5-claimed"
+	d5Unrelated = "task-d5-unrelated"
+	d5Torn      = "S-torn"
+	d5Owner     = "owner@example.invalid"
+)
+
+// d5Cut is where a torn tail is cut: inside its payload, after its kind and
+// task identity, as an append interrupted mid-write leaves it.
+const d5Cut = `"payload":{"str`
+
+// tornStore writes, without the Store, the record an interrupted pre-70B2a1
+// append left: the TaskCreated root of taskID and one complete output event
+// of it, then the first bytes of another output event of it, cut inside its
+// payload (d5Cut) with no terminating newline.
+func tornStore(t *testing.T, repo, sessionID, taskID string) *Store {
+	t.Helper()
+	s, err := New(repo, sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := event.New(sessionID, taskID, event.SourceSystem, event.TaskCreated, "the objective", nil)
+	writeRaw(t, s, root, d5Output(sessionID, taskID))
+	writeTail(t, s, tornTail(t, d5Output(sessionID, taskID)))
+	return s
+}
+
+// d5Output is a valid output event of taskID by sessionID.
+func d5Output(sessionID, taskID string) event.Event {
+	return event.New(sessionID, taskID, event.SourceClaude, event.Output, "a line", map[string]string{"stream": "assistant"})
+}
+
+// tornTail is e encoded and cut inside its payload.
+func tornTail(t *testing.T, e event.Event) string {
+	t.Helper()
+	line, err := json.Marshal(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cut := strings.Index(string(line), d5Cut)
+	if cut < 0 {
+		t.Fatalf("the encoded event has no %s to cut at: %s", d5Cut, line)
+	}
+	return string(line[:cut+len(d5Cut)])
+}
+
+// writeTail appends raw bytes to the record, terminated or not.
+func writeTail(t *testing.T, s *Store, tail string) {
+	t.Helper()
+	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(tail); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// fileBytes is the file at path, byte for byte.
+func fileBytes(t *testing.T, path string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// exists reports whether path names anything.
+func exists(t *testing.T, path string) bool {
+	t.Helper()
+	_, err := os.Lstat(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		t.Fatal(err)
+	}
+	return err == nil
+}
+
+// isErr is errors.Is, for the witnesses whose files do not import errors.
+func isErr(err, target error) bool { return errors.Is(err, target) }
+
+// authorized is the authorization the human owner gives after inspecting
+// the record: its exact size and SHA-256 as they read it.
+func authorized(t *testing.T, repo, sessionID string) QuarantineAuthorization {
+	t.Helper()
+	in, err := InspectQuarantine(repo, sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return QuarantineAuthorization{ExpectedSize: in.Size, ExpectedSHA256: in.SHA256, AuthorizedBy: d5Owner,
+		Provenance: "RULING-224 witness"}
+}
+
+// activate quarantines sessionID's record under the owner's authorization.
+func activate(t *testing.T, repo, sessionID string) QuarantineManifest {
+	t.Helper()
+	m, err := ActivateQuarantine(t.Context(), repo, sessionID, authorized(t, repo, sessionID))
+	if err != nil {
+		t.Fatalf("the quarantine of %s was not activated: %v", sessionID, err)
+	}
+	return m
+}
+
+// otherStore is a Store of a fresh record of the repository.
+func otherStore(t *testing.T, repo, sessionID string) *Store {
+	t.Helper()
+	s, err := New(repo, sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// createTask creates taskID's root through s exactly as an invocation does:
+// its lease, then its root.
+func createTask(t *testing.T, s *Store, taskID string) error {
+	t.Helper()
+	lease, err := s.AcquireTaskInvocation(t.Context(), taskID)
+	if err != nil {
+		return err
+	}
+	defer lease.Release()
+	sessionID := filepath.Base(filepath.Dir(s.path))
+	return s.CreateTaskRoot(t.Context(), lease, event.New(sessionID, taskID, event.SourceSystem, event.TaskCreated, "objective", nil))
+}
+
+// unscreenedLease is taskID's live invocation lease taken through s WITHOUT
+// the admission screen AcquireTaskInvocation applies: a capability that got
+// past the lease boundary, so what CreateTaskRoot and BindSessionLineage
+// enforce on their own is what is witnessed.
+func unscreenedLease(t *testing.T, s *Store, taskID string) *TaskLease {
+	t.Helper()
+	path := s.taskLeasePath(taskID)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	release, err := lockFileWithin(t.Context(), path, taskLeaseWait)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := &TaskLease{taskID: taskID, leasePath: path, recordPath: s.path, release: release, live: true}
+	l.idle = sync.NewCond(&l.mu)
+	t.Cleanup(l.Release)
+	return l
+}
+
+// D5-W1: a quarantined record's task identity is never minted or admitted
+// again -- not by AcquireTaskInvocation, not by CreateTaskRoot, not by
+// BindSessionLineage -- through any record, its own included.
+func TestD5W1AQuarantinedClaimIsNeverAdmittedAgain(t *testing.T) {
+	repo := t.TempDir()
+	torn := tornStore(t, repo, d5Torn, d5Claimed)
+	activate(t, repo, d5Torn)
+
+	other := otherStore(t, repo, "S-new")
+	if _, err := other.AcquireTaskInvocation(t.Context(), d5Claimed); !errors.Is(err, ErrTaskQuarantined) || !errors.Is(err, ErrSessionLineage) {
+		t.Fatalf("a quarantined claim was leased: %v", err)
+	}
+	if err := createTask(t, other, d5Claimed); !errors.Is(err, ErrTaskQuarantined) {
+		t.Fatalf("a quarantined claim was minted again: %v", err)
+	}
+	// Past the lease boundary, the root is still refused at the Store.
+	root := event.New("S-new", d5Claimed, event.SourceSystem, event.TaskCreated, "objective", nil)
+	bypass := unscreenedLease(t, other, d5Claimed)
+	if err := other.CreateTaskRoot(t.Context(), bypass, root); !errors.Is(err, ErrTaskQuarantined) {
+		t.Fatalf("a quarantined claim's root was created: %v", err)
+	}
+	bypass.Release()
+	if exists(t, other.path) {
+		t.Fatal("a refused root wrote the record")
+	}
+	// A legacy second ledger of the claimed task, which lets
+	// BindSessionLineage be asked to move it, binds nothing.
+	holder := otherStore(t, repo, "S-holder")
+	writeRaw(t, holder, event.New("S-holder", d5Claimed, event.SourceSystem, event.TaskCreated, "the objective", nil))
+	before := fileBytes(t, holder.path)
+	l, err := holder.TaskSessionLineage(d5Claimed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := l.BindingFor("S-next")
+	if err != nil {
+		t.Fatal(err)
+	}
+	unscreened := unscreenedLease(t, holder, d5Claimed)
+	if _, err := holder.BindSessionLineage(t.Context(), unscreened, b); !errors.Is(err, ErrTaskQuarantined) {
+		t.Fatalf("a quarantined claim's lineage was bound: %v", err)
+	}
+	unscreened.Release()
+	if string(fileBytes(t, holder.path)) != string(before) {
+		t.Fatal("a refused binding changed the record")
+	}
+	// The quarantined record admits nothing through itself, related or not.
+	for _, task := range []string{d5Claimed, "task-d5-through-the-quarantine"} {
+		if _, err := torn.AcquireTaskInvocation(t.Context(), task); !errors.Is(err, ErrSessionQuarantined) {
+			t.Fatalf("task %s was leased through the quarantined record: %v", task, err)
+		}
+	}
+}
+
+// D5-W1 (f1): admission validates the Store's OWN record through the same
+// reader discovery uses, never skips it. An unquarantined torn own record
+// leases nothing, exactly as discovery fails closed on it; an ordinary
+// readable own record admits normally; only a manifest valid for the own
+// record's exact bytes is ErrSessionQuarantined; and a malformed, stale or
+// readable-record manifest beside it is invalid, not quarantine -- at
+// AcquireTaskInvocation and, under the record lock they already hold, at
+// CreateTaskRoot and BindSessionLineage.
+func TestD5W1BSameRecordAdmissionValidatesItsOwnRecord(t *testing.T) {
+	// Torn, no manifest: refused through itself, as discovery refuses it.
+	repo := t.TempDir()
+	torn := tornStore(t, repo, d5Torn, d5Claimed)
+	for _, task := range []string{d5Claimed, d5Unrelated} {
+		if l, err := torn.AcquireTaskInvocation(t.Context(), task); !errors.Is(err, ErrRecordUnreadable) || errors.Is(err, ErrSessionQuarantined) {
+			if l != nil {
+				l.Release()
+			}
+			t.Fatalf("task %s was admitted through its own unquarantined torn record: %v", task, err)
+		}
+	}
+	if _, err := FindActive(repo); !errors.Is(err, ErrRecordUnreadable) {
+		t.Fatalf("discovery did not fail closed on the same record: %v", err)
+	}
+
+	// Readable and canonical: ordinary admission through itself.
+	repo = t.TempDir()
+	valid := otherStore(t, repo, "S-valid")
+	if err := createTask(t, valid, "task-d5-own-a"); err != nil {
+		t.Fatalf("a root was refused through an ordinary record: %v", err)
+	}
+	if err := createTask(t, valid, "task-d5-own-b"); err != nil {
+		t.Fatalf("a second root was refused through an ordinary record: %v", err)
+	}
+
+	// Validly quarantined: ErrSessionQuarantined.
+	repo = t.TempDir()
+	torn = tornStore(t, repo, d5Torn, d5Claimed)
+	activate(t, repo, d5Torn)
+	if _, err := torn.AcquireTaskInvocation(t.Context(), d5Unrelated); !errors.Is(err, ErrSessionQuarantined) {
+		t.Fatalf("a valid own quarantine was not reported: %v", err)
+	}
+
+	// Invalid own manifests: invalid, never quarantine, and nothing leased.
+	invalid := map[string]func(t *testing.T, repo string, s *Store){
+		"malformed": func(t *testing.T, _ string, s *Store) {
+			writeManifest(t, s, []byte("{not a manifest"))
+		},
+		"stale": func(t *testing.T, repo string, s *Store) {
+			activate(t, repo, d5Torn)
+			writeTail(t, s, "more")
+		},
+		"under-claiming": func(t *testing.T, _ string, s *Store) {
+			m := forged(t, s)
+			m.Claims = []string{}
+			writeManifest(t, s, encoded(t, m))
+		},
+	}
+	for name, plant := range invalid {
+		repo := t.TempDir()
+		s := tornStore(t, repo, d5Torn, d5Claimed)
+		plant(t, repo, s)
+		if l, err := s.AcquireTaskInvocation(t.Context(), d5Unrelated); !errors.Is(err, ErrQuarantineInvalid) || errors.Is(err, ErrSessionQuarantined) {
+			if l != nil {
+				l.Release()
+			}
+			t.Fatalf("%s: an invalid own manifest was not reported invalid: %v", name, err)
+		}
+	}
+
+	// Beside a readable own record: invalid at every admission boundary,
+	// including the two that already hold the record lock.
+	repo = t.TempDir()
+	readable := otherStore(t, repo, d5Torn)
+	writeRaw(t, readable, event.New(d5Torn, d5Claimed, event.SourceSystem, event.TaskCreated, "the objective", nil))
+	writeManifest(t, readable, encoded(t, forged(t, readable)))
+	before := string(fileBytes(t, readable.path))
+	if _, err := readable.AcquireTaskInvocation(t.Context(), d5Unrelated); !errors.Is(err, ErrQuarantineInvalid) || errors.Is(err, ErrSessionQuarantined) {
+		t.Fatalf("a manifest beside the own readable record was not invalid at the lease: %v", err)
+	}
+	root := event.New(d5Torn, d5Unrelated, event.SourceSystem, event.TaskCreated, "objective", nil)
+	bypass := unscreenedLease(t, readable, d5Unrelated)
+	if err := readable.CreateTaskRoot(t.Context(), bypass, root); !errors.Is(err, ErrQuarantineInvalid) || errors.Is(err, ErrSessionQuarantined) {
+		t.Fatalf("a manifest beside the own readable record was not invalid at the root: %v", err)
+	}
+	bypass.Release()
+	l, err := readable.TaskSessionLineage(d5Claimed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := l.BindingFor("S-next")
+	if err != nil {
+		t.Fatal(err)
+	}
+	unscreened := unscreenedLease(t, readable, d5Claimed)
+	if _, err := readable.BindSessionLineage(t.Context(), unscreened, b); !errors.Is(err, ErrQuarantineInvalid) || errors.Is(err, ErrSessionQuarantined) {
+		t.Fatalf("a manifest beside the own readable record was not invalid at the binding: %v", err)
+	}
+	unscreened.Release()
+	if string(fileBytes(t, readable.path)) != before {
+		t.Fatal("a refused admission changed the record")
+	}
+}
+
+// d5Doubled writes, without the Store, a legacy record of sessionID that
+// creates "task-d5-twice" twice and "task-d5-single" once: a record whose
+// events cannot be attributed to one task.
+func d5Doubled(t *testing.T, repo, sessionID string) *Store {
+	t.Helper()
+	s := otherStore(t, repo, sessionID)
+	writeRaw(t, s,
+		event.New(sessionID, "task-d5-twice", event.SourceSystem, event.TaskCreated, "first", nil),
+		event.New(sessionID, "task-d5-twice", event.SourceSystem, event.TaskCreated, "second", nil),
+		event.New(sessionID, "task-d5-single", event.SourceSystem, event.TaskCreated, "objective", nil))
+	return s
+}
+
+// D5-W1 (review f1): a record that creates one identity twice is refused by
+// the shared claim inventory, so admission refuses it -- through the record
+// itself at every boundary (AcquireTaskInvocation, CreateTaskRoot,
+// BindSessionLineage), and through any other record -- with the same typed
+// error discovery gives (ErrDuplicateTaskRoot), and writes nothing.
+func TestD5W1CADuplicateRootRecordAdmitsNothing(t *testing.T) {
+	repo := t.TempDir()
+	doubled := d5Doubled(t, repo, "S-doubled")
+	before := string(fileBytes(t, doubled.path))
+	// The binding is computed while the record has no lineage refusal of its
+	// own for task-d5-single, so only the inventory can refuse it.
+	l, err := doubled.TaskSessionLineage("task-d5-single")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := l.BindingFor("S-next")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := FindActive(repo); !errors.Is(err, ErrDuplicateTaskRoot) {
+		t.Fatalf("discovery did not refuse the doubled record: %v", err)
+	}
+	for _, task := range []string{"task-d5-twice", "task-d5-single", d5Unrelated} {
+		if lease, err := doubled.AcquireTaskInvocation(t.Context(), task); !errors.Is(err, ErrDuplicateTaskRoot) {
+			if lease != nil {
+				lease.Release()
+			}
+			t.Fatalf("task %s was leased through its own doubled record: %v", task, err)
+		}
+		if err := createTask(t, otherStore(t, repo, "S-new"), task); !errors.Is(err, ErrDuplicateTaskRoot) {
+			t.Fatalf("task %s was admitted through another record beside the doubled one: %v", task, err)
+		}
+	}
+	bypass := unscreenedLease(t, doubled, d5Unrelated)
+	root := event.New("S-doubled", d5Unrelated, event.SourceSystem, event.TaskCreated, "objective", nil)
+	if err := doubled.CreateTaskRoot(t.Context(), bypass, root); !errors.Is(err, ErrDuplicateTaskRoot) {
+		t.Fatalf("a root was created in the doubled record: %v", err)
+	}
+	bypass.Release()
+	unscreened := unscreenedLease(t, doubled, "task-d5-single")
+	if _, err := doubled.BindSessionLineage(t.Context(), unscreened, b); !errors.Is(err, ErrDuplicateTaskRoot) {
+		t.Fatalf("a lineage transition was bound in the doubled record: %v", err)
+	}
+	unscreened.Release()
+	if string(fileBytes(t, doubled.path)) != before {
+		t.Fatal("a refused admission changed the doubled record")
+	}
+}
+
+// D5-W1 (Q-e): a noncanonical task identity is refused, typed, at every
+// admission boundary; a canonical one is unchanged.
+func TestD5W1NoncanonicalTaskIDIsRefusedAtAdmission(t *testing.T) {
+	s := lineageStore(t, "A")
+	for _, id := range []string{"", " task-x", "task-x ", "task\x00x", "task\nx", "task-\xff"} {
+		if _, err := s.AcquireTaskInvocation(t.Context(), id); !errors.Is(err, ErrNoncanonicalTaskID) {
+			t.Fatalf("task %q was leased: %v", id, err)
+		}
+		root := event.New("A", id, event.SourceSystem, event.TaskCreated, "objective", nil)
+		if err := s.CreateTaskRoot(t.Context(), nil, root); !errors.Is(err, ErrNoncanonicalTaskID) {
+			t.Fatalf("the root of task %q was not refused as noncanonical: %v", id, err)
+		}
+		b := SessionLineageBinding{TaskID: id, HolderSessionID: "A", ParentSessionID: "A", CurrentSessionID: "B"}
+		if _, err := s.BindSessionLineage(t.Context(), nil, b); !errors.Is(err, ErrNoncanonicalTaskID) {
+			t.Fatalf("a transition of task %q was not refused as noncanonical: %v", id, err)
+		}
+	}
+	if exists(t, s.path) {
+		t.Fatal("a refused noncanonical identity wrote the record")
+	}
+	if err := createTask(t, s, "task-1700000000000000000"); err != nil {
+		t.Fatalf("a canonical identity was refused: %v", err)
+	}
+}
+
+// D5-W2: after authorized recovery an unreadable historical record no longer
+// blocks the creation or discovery of a provably unrelated task; before it,
+// it still does.
+func TestD5W2RecoveryUnblocksAnUnrelatedTask(t *testing.T) {
+	repo := t.TempDir()
+	tornStore(t, repo, d5Torn, d5Claimed)
+	other := otherStore(t, repo, "S-new")
+	if err := createTask(t, other, d5Unrelated); !errors.Is(err, ErrRecordUnreadable) {
+		t.Fatalf("an unquarantined torn record did not fail closed: %v", err)
+	}
+	if _, err := FindActive(repo); !errors.Is(err, ErrRecordUnreadable) {
+		t.Fatalf("discovery past an unquarantined torn record did not fail closed: %v", err)
+	}
+	activate(t, repo, d5Torn)
+	if err := createTask(t, other, d5Unrelated); err != nil {
+		t.Fatalf("an unrelated task was refused after recovery: %v", err)
+	}
+	found, err := FindActive(repo)
+	if err != nil {
+		t.Fatalf("discovery failed after recovery: %v", err)
+	}
+	if len(found.Active) != 1 || found.Active[0].Task.TaskID != d5Unrelated || found.Active[0].SessionID != "S-new" {
+		t.Fatalf("the unrelated task is not what discovery finds: %+v", found.Active)
+	}
+	if len(found.Quarantined) != 1 || found.Quarantined[0].SessionID != d5Torn {
+		t.Fatalf("the quarantined record is not reported: %+v", found.Quarantined)
+	}
+}
+
+// D5-W6: an interrupted or repeated recovery never releases a reservation
+// already established: a second activation publishes nothing over the first,
+// a crashed publication's leftover is no manifest, and a record changed after
+// its quarantine fails closed rather than freeing its claims.
+func TestD5W6InterruptedRecoveryCannotReleaseAReservation(t *testing.T) {
+	repo := t.TempDir()
+	torn := tornStore(t, repo, d5Torn, d5Claimed)
+	activate(t, repo, d5Torn)
+	manifest := quarantinePath(torn.path)
+	established := fileBytes(t, manifest)
+	other := otherStore(t, repo, "S-new")
+
+	if _, err := ActivateQuarantine(t.Context(), repo, d5Torn, authorized(t, repo, d5Torn)); !errors.Is(err, ErrQuarantineRefused) {
+		t.Fatalf("a second activation was not refused: %v", err)
+	}
+	died := func(string, *os.File) error { return errors.New("the process died") }
+	if _, err := activateQuarantine(t.Context(), repo, d5Torn, authorized(t, repo, d5Torn), died); err == nil {
+		t.Fatal("an interrupted second activation succeeded")
+	}
+	if err := os.WriteFile(filepath.Join(filepath.Dir(torn.path), "quarantine.123.tmp"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if string(fileBytes(t, manifest)) != string(established) {
+		t.Fatal("the established manifest was changed")
+	}
+	if err := createTask(t, other, d5Claimed); !errors.Is(err, ErrTaskQuarantined) {
+		t.Fatalf("the reservation was released: %v", err)
+	}
+	if err := createTask(t, other, d5Unrelated); err != nil {
+		t.Fatalf("an unrelated task was refused: %v", err)
+	}
+	// The record changes after its quarantine: the manifest is stale, and the
+	// repository fails closed -- the claim is not freed.
+	writeTail(t, torn, "x")
+	elsewhere := otherStore(t, repo, "S-elsewhere")
+	for _, task := range []string{d5Claimed, "task-d5-after-staleness"} {
+		if err := createTask(t, elsewhere, task); !errors.Is(err, ErrRecordUnreadable) || !errors.Is(err, ErrQuarantineInvalid) {
+			t.Fatalf("task %s past a stale manifest was not refused: %v", task, err)
+		}
+	}
+}
+
+// D5-W7: concurrent creation through many records cannot bypass the
+// reservation, and creates an unrelated task's root exactly once.
+func TestD5W7ConcurrentCreationCannotBypassTheReservation(t *testing.T) {
+	repo := t.TempDir()
+	tornStore(t, repo, d5Torn, d5Claimed)
+	activate(t, repo, d5Torn)
+	const n = 8
+	claimed, fresh := make([]error, n), make([]error, n)
+	var wg sync.WaitGroup
+	for i := range n {
+		s := otherStore(t, repo, "S-"+string(rune('a'+i)))
+		wg.Add(2)
+		go func() { defer wg.Done(); claimed[i] = createTask(t, s, d5Claimed) }()
+		go func() { defer wg.Done(); fresh[i] = createTask(t, s, d5Unrelated) }()
+	}
+	wg.Wait()
+	created := 0
+	for i := range n {
+		if !errors.Is(claimed[i], ErrTaskQuarantined) && !errors.Is(claimed[i], ErrTaskInvocationLeased) {
+			t.Fatalf("a concurrent creation of the claimed task was not refused: %v", claimed[i])
+		}
+		if claimed[i] == nil {
+			t.Fatal("the claimed task was created")
+		}
+		if fresh[i] == nil {
+			created++
+		}
+	}
+	if created != 1 {
+		t.Fatalf("the unrelated task's root was created %d times", created)
+	}
+	found, err := FindActive(repo)
+	if err != nil {
+		t.Fatalf("discovery found a split identity: %v", err)
+	}
+	if len(found.Active) != 1 || found.Active[0].Task.TaskID != d5Unrelated {
+		t.Fatalf("discovery found %+v", found.Active)
+	}
+}
+
+// D5-W9: a record that is torn on an unlocked read may be an append in
+// flight; it is re-read under its own record lock before it is classified.
+// Completed by then, it is used; still torn, the refusal stands.
+func TestD5W9APartialAppendIsReReadUnderTheRecordLock(t *testing.T) {
+	for _, completes := range []bool{true, false} {
+		repo := t.TempDir()
+		live := otherStore(t, repo, "S-live")
+		writeRaw(t, live, event.New("S-live", "task-d5-live", event.SourceSystem, event.TaskCreated, "objective", nil))
+		release, err := live.lockRecord(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		line, err := json.Marshal(d5Output("S-live", "task-d5-live"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		half := len(line) / 2
+		writeTail(t, live, string(line[:half]))
+		done := make(chan error, 1)
+		other := otherStore(t, repo, "S-new")
+		go func() { done <- createTask(t, other, d5Unrelated) }()
+		select {
+		case err := <-done:
+			release()
+			t.Fatalf("admission decided on a record whose writer held its lock, without waiting for it: %v", err)
+		case <-time.After(150 * time.Millisecond):
+		}
+		if completes {
+			writeTail(t, live, string(line[half:])+"\n")
+		}
+		release()
+		err = <-done
+		switch {
+		case completes && err != nil:
+			t.Fatalf("an append completed under the lock was classified as torn: %v", err)
+		case !completes && !errors.Is(err, ErrRecordUnreadable):
+			t.Fatalf("a record still torn under its lock was not refused: %v", err)
+		}
+	}
+}
+
+// D5-W10: activation interrupted at every durability stage never releases a
+// reserved claim, never exposes the record as ignored while its claims are
+// unenforced, and never overwrites a manifest that appears before it
+// publishes.
+func TestD5W10PublicationInterruptedAtEveryStageNeverReleasesAClaim(t *testing.T) {
+	for _, step := range []string{"write", "sync", "publish", "dirsync", "verify"} {
+		repo := t.TempDir()
+		torn := tornStore(t, repo, d5Torn, d5Claimed)
+		before := fileBytes(t, torn.path)
+		auth := authorized(t, repo, d5Torn)
+		interrupt := func(at string, _ *os.File) error {
+			if at == step {
+				return errors.New("interrupted at " + step)
+			}
+			return nil
+		}
+		_, err := activateQuarantine(t.Context(), repo, d5Torn, auth, interrupt)
+		published := step == "dirsync" || step == "verify"
+		switch {
+		case published && !errors.Is(err, ErrQuarantineIndeterminate):
+			t.Fatalf("%s: a published, unconfirmed manifest was not reported indeterminate: %v", step, err)
+		case !published && (!errors.Is(err, ErrQuarantineRefused) || exists(t, quarantinePath(torn.path))):
+			t.Fatalf("%s: an unpublished manifest was reported or left: %v", step, err)
+		}
+		if string(fileBytes(t, torn.path)) != string(before) {
+			t.Fatalf("%s: the record's bytes changed", step)
+		}
+		other := otherStore(t, repo, "S-new")
+		if err := createTask(t, other, d5Claimed); err == nil {
+			t.Fatalf("%s: the claimed task was created", step)
+		}
+		err = createTask(t, other, d5Unrelated)
+		if published != (err == nil) {
+			t.Fatalf("%s: an unrelated task's admission (%v) does not follow the manifest's publication", step, err)
+		}
+	}
+	// A manifest that appears between the durable write and the publication
+	// is never replaced.
+	repo := t.TempDir()
+	torn := tornStore(t, repo, d5Torn, d5Claimed)
+	planted := []byte("planted by another process\n")
+	plant := func(at string, _ *os.File) error {
+		if at == "publish" {
+			return os.WriteFile(quarantinePath(torn.path), planted, 0o600)
+		}
+		return nil
+	}
+	if _, err := activateQuarantine(t.Context(), repo, d5Torn, authorized(t, repo, d5Torn), plant); !errors.Is(err, ErrQuarantineRefused) {
+		t.Fatalf("a publication over an existing manifest was not refused: %v", err)
+	}
+	if string(fileBytes(t, quarantinePath(torn.path))) != string(planted) {
+		t.Fatal("an existing manifest was overwritten")
+	}
+}
+
+// d5SyncOrder activates the quarantine of a fresh torn record with a seam
+// that only observes, recording each publication step and whether the
+// manifest was published when it was reached.
+func d5SyncOrder(t *testing.T) []string {
+	t.Helper()
+	repo := t.TempDir()
+	torn := tornStore(t, repo, d5Torn, d5Claimed)
+	var steps []string
+	observe := func(at string, _ *os.File) error {
+		if exists(t, quarantinePath(torn.path)) {
+			at += " (published)"
+		}
+		steps = append(steps, at)
+		return nil
+	}
+	if _, err := activateQuarantine(t.Context(), repo, d5Torn, authorized(t, repo, d5Torn), observe); err != nil {
+		t.Fatalf("an observed activation failed: %v", err)
+	}
+	return steps
+}
+
+// d5SyncFails activates the quarantine of a fresh torn record with a seam
+// that, at step, CLOSES the file it is handed and reports no error, so only
+// the real Sync that follows on that descriptor can fail. It returns the
+// repository, the torn record's Store, its original bytes and the
+// activation's error.
+func d5SyncFails(t *testing.T, step string) (repo string, torn *Store, before []byte, err error) {
+	t.Helper()
+	repo = t.TempDir()
+	torn = tornStore(t, repo, d5Torn, d5Claimed)
+	before = fileBytes(t, torn.path)
+	closeAt := func(at string, f *os.File) error {
+		if at == step {
+			if err := f.Close(); err != nil {
+				t.Fatalf("%s: the handed file could not be closed: %v", step, err)
+			}
+		}
+		return nil
+	}
+	_, err = activateQuarantine(t.Context(), repo, d5Torn, authorized(t, repo, d5Torn), closeAt)
+	return repo, torn, before, err
+}
+
+// d5ReservedAfter proves the claimed task stays unadmitted, and the record
+// unchanged, after a failed activation.
+func d5ReservedAfter(t *testing.T, repo string, torn *Store, before []byte) {
+	t.Helper()
+	if string(fileBytes(t, torn.path)) != string(before) {
+		t.Fatal("the record's bytes changed")
+	}
+	if err := createTask(t, otherStore(t, repo, "S-new"), d5Claimed); err == nil {
+		t.Fatal("the claimed task was created after a failed synchronization")
+	}
+}
+
+// D5-W10 (RULING-229): publication executes the REAL Sync of the manifest's
+// temporary file, before the manifest is published. The seam closes that
+// file's descriptor and reports nothing, so the activation fails as a typed
+// file synchronization failure only if the real Sync ran on it; with no
+// manifest published and the claim still reserved. The success path is the
+// same code with no seam: the real Sync is not behind the seam, it follows it.
+func TestD5W10ManifestFileSyncIsRealAndPrecedesPublication(t *testing.T) {
+	steps := d5SyncOrder(t)
+	if want := []string{"write", "sync", "publish", "dirsync (published)", "verify (published)"}; strings.Join(steps, ",") != strings.Join(want, ",") {
+		t.Fatalf("the publication steps ran as %q, not %q", steps, want)
+	}
+	repo, torn, before, err := d5SyncFails(t, "sync")
+	if !errors.Is(err, ErrQuarantineSync) || !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("the manifest file's real Sync did not run before publication: %v", err)
+	}
+	if !errors.Is(err, ErrQuarantineRefused) || errors.Is(err, ErrQuarantineIndeterminate) {
+		t.Fatalf("a failed manifest file Sync was not a refusal before publication: %v", err)
+	}
+	if exists(t, quarantinePath(torn.path)) {
+		t.Fatal("a manifest whose file Sync failed was published")
+	}
+	d5ReservedAfter(t, repo, torn, before)
+}
+
+// D5-W10 (RULING-229): publication executes the REAL Sync of the manifest's
+// parent directory after the manifest is published and before success is
+// acknowledged. The seam closes the directory's descriptor and reports
+// nothing, so the activation fails as a typed directory synchronization
+// failure -- never a successful activation -- only if the real Sync ran.
+func TestD5W10ManifestDirectorySyncIsRealAndPrecedesSuccess(t *testing.T) {
+	repo, torn, before, err := d5SyncFails(t, "dirsync")
+	if !errors.Is(err, ErrQuarantineSync) || !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("the manifest directory's real Sync did not run before success: %v", err)
+	}
+	if !errors.Is(err, ErrQuarantineIndeterminate) {
+		t.Fatalf("a failed directory Sync after publication was not reported indeterminate: %v", err)
+	}
+	d5ReservedAfter(t, repo, torn, before)
+}
+
+// D5-W14: concurrent activation and task creation cannot bypass identity
+// reservation; activation holds every claimed task's lease and then the
+// record's lock, and refuses, publishing nothing, when it cannot take them.
+func TestD5W14ConcurrentActivationAndCreationCannotBypassIdentity(t *testing.T) {
+	repo := t.TempDir()
+	tornStore(t, repo, d5Torn, d5Claimed)
+	auth := authorized(t, repo, d5Torn)
+	const n = 6
+	errs := make([]error, n)
+	var activation error
+	var wg sync.WaitGroup
+	wg.Add(n + 1)
+	go func() { defer wg.Done(); _, activation = ActivateQuarantine(t.Context(), repo, d5Torn, auth) }()
+	for i := range n {
+		s := otherStore(t, repo, "S-"+string(rune('a'+i)))
+		go func() { defer wg.Done(); errs[i] = createTask(t, s, d5Claimed) }()
+	}
+	wg.Wait()
+	if activation != nil {
+		t.Fatalf("the activation was refused: %v", activation)
+	}
+	for i, err := range errs {
+		if err == nil {
+			t.Fatalf("creator %d created the claimed task during activation", i)
+		}
+	}
+	if err := createTask(t, otherStore(t, repo, "S-after"), d5Claimed); !errors.Is(err, ErrTaskQuarantined) {
+		t.Fatalf("the claimed task was not reserved after activation: %v", err)
+	}
+
+	// Activation refuses while a claimed task's lease is held elsewhere.
+	savedLease, savedLock := taskLeaseWait, recordLockWait
+	t.Cleanup(func() { taskLeaseWait, recordLockWait = savedLease, savedLock })
+	taskLeaseWait, recordLockWait = 30*time.Millisecond, 30*time.Millisecond
+	repo = t.TempDir()
+	torn := tornStore(t, repo, d5Torn, d5Claimed)
+	held := unscreenedLease(t, otherStore(t, repo, "S-holder"), d5Claimed)
+	if _, err := ActivateQuarantine(t.Context(), repo, d5Torn, authorized(t, repo, d5Torn)); !errors.Is(err, ErrTaskInvocationLeased) {
+		t.Fatalf("activation proceeded while a claimed task's lease was held: %v", err)
+	}
+	held.Release()
+	// And while the record's lock is held.
+	release, err := torn.lockRecord(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ActivateQuarantine(t.Context(), repo, d5Torn, authorized(t, repo, d5Torn)); !errors.Is(err, ErrRecordLockTimeout) {
+		t.Fatalf("activation proceeded while the record's lock was held: %v", err)
+	}
+	release()
+	if exists(t, quarantinePath(torn.path)) {
+		t.Fatal("a refused activation published a manifest")
+	}
+}
