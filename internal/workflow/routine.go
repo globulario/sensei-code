@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"context"
+
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -315,10 +317,10 @@ func notPlanned(planned, changed []string) []string {
 // "not routine". The two are different: one says the change was measured and
 // found architectural, the other says nobody measured it, and a dark run that
 // conflated them would report a tidy zero for the wrong reason.
-func (e *Engine) classifyForDarkRun(sc *sensei.Client, start certifiedStart, taskID string, tc *taskContext, diff string) {
+func (e *Engine) classifyForDarkRun(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, tc *taskContext, diff string) {
 	record, ok := e.routingFor(taskID)
 	if !ok {
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.RoutineClassified,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.RoutineClassified,
 			"routine classification unavailable: no routing evidence was recorded for this task", nil))
 		return
 	}
@@ -330,12 +332,12 @@ func (e *Engine) classifyForDarkRun(sc *sensei.Client, start certifiedStart, tas
 		// surface's own refusal text is emphatic that an unreachable check is
 		// not an empty result, and the classifier agrees: an unanswered check
 		// blocks rather than clears.
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 			"edit check could not run for the routine classification: "+err.Error(), nil))
 	}
 
 	decision := classifyRoutine(record.Scoped, record.Claims, edit, record.Planned, shape)
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.RoutineClassified,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.RoutineClassified,
 		"level-1 dark run — "+decision.Describe()+" (nothing was skipped)", decision))
 }
 

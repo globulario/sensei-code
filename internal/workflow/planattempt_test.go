@@ -55,15 +55,17 @@ func attemptPlan(text string, files ...string) architectureDecision {
 // the attempt begins first, and the grant record carries its identity.
 func routeWithTestEdits(t *testing.T, e *Engine, taskID string, d architectureDecision, grants []testEditGrant) planAttempt {
 	t.Helper()
-	a, err := e.beginPlanAttempt(taskID, attemptObjective, d)
+	// FIXTURE MIGRATION (70B2a1, RULING-190): routed on the task's durable root.
+	rootFixtureTaskOnce(t, e, taskID, attemptObjective)
+	a, err := e.beginPlanAttempt(fixtureCtx(e, taskID), taskID, attemptObjective, d)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.recordTestEditGrants(taskID, "recorded", testEditRecord{PlanAttemptID: a.ID, World: teWorld, Grants: grants}); err != nil {
+	if err := e.recordTestEditGrants(fixtureCtx(e, taskID), taskID, "recorded", testEditRecord{PlanAttemptID: a.ID, World: teWorld, Grants: grants}); err != nil {
 		t.Fatal(err)
 	}
 	e.setTestEditGrants(taskID, grants)
-	if err := e.recordProspectiveGrants(taskID, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: teWorld}); err != nil {
+	if err := e.recordProspectiveGrants(fixtureCtx(e, taskID), taskID, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: teWorld}); err != nil {
 		t.Fatal(err)
 	}
 	e.setProspectiveGrants(taskID, nil)
@@ -73,11 +75,13 @@ func routeWithTestEdits(t *testing.T, e *Engine, taskID string, d architectureDe
 // routeWithDerivation routes d's grant state through the production recorder.
 func routeWithDerivation(t *testing.T, e *Engine, taskID string, d architectureDecision) planAttempt {
 	t.Helper()
-	a, err := e.beginPlanAttempt(taskID, attemptObjective, d)
+	// FIXTURE MIGRATION (70B2a1, RULING-190): routed on the task's durable root.
+	rootFixtureTaskOnce(t, e, taskID, attemptObjective)
+	a, err := e.beginPlanAttempt(fixtureCtx(e, taskID), taskID, attemptObjective, d)
 	if err != nil {
 		t.Fatal(err)
 	}
-	e.derivedCoverage(context.Background(), taskID, d.Files, d.ProspectiveSurfaces)
+	e.derivedCoverage(fixtureCtx(e, taskID), taskID, d.Files, d.ProspectiveSurfaces)
 	return a
 }
 
@@ -147,7 +151,7 @@ func TestW1AnInitialPlanAttemptAndItsGrantsSurviveRestartExactly(t *testing.T) {
 	planned := []string{teS, teF}
 	grants := teEditGrants(t)
 	a := routeWithTestEdits(t, e, task, attemptPlan("plan A", planned...), grants)
-	if _, err := e.adoptPlanAttempt(task, attemptObjective, attemptPlan("plan A", planned...)); err != nil {
+	if _, err := e.adoptPlanAttempt(fixtureCtx(e, task), task, attemptObjective, attemptPlan("plan A", planned...)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -198,7 +202,7 @@ func grantWorld(t *testing.T, e *Engine) string {
 		t.Fatal(err)
 	}
 	t.Setenv("SENSEI_BIN", bin)
-	e.recordClosureQuestion("task-writer", "coverage gap", closureDecision(t), certifiedStart{}, "model", 1)
+	e.recordClosureQuestion("task-writer", "coverage gap", closureDecision(t), certifiedStart{}, "model", 1, fixtureCtx(e, "task-writer"))
 	return world
 }
 
@@ -441,7 +445,8 @@ func TestW4SamePathsDifferentPayloadAreDifferentAttempts(t *testing.T) {
 	planned := []string{teS, teF}
 	grants := teEditGrants(t)
 	a := routeWithTestEdits(t, e, task, attemptPlan("plan A", planned...), grants)
-	b, err := e.beginPlanAttempt(task, attemptObjective, attemptPlan("plan A, but different", planned...))
+	rootFixtureTaskOnce(t, e, task, attemptObjective)
+	b, err := e.beginPlanAttempt(fixtureCtx(e, task), task, attemptObjective, attemptPlan("plan A, but different", planned...))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,7 +454,7 @@ func TestW4SamePathsDifferentPayloadAreDifferentAttempts(t *testing.T) {
 		t.Fatal("same paths, different payload: one identity")
 	}
 	// B became operative without routing recording anything for it.
-	e.emit(event.New("s1", task, event.SourceArchitect, event.PlanProposed, "B",
+	e.emitIn(fixtureCtx(e, task), event.New("s1", task, event.SourceArchitect, event.PlanProposed, "B",
 		proposedPlan{architectureDecision: attemptPlan("plan A, but different", planned...), PlanSource: PlanByArchitect, PlanAttemptID: b.ID}))
 	restored := interruptedFrom(t, store, task)
 	if len(restored.TestEditRecord) != 0 {
@@ -481,8 +486,10 @@ func TestW5TheIdentityIsDeterministicAndReDerivable(t *testing.T) {
 	d := attemptPlan("plan A", teS, teF)
 	one, _ := attemptEngine(t)
 	two, _ := attemptEngine(t)
-	a1, err1 := one.beginPlanAttempt("task-w5", attemptObjective, d)
-	a2, err2 := two.beginPlanAttempt("task-w5", attemptObjective, d)
+	rootFixtureTaskOnce(t, one, "task-w5", attemptObjective)
+	rootFixtureTaskOnce(t, two, "task-w5", attemptObjective)
+	a1, err1 := one.beginPlanAttempt(fixtureCtx(one, "task-w5"), "task-w5", attemptObjective, d)
+	a2, err2 := two.beginPlanAttempt(fixtureCtx(two, "task-w5"), "task-w5", attemptObjective, d)
 	if err1 != nil || err2 != nil || a1.ID != a2.ID || len(a1.ID) != 64 {
 		t.Fatalf("one payload, two identities: %q %q (%v %v)", a1.ID, a2.ID, err1, err2)
 	}
@@ -558,7 +565,7 @@ func TestW6AnAdmissionRefusalIsBoundToItsAttemptAcrossInterruption(t *testing.T)
 	interrupted := sessionStore(t)
 	for _, ev := range history {
 		if ev.Kind != event.WorkflowFailed {
-			if err := interrupted.Append(ev); err != nil {
+			if err := seedAppend(t, interrupted, ev); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -723,10 +730,10 @@ func TestW10DeclaredEffectsArePartOfThePlanAttemptIdentity(t *testing.T) {
 	e, store := attemptEngine(t)
 	grants := teEditGrants(t)
 	routeWithTestEdits(t, e, "task-w10", first, grants)
-	if _, err := e.adoptPlanAttempt("task-w10", attemptObjective, second); err == nil {
+	if _, err := e.adoptPlanAttempt(fixtureCtx(e, "task-w10"), "task-w10", attemptObjective, second); err == nil {
 		t.Fatal("a plan whose declared effects differ was made operative under the routed attempt's authority")
 	}
-	if _, err := e.adoptPlanAttempt("task-w10", attemptObjective, first); err != nil {
+	if _, err := e.adoptPlanAttempt(fixtureCtx(e, "task-w10"), "task-w10", attemptObjective, first); err != nil {
 		t.Fatal(err)
 	}
 	restored := interruptedFrom(t, store, "task-w10")
@@ -892,7 +899,8 @@ func TestW11OnlyTheExactRecordedAuthorityPremiseIsSetAside(t *testing.T) {
 		Authority: &AuthorityPremise{Requirement: premiseProspectiveCreate, Path: created, State: premiseAuthorityUnestablished}}
 	d.Claims = []Claim{exact, mixed, undeclared, otherState, ungranted}
 
-	a, err := e.beginPlanAttempt(task, attemptObjective, d)
+	rootFixtureTaskOnce(t, e, task, attemptObjective)
+	a, err := e.beginPlanAttempt(fixtureCtx(e, task), task, attemptObjective, d)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -905,14 +913,14 @@ func TestW11OnlyTheExactRecordedAuthorityPremiseIsSetAside(t *testing.T) {
 	if grants[0].World == a.World {
 		t.Fatal("premise: the fixture grant must be at another world")
 	}
-	e.recordTestEditGrants(task, "recorded", testEditRecord{PlanAttemptID: a.ID, World: grants[0].World, Grants: grants})
+	e.recordTestEditGrants(fixtureCtx(e, task), task, "recorded", testEditRecord{PlanAttemptID: a.ID, World: grants[0].World, Grants: grants})
 	if _, contradicted := e.premisesUnderRecordedAuthority(task, d); len(contradicted) != 0 {
 		t.Fatal("a test-edit grant recorded at another world answered the premise")
 	}
 	for i := range grants {
 		grants[i].World = a.World
 	}
-	e.recordTestEditGrants(task, "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants})
+	e.recordTestEditGrants(fixtureCtx(e, task), task, "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants})
 	kept, contradicted := e.premisesUnderRecordedAuthority(task, d)
 	if len(contradicted) != 1 || contradicted[0].About != teF || len(kept) != 4 {
 		t.Fatalf("not exactly the matching premise was set aside: kept %v contradicted %v", kept, contradicted)
@@ -920,18 +928,19 @@ func TestW11OnlyTheExactRecordedAuthorityPremiseIsSetAside(t *testing.T) {
 	// A prospective record holding the grant, but read at another world,
 	// answers nothing; at this attempt's world it answers the create premise.
 	granted := []prospectiveGrant{{Surface: d.ProspectiveSurfaces[0], Covering: teS}}
-	e.recordProspectiveGrants(task, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: "another world", Grants: granted})
+	e.recordProspectiveGrants(fixtureCtx(e, task), task, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: "another world", Grants: granted})
 	if _, contradicted := e.premisesUnderRecordedAuthority(task, d); len(contradicted) != 1 {
 		t.Fatalf("a prospective grant recorded at another world answered the premise: %v", contradicted)
 	}
-	e.recordProspectiveGrants(task, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: a.World, Grants: granted})
+	e.recordProspectiveGrants(fixtureCtx(e, task), task, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: a.World, Grants: granted})
 	if _, contradicted := e.premisesUnderRecordedAuthority(task, d); len(contradicted) != 2 {
 		t.Fatalf("the recorded prospective grant did not answer its premise: %v", contradicted)
 	}
 	// A record for another attempt answers nothing for this one.
 	other := d
 	other.Plan = "another plan"
-	if _, err := e.beginPlanAttempt(task, attemptObjective, other); err != nil {
+	rootFixtureTaskOnce(t, e, task, attemptObjective)
+	if _, err := e.beginPlanAttempt(fixtureCtx(e, task), task, attemptObjective, other); err != nil {
 		t.Fatal(err)
 	}
 	if _, contradicted := e.premisesUnderRecordedAuthority(task, other); len(contradicted) != 0 {
@@ -955,7 +964,9 @@ func TestW12ThePrimitiveLivesInTheExistingWorkflowSeam(t *testing.T) {
 
 // The start record is an ACKNOWLEDGED durable prerequisite: a start the store
 // refuses fails routing closed, and nothing is derived or recorded under an
-// identity no record establishes.
+// identity no record establishes. The refusal halts the task through the one
+// append-failure owner (70B2a1): the failure to record the start is the run's
+// outcome, and no terminal is recorded or published after it.
 func TestAPlanAttemptWhoseStartCannotBeRecordedIsNotRouted(t *testing.T) {
 	const task = "task-start-refused"
 	store := sessionStore(t)
@@ -969,12 +980,15 @@ func TestAPlanAttemptWhoseStartCannotBeRecordedIsNotRouted(t *testing.T) {
 			t.Fatalf("%s was recorded although the attempt's start could not be:\n%s", k, gapLoopTrace(run.events))
 		}
 	}
-	failed := false
-	for _, ev := range run.events {
-		failed = failed || (ev.Kind == event.WorkflowFailed && strings.Contains(ev.Summary, "could not be written durably"))
+	f := taskFailure(run.engine, task)
+	if f == nil || f.Kind != event.PlanAttemptStarted || !errors.Is(f, session.ErrSessionEventTooLarge) {
+		t.Fatalf("the run did not fail closed on the unrecorded start: %v\n%s", f, gapLoopTrace(run.events))
 	}
-	if !failed {
-		t.Fatalf("the run did not fail closed on the unrecorded start:\n%s", gapLoopTrace(run.events))
+	if hasKind(kinds, event.WorkflowFailed) || hasKind(kinds, event.RunReceipt) {
+		t.Fatalf("a terminal was published after the start could not be recorded:\n%s", gapLoopTrace(run.events))
+	}
+	if history, err := store.Load(); err != nil || hasKind(kindsOf(history), event.WorkflowFailed) {
+		t.Fatalf("a terminal was recorded after the start could not be recorded: %v", err)
 	}
 	if e := run.engine; e.pendingPlanAttempt(task).ID != "" {
 		t.Fatal("an unrecorded attempt became the one authority binds to")
@@ -990,7 +1004,7 @@ func TestAResumeRequiresTheAttemptStartToPrecedeItsAuthority(t *testing.T) {
 	planned := []string{teS, teF}
 	grants := teEditGrants(t)
 	a := routeWithTestEdits(t, e, task, attemptPlan("plan A", planned...), grants)
-	if _, err := e.adoptPlanAttempt(task, attemptObjective, attemptPlan("plan A", planned...)); err != nil {
+	if _, err := e.adoptPlanAttempt(fixtureCtx(e, task), task, attemptObjective, attemptPlan("plan A", planned...)); err != nil {
 		t.Fatal(err)
 	}
 	history, _ := store.Load()
@@ -1103,15 +1117,16 @@ func TestEveryAdmissionRefusalIsRecordedAgainstItsAttempt(t *testing.T) {
 	t.Run("declined authority", func(t *testing.T) {
 		const task = "task-refuse-declined"
 		store := sessionStore(t)
+		rootFixtureTask(t, store, "s1", task, attemptObjective)
 		e, architect, world := newGapLoopEngine(t, nil, store, gapProceed)
 		gap := GapIdentity{Kind: "unverified-premise", Subject: "main.go", Scope: []string{"main.go"}, World: world}
-		declined := resolvedAuthority{Resolution: authority.Resolution{TaskID: task, SessionID: "s1", Condition: "declined",
-			Scope: []string{"main.go"}, Outcome: authority.Decline, DecidedAt: time.Now().UTC()}, Gap: &gap}
-		if err := store.Append(event.New("s1", task, event.SourceUser, event.AuthorityResolved, "Decline", declined)); err != nil {
+		declined := resolvedAuthority{Resolution: authority.Resolution{TaskID: task, SessionID: "s1", Question: "declined", OptionID: "1", Condition: "declined",
+			Scope: []string{"main.go"}, Outcome: authority.Decline, State: authority.Unsupported, DecidedAt: time.Now().UTC()}, Gap: &gap}
+		if err := seedAppend(t, store, event.New("s1", task, event.SourceUser, event.AuthorityResolved, "Decline", declined)); err != nil {
 			t.Fatal(err)
 		}
 		run := driveGapLoop(t, e, architect, world, task, "", func(ctx context.Context) {
-			e.run(ctx, task, attemptObjective, RequestedByHuman)
+			runRootedTask(ctx, e, task, attemptObjective, RequestedByHuman)
 		})
 		if r := refusalOf(t, run); !strings.Contains(r.Reason, "declined") {
 			t.Fatalf("the plan was refused for another reason: %s", r.Reason)
@@ -1162,10 +1177,14 @@ func TestAHumanAnswerAndADeferredQuestionNameTheirAttempt(t *testing.T) {
 	forged := q
 	forged.PlanAttemptID = strings.Repeat("f", 64)
 	raw, _ := json.Marshal(forged)
+	// FIXTURE MIGRATION (70B2a1): a fresh process resumes the deferred task
+	// from the record that holds it, under a fresh session the resume binds.
 	fresh, _ := attemptEngine(t)
+	fresh.Store, fresh.SessionID = deferred.engine.Store, "s2"
+	bindFixtureSession(t, fresh.Store, "task-asked-deferred", fresh.SessionID)
 	ch, cancel := fresh.Bus.Subscribe(64)
 	defer cancel()
-	fresh.resumeAuthority(context.Background(), session.Interrupted{TaskID: "task-asked-deferred", AwaitingAuthority: raw,
+	fresh.resumeAuthority(fixtureCtx(fresh, "task-asked-deferred"), session.Interrupted{TaskID: "task-asked-deferred", AwaitingAuthority: raw,
 		StartedPlanAttempts: map[string]bool{q.PlanAttemptID: true}})
 	refused := false
 	for len(ch) > 0 {
@@ -1190,13 +1209,13 @@ func TestASettlementDoesNotAuthorizeAReplacementPlanAttempt(t *testing.T) {
 	route := Routing{Route: RouteHuman, Condition: "may it change", Gap: gap}
 	answer := func(owner, condition string, withGap bool) {
 		t.Helper()
-		res := resolvedAuthority{Resolution: authority.Resolution{TaskID: task, SessionID: "s1", Condition: condition,
-			Scope: []string{teS}, Outcome: authority.Authorize, DecidedAt: time.Now().UTC()}, PlanAttemptID: owner}
+		res := resolvedAuthority{Resolution: authority.Resolution{TaskID: task, SessionID: "s1", Question: condition, OptionID: "1", Condition: condition,
+			Scope: []string{teS}, Outcome: authority.Authorize, State: authority.Unsupported, DecidedAt: time.Now().UTC()}, PlanAttemptID: owner}
 		if withGap {
 			res.Gap = &gap
 			e.settleGapFor(task, gap, authority.Authorize, owner)
 		}
-		e.emit(event.New("s1", task, event.SourceUser, event.AuthorityResolved, "Authorize", res))
+		e.emitIn(fixtureCtx(e, task), event.New("s1", task, event.SourceUser, event.AuthorityResolved, "Authorize", res))
 	}
 	consumes := func(e *Engine) (gapSettled, conditionAnswered bool) {
 		_, gapSettled = e.gapSettlement(task, route)
@@ -1227,7 +1246,7 @@ func TestASettlementDoesNotAuthorizeAReplacementPlanAttempt(t *testing.T) {
 	if g, c := consumes(e); g || c {
 		t.Fatalf("A's answers authorized B before adoption: gap %v condition %v", g, c)
 	}
-	if _, err := e.adoptPlanAttempt(task, attemptObjective, planB); err != nil {
+	if _, err := e.adoptPlanAttempt(fixtureCtx(e, task), task, attemptObjective, planB); err != nil {
 		t.Fatal(err)
 	}
 	if g, c := consumes(e); g || c {
@@ -1247,6 +1266,8 @@ func TestASettlementDoesNotAuthorizeAReplacementPlanAttempt(t *testing.T) {
 	}
 	// Routing A again -- one identity, wherever it recurs -- holds A's answers
 	// and none of B's.
+	// One operative invocation of the task at a time: e's ends before e2's.
+	endFixtureInvocation(e, task)
 	e2 := &Engine{Store: store, SessionID: "s1", Bus: event.NewBus()}
 	e2.Repo.Root = t.TempDir()
 	if again := routeWithDerivation(t, e2, task, planA); again.ID != a.ID {
@@ -1259,11 +1280,14 @@ func TestASettlementDoesNotAuthorizeAReplacementPlanAttempt(t *testing.T) {
 		t.Fatalf("A routed again lost its own answers: gap %v condition %v", g, c)
 	}
 	// An answer naming an attempt this task never started authorizes nothing.
-	if _, err := e.beginPlanAttempt(task, attemptObjective, attemptPlan("plan C", teS)); err != nil {
+	endFixtureInvocation(e2, task)
+	rootFixtureTaskOnce(t, e, task, attemptObjective)
+	if _, err := e.beginPlanAttempt(fixtureCtx(e, task), task, attemptObjective, attemptPlan("plan C", teS)); err != nil {
 		t.Fatal(err)
 	}
-	e.emit(event.New("s1", task, event.SourceUser, event.AuthorityResolved, "Authorize", resolvedAuthority{
-		Resolution:    authority.Resolution{TaskID: task, Condition: "unowned", Scope: []string{teS}, Outcome: authority.Authorize},
+	e.emitIn(fixtureCtx(e, task), event.New("s1", task, event.SourceUser, event.AuthorityResolved, "Authorize", resolvedAuthority{
+		Resolution: authority.Resolution{TaskID: task, SessionID: "s1", Question: "unowned", OptionID: "1", Condition: "unowned", Scope: []string{teS},
+			Outcome: authority.Authorize, State: authority.Unsupported, DecidedAt: time.Now().UTC()},
 		PlanAttemptID: strings.Repeat("f", 64)}))
 	if _, asked := e.applyAnsweredCondition(task, "unowned", teS); asked {
 		t.Fatal("an answer naming an attempt nobody started was consumed")
@@ -1283,7 +1307,7 @@ func TestAnAbandonedReplanLeavesNoRoutingStateOnTheOperativePlan(t *testing.T) {
 
 	a := routeWithTestEdits(t, e, task, planA, grantsA)
 	e.setRouting(task, zero.Policy, zero.Scoped, nil, []string{"routed for A"})
-	if _, err := e.adoptPlanAttempt(task, attemptObjective, planA); err != nil {
+	if _, err := e.adoptPlanAttempt(fixtureCtx(e, task), task, attemptObjective, planA); err != nil {
 		t.Fatal(err)
 	}
 	routed := func() string {
@@ -1319,7 +1343,7 @@ func TestAnAbandonedReplanLeavesNoRoutingStateOnTheOperativePlan(t *testing.T) {
 	// attempt other than the one the task stands on is never returned.
 	routeWithTestEdits(t, e, task, planB, nil)
 	e.setRouting(task, zero.Policy, zero.Scoped, nil, []string{"routed for B"})
-	if _, err := e.adoptPlanAttempt(task, attemptObjective, planB); err != nil {
+	if _, err := e.adoptPlanAttempt(fixtureCtx(e, task), task, attemptObjective, planB); err != nil {
 		t.Fatal(err)
 	}
 	if got := routed(); got != b.ID+":routed for B" {
@@ -1501,6 +1525,11 @@ func breakStore(t *testing.T, dir string) (mend func()) {
 	t.Helper()
 	var files []string
 	err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		// The record lock's own lock files, and the task invocation leases,
+		// hold no events.
+		if err == nil && d.IsDir() && (d.Name() == "locks" || d.Name() == "invocations") {
+			return filepath.SkipDir
+		}
 		if err == nil && !d.IsDir() {
 			files = append(files, p)
 		}
@@ -1550,16 +1579,17 @@ func TestAGrantStateThatCannotBeRecordedHoldsNoAuthority(t *testing.T) {
 	const task = "task-grant-write-fails"
 	planA := attemptPlan("plan A", teS)
 	routeWithTestEdits(t, e, task, planA, []testEditGrant{{Path: teS, World: teWorld}})
-	if _, err := e.adoptPlanAttempt(task, attemptObjective, planA); err != nil {
+	if _, err := e.adoptPlanAttempt(fixtureCtx(e, task), task, attemptObjective, planA); err != nil {
 		t.Fatal(err)
 	}
 	planB := attemptPlan("plan B", teS)
-	b, err := e.beginPlanAttempt(task, attemptObjective, planB)
+	rootFixtureTaskOnce(t, e, task, attemptObjective)
+	b, err := e.beginPlanAttempt(fixtureCtx(e, task), task, attemptObjective, planB)
 	if err != nil {
 		t.Fatal(err)
 	}
 	mend := breakStore(t, dir)
-	e.derivedCoverage(context.Background(), task, planB.Files, nil)
+	e.derivedCoverage(fixtureCtx(e, task), task, planB.Files, nil)
 	if g := e.testEditGrants(task); len(g) != 0 {
 		t.Fatalf("an unrecorded grant state left grants in force: %+v", g)
 	}
@@ -1570,7 +1600,7 @@ func TestAGrantStateThatCannotBeRecordedHoldsNoAuthority(t *testing.T) {
 		t.Fatalf("routing would go on with an unrecorded grant state: %v", err)
 	}
 	mend()
-	if _, err := e.adoptPlanAttempt(task, attemptObjective, planB); err == nil {
+	if _, err := e.adoptPlanAttempt(fixtureCtx(e, task), task, attemptObjective, planB); err == nil {
 		t.Fatal("an attempt whose grant state was never recorded was made operative")
 	}
 	if op := e.operativePlanAttempt(task); op.ID == b.ID {
@@ -1587,7 +1617,7 @@ func TestAGrantStateThatCannotBeRecordedHoldsNoAuthority(t *testing.T) {
 	e2, _, dir2 := durableStore(t)
 	c := routeWithTestEdits(t, e2, task, attemptPlan("plan C", teS), nil)
 	mend2 := breakStore(t, dir2)
-	err = e2.recordTestEditGrants(task, "authored", testEditRecord{PlanAttemptID: c.ID, World: teWorld, Grants: []testEditGrant{{Path: teS}}})
+	err = e2.recordTestEditGrants(fixtureCtx(e2, task), task, "authored", testEditRecord{PlanAttemptID: c.ID, World: teWorld, Grants: []testEditGrant{{Path: teS}}})
 	mend2()
 	if err == nil {
 		t.Fatal("a failed grant write was reported as written")
@@ -1601,18 +1631,23 @@ func TestAGrantStateThatCannotBeRecordedHoldsNoAuthority(t *testing.T) {
 }
 
 // A refusal whose record could not be written is not suppressed as though it
-// had been: the caller gets the cause and the write failure, and a later
-// refusal of the same attempt is recorded, exactly once.
+// had been: the caller gets the cause and the write failure. The failed
+// governed append halts the task (70B2a1): once the store recovers, nothing
+// more of the invocation -- no later refusal of the same attempt -- is
+// recorded, and every later close returns the original failure beside its
+// cause.
 func TestAnAdmissionRefusalThatCannotBeRecordedIsNotSuppressed(t *testing.T) {
 	e, store, dir := durableStore(t)
 	const task = "task-refusal-write-fails"
-	a, err := e.beginPlanAttempt(task, attemptObjective, attemptPlan("plan A", teS))
+	rootFixtureTaskOnce(t, e, task, attemptObjective)
+	inv := liveInvocation(t, e, task)
+	a, err := e.beginPlanAttempt(inv.ctx, task, attemptObjective, attemptPlan("plan A", teS))
 	if err != nil {
 		t.Fatal(err)
 	}
 	cause := refusePlanAdmission(refusalProspectiveAdmission, nil, errors.New("prospective admission refused before implementation: x"))
 	mend := breakStore(t, dir)
-	got := e.closePlanAdmission(task, cause)
+	got := e.closePlanAdmission(fixtureCtx(e, task), task, cause)
 	mend()
 	if got == nil || !errors.Is(got, cause) || got.Error() == cause.Error() {
 		t.Fatalf("the failed refusal write was not returned beside its cause: %v", got)
@@ -1630,12 +1665,18 @@ func TestAnAdmissionRefusalThatCannotBeRecordedIsNotSuppressed(t *testing.T) {
 	if refusals() != 0 {
 		t.Fatal("a refusal that could not be written is on the record")
 	}
-	if got := e.closePlanAdmission(task, cause); got != cause {
-		t.Fatalf("a recorded refusal changed its cause: %v", got)
+	halt := e.invocationFailure(inv)
+	if halt == nil || halt.Kind != event.PlanAttemptRefused || !errors.Is(got, halt) {
+		t.Fatalf("the failed refusal write did not halt the task with that failure: %v", halt)
 	}
-	_ = e.closePlanAdmission(task, cause)
-	if refusals() != 1 {
-		t.Fatalf("the refusal was not recorded exactly once after the store recovered: %d", refusals())
+	if again := e.closePlanAdmission(fixtureCtx(e, task), task, cause); again == cause || !errors.Is(again, cause) || !errors.Is(again, halt) {
+		t.Fatalf("a halted task's later refusal did not return the original failure beside its cause: %v", again)
+	}
+	if refusals() != 0 {
+		t.Fatalf("a halted task recorded %d refusal(s) after the store recovered", refusals())
+	}
+	if e.invocationFailure(inv) != halt {
+		t.Fatal("a later refusal replaced the original append failure")
 	}
 }
 
@@ -1646,7 +1687,8 @@ func TestAnAdmissionRefusalThatCannotBeRecordedIsNotSuppressed(t *testing.T) {
 func TestOnlyAGenuineAdmissionRefusalIsRecordedAsOne(t *testing.T) {
 	e, store := attemptEngine(t)
 	const task = "task-not-a-refusal"
-	if _, err := e.beginPlanAttempt(task, attemptObjective, attemptPlan("plan A", teS)); err != nil {
+	rootFixtureTaskOnce(t, e, task, attemptObjective)
+	if _, err := e.beginPlanAttempt(fixtureCtx(e, task), task, attemptObjective, attemptPlan("plan A", teS)); err != nil {
 		t.Fatal(err)
 	}
 	for _, cause := range []error{
@@ -1656,7 +1698,7 @@ func TestOnlyAGenuineAdmissionRefusalIsRecordedAsOne(t *testing.T) {
 		errors.New("the TestEditGranted record could not be written durably: disk full"),
 		context.Canceled,
 	} {
-		if got := e.closePlanAdmission(task, cause); got != cause {
+		if got := e.closePlanAdmission(fixtureCtx(e, task), task, cause); got != cause {
 			t.Fatalf("a non-refusal was changed on its way back: %v -> %v", cause, got)
 		}
 	}
@@ -2024,7 +2066,7 @@ func TestObj61W2NewGovernedEvidenceResetsTheRepeatIdentity(t *testing.T) {
 	route := func(grants []testEditGrant) (planAttemptRefusal, error) {
 		t.Helper()
 		routeWithTestEdits(t, e, task, d, grants)
-		return e.continueAfterAdmissionRefusal(task, refused)
+		return e.continueAfterAdmissionRefusal(fixtureCtx(e, task), task, refused)
 	}
 	first, err := route(nil)
 	if err != nil || first.RefusalID == "" {
@@ -2062,7 +2104,7 @@ func TestObj61W2NewGovernedEvidenceResetsTheRepeatIdentity(t *testing.T) {
 		e.mu.Unlock()
 		scoped.RiskClass = "HIGH_RISK"
 		e.noteScopedPreflight(task, scoped)
-		return e.continueAfterAdmissionRefusal(task, refused)
+		return e.continueAfterAdmissionRefusal(fixtureCtx(e, task), task, refused)
 	}
 	fourth, err := scopedRoute()
 	if err != nil || fourth.PlanAttemptID != third.PlanAttemptID || fourth.RefusalID == third.RefusalID {
@@ -2074,12 +2116,12 @@ func TestObj61W2NewGovernedEvidenceResetsTheRepeatIdentity(t *testing.T) {
 	// Classes that do not establish only "this plan" are routed as before.
 	for _, c := range []planAdmissionRefusalClass{refusalAuthorityDeclined, refusalSuppliedPlan, "unknown"} {
 		cause := refusePlanAdmission(c, nil, errors.New("declined"))
-		if _, err := e.continueAfterAdmissionRefusal(task, cause); err != cause {
+		if _, err := e.continueAfterAdmissionRefusal(fixtureCtx(e, task), task, cause); err != cause {
 			t.Errorf("class %s was continued: %v", c, err)
 		}
 	}
 	plain := errors.New("Sensei scoped preflight: connection reset")
-	if _, err := e.continueAfterAdmissionRefusal(task, plain); err != plain {
+	if _, err := e.continueAfterAdmissionRefusal(fixtureCtx(e, task), task, plain); err != plain {
 		t.Fatalf("an operational failure was read as a plan refusal: %v", err)
 	}
 }
@@ -2147,7 +2189,7 @@ func TestObj61W7AResumePresentsTheOwedRefusalAndRestoresNoAuthority(t *testing.T
 			resumed := sessionStore(t)
 			history, _ := store.Load()
 			for _, ev := range history {
-				if err := resumed.Append(ev); err != nil {
+				if err := seedAppend(t, resumed, ev); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -2246,7 +2288,7 @@ func TestObj61W7BAFirstReplanRefusalOfAPlannedTaskIsOwedAcrossInterruption(t *te
 		t.Helper()
 		s := sessionStore(t)
 		for _, ev := range history[:cut+1] {
-			if err := s.Append(ev); err != nil {
+			if err := seedAppend(t, s, ev); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -2319,7 +2361,7 @@ func TestObj61W5TheContinuationIsOneSharedBoundary(t *testing.T) {
 		t.Fatal("routePlan decides a continuation, or no longer reconciles prospective grants exactly once")
 	}
 	ask := sourceOf(t, "internal/workflow/engine.go", "askArchitect")
-	if strings.Count(ask, "e.continueAfterAdmissionRefusal(taskID, err)") != 2 {
+	if strings.Count(ask, "e.continueAfterAdmissionRefusal(ctx, taskID, err)") != 2 {
 		t.Fatal("both architect routing paths (proceed and escalate) must reach the one shared boundary")
 	}
 	boundary := sourceOf(t, "internal/workflow/engine.go", "continueAfterAdmissionRefusal")
@@ -2342,7 +2384,7 @@ func TestObj61W5TheContinuationIsOneSharedBoundary(t *testing.T) {
 func TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked(t *testing.T) {
 	e, store := attemptEngine(t)
 	const task = "task-obj61-w8"
-	if err := store.Append(event.New("s1", task, event.SourceSystem, event.TaskCreated, attemptObjective, nil)); err != nil {
+	if err := seedAppend(t, store, event.New("s1", task, event.SourceSystem, event.TaskCreated, attemptObjective, nil)); err != nil {
 		t.Fatal(err)
 	}
 	d := attemptPlan("plan A", teS, teF)
@@ -2350,7 +2392,7 @@ func TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked(t 
 	route := func(grants []testEditGrant) (planAttemptRefusal, error) {
 		t.Helper()
 		routeWithTestEdits(t, e, task, d, grants)
-		return e.continueAfterAdmissionRefusal(task, refused)
+		return e.continueAfterAdmissionRefusal(fixtureCtx(e, task), task, refused)
 	}
 	first, err := route(nil)
 	if err != nil {
@@ -2366,7 +2408,7 @@ func TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked(t 
 		t.Fatalf("premise: the repeat of the FIRST refusal parks: %v", err)
 	}
 	e.beginReceipt(task)
-	if !e.parkPlanAdmission(task, err) {
+	if !e.parkPlanAdmission(fixtureCtx(e, task), task, err) {
 		t.Fatal("the repeated refusal did not park the invocation")
 	}
 
@@ -2418,17 +2460,17 @@ func TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked(t 
 func TestObj61OnlyARecordedReturnToTheArchitectIsOwed(t *testing.T) {
 	e, store := attemptEngine(t)
 	const task = "task-obj61-owed-disposition"
-	if err := store.Append(event.New("s1", task, event.SourceSystem, event.TaskCreated, attemptObjective, nil)); err != nil {
+	if err := seedAppend(t, store, event.New("s1", task, event.SourceSystem, event.TaskCreated, attemptObjective, nil)); err != nil {
 		t.Fatal(err)
 	}
 	attempt := routeWithTestEdits(t, e, task, attemptPlan("plan A", teS, teF), nil)
 	byClass := map[planAdmissionRefusalClass]string{}
 	for _, c := range []planAdmissionRefusalClass{refusalAuthorityDeclined, refusalSuppliedPlan, "unknown"} {
 		cause := refusePlanAdmission(c, nil, errors.New("refused as "+string(c)))
-		if _, err := e.continueAfterAdmissionRefusal(task, cause); err != cause {
+		if _, err := e.continueAfterAdmissionRefusal(fixtureCtx(e, task), task, cause); err != cause {
 			t.Fatalf("premise: class %s was continued: %v", c, err)
 		}
-		if err := e.closePlanAdmission(task, cause); err != cause {
+		if err := e.closePlanAdmission(fixtureCtx(e, task), task, cause); err != cause {
 			t.Fatalf("premise: class %s was not recorded by the production recorder: %v", c, err)
 		}
 		rec, ok := e.admissionRefusalOf(task, cause)
@@ -2481,7 +2523,7 @@ func TestObj61OnlyARecordedReturnToTheArchitectIsOwed(t *testing.T) {
 		Class: refusalAuthorityDeclined, GoverningEvidenceID: "g"}
 	claimed.RefusalID = planAdmissionRefusalID(claimed)
 	claimed.Continuation = session.PlanAdmissionContinuationArchitectTurn
-	if err := store.Append(event.New("s1", task, event.SourceSystem, event.PlanAttemptRefused, "refused", claimed)); err != nil {
+	if err := seedAppend(t, store, event.New("s1", task, event.SourceSystem, event.PlanAttemptRefused, "refused", claimed)); err != nil {
 		t.Fatal(err)
 	}
 	inconsistent := reconstructed(t, store, task)
@@ -2498,7 +2540,7 @@ func TestObj61OnlyARecordedReturnToTheArchitectIsOwed(t *testing.T) {
 // architect, of an attempt that is durably started only AFTER the refusal is
 // recorded: every field valid, so ordering is the only thing wrong with it.
 func beforeStartRefusal(taskID string) (planAttemptRefusal, planAttempt) {
-	a := planAttempt{ID: strings.Repeat("d", 64), TaskID: taskID}
+	a := planAttempt{ID: strings.Repeat("d", 64), TaskID: taskID, PlanSource: PlanByArchitect}
 	r := planAttemptRefusal{PlanAttemptID: a.ID, TaskID: taskID, Reason: "declared prospective surface holds no recorded grant",
 		Class: refusalProspectiveAdmission, Declaration: json.RawMessage(`[{"path":"extra/coverage_reconciliation_test.go"}]`),
 		GoverningEvidenceID: strings.Repeat("e", 64)}
@@ -2520,11 +2562,11 @@ func TestObj61ARefusalBeforeItsStartIsNeverRepetitionState(t *testing.T) {
 	record := func(order ...event.Event) session.Interrupted {
 		t.Helper()
 		_, store := attemptEngine(t)
-		if err := store.Append(event.New("s1", task, event.SourceSystem, event.TaskCreated, attemptObjective, nil)); err != nil {
+		if err := seedAppend(t, store, event.New("s1", task, event.SourceSystem, event.TaskCreated, attemptObjective, nil)); err != nil {
 			t.Fatal(err)
 		}
 		for _, ev := range order {
-			if err := store.Append(ev); err != nil {
+			if err := seedAppend(t, store, ev); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -2587,7 +2629,7 @@ func TestObj61AResumeRefusingAnOwedRefusalMeasuresTheRetainedCandidate(t *testin
 		event.New("s1", task, event.SourceSystem, event.PlanAttemptRefused, "refused", refusal),
 		event.New("s1", task, event.SourceSystem, event.PlanAttemptStarted, "started", attempt),
 	} {
-		if err := store.Append(ev); err != nil {
+		if err := seedAppend(t, store, ev); err != nil {
 			t.Fatal(err)
 		}
 	}

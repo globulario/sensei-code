@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"context"
+
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -151,7 +153,7 @@ func handoffPacket(state taskstate.State, binding roles.Binding, previous string
 // rather than written anyway. The failure mode it guards against is a
 // reconciliation that rests on nothing but agreement, and a receipt that
 // silently downgrades itself to prose would be that failure with a paper trail.
-func (e *Engine) recordReconciliation(taskID string, binding roles.Binding, r roles.Reconciliation) {
+func (e *Engine) recordReconciliation(ctx context.Context, taskID string, binding roles.Binding, r roles.Reconciliation) {
 	r.Provenance = roles.Provenance{
 		TaskID: taskID, Role: roles.Architect,
 		Provider: e.Config.Architect.Name, SessionID: e.SessionID,
@@ -163,11 +165,11 @@ func (e *Engine) recordReconciliation(taskID string, binding roles.Binding, r ro
 		At:            time.Now().UTC(),
 	}
 	if err := r.Validate(); err != nil {
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			"a disagreement was resolved without a recordable reconciliation: "+err.Error(), r))
 		return
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectReconciliation, r.Describe(), r))
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectReconciliation, r.Describe(), r))
 }
 
 // reconciliationEvidence is what an architect's resolution actually rests on.

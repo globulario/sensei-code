@@ -398,8 +398,11 @@ func TestDiscoveryFailsClosedOnAnUnreadableHistoryOrASplitIdentity(t *testing.T)
 
 	t.Run("one task id in two records", func(t *testing.T) {
 		root := t.TempDir()
+		// Only a legacy writer can leave two roots of one task: the Store
+		// creates a root only under the task's one lease, after proving no
+		// other record claims it (70B2a1).
 		for _, id := range []string{"session-one", "session-two"} {
-			writeSession(t, root, id,
+			writeRawSession(t, root, id,
 				event.New(id, "t-split", event.SourceSystem, event.TaskCreated, "one objective, two accounts", nil))
 		}
 		if _, err := session.FindActive(root); err == nil {
@@ -441,9 +444,28 @@ func writeSession(t *testing.T, root, sessionID string, evs ...event.Event) {
 		t.Fatal(err)
 	}
 	for _, e := range evs {
-		if err := store.Append(e); err != nil {
+		if err := seedAppend(t, store, e); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+// writeRawSession writes events into a session record byte for byte, without
+// the Store's append authorization: a record an earlier writer left behind.
+func writeRawSession(t *testing.T, root, sessionID string, evs ...event.Event) {
+	t.Helper()
+	if _, err := session.New(root, sessionID); err != nil {
+		t.Fatal(err)
+	}
+	var lines bytes.Buffer
+	for _, e := range evs {
+		if err := json.NewEncoder(&lines).Encode(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(root, ".sensei-code", "sessions", sessionID, "events.jsonl")
+	if err := os.WriteFile(path, lines.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -460,12 +482,13 @@ func TestAnEmptyDefaultListingPointsAtSessionsThatDoHoldQuestions(t *testing.T) 
 	// A session that deferred a question, and one that merely ran.
 	deferred := event.New("s-old", "t-asking", event.SourceUser, event.WorkflowAwaitingAuthority,
 		"authority decision deferred; the question stands", workflow.DeferredAuthority{
+			TaskID: "t-asking", SessionID: "s-old", ScopeRecorded: true,
 			Decision: authority.Decision{Level: authority.Human, Subject: "may this land?",
 				Options: []authority.Option{{ID: "1", Label: "yes"}}},
 		})
 	write("session-old",
 		event.New("s-old", "t-asking", event.SourceUser, event.TaskCreated, "do the work", nil),
-		event.New("s-old", "t-asking", event.SourceArchitect, event.PlanProposed, "the bounded plan", nil),
+		event.New("s-old", "t-asking", event.SourceArchitect, event.PlanProposed, "the bounded plan", map[string]string{"decision": "proceed", "summary": "the bounded plan", "plan": "the bounded plan", "plan_source": "architect"}),
 		deferred)
 	write("session-new",
 		event.New("s-new", "t-done", event.SourceSystem, event.TaskCreated, "something else", nil),
@@ -736,9 +759,10 @@ func TestUnreadableStorageIsNeverReportedAsAbsence(t *testing.T) {
 func TestOneTaskIdentityClaimedByTwoRecordsIsAlwaysRefused(t *testing.T) {
 	t.Run("active in one record, ended in another", func(t *testing.T) {
 		root := t.TempDir()
-		writeSession(t, root, "session-active",
+		// Only a legacy writer can leave two roots of one task (70B2a1).
+		writeRawSession(t, root, "session-active",
 			event.New("session-active", "t-split", event.SourceSystem, event.TaskCreated, "one objective", nil))
-		writeSession(t, root, "session-ended",
+		writeRawSession(t, root, "session-ended",
 			event.New("session-ended", "t-split", event.SourceSystem, event.TaskCreated, "one objective", nil),
 			event.New("session-ended", "t-split", event.SourceSystem, event.WorkflowCompleted, "done", nil))
 
@@ -755,7 +779,10 @@ func TestOneTaskIdentityClaimedByTwoRecordsIsAlwaysRefused(t *testing.T) {
 
 	t.Run("created twice inside one record", func(t *testing.T) {
 		root := t.TempDir()
-		writeSession(t, root, "session-doubled",
+		// The Store refuses to write a second root (objective 70B2a1), so the
+		// doubled record is written as a legacy writer left it: the readers
+		// must still refuse it.
+		writeRawSession(t, root, "session-doubled",
 			event.New("session-doubled", "t-twice", event.SourceSystem, event.TaskCreated, "first", nil),
 			event.New("session-doubled", "t-twice", event.SourceSystem, event.TaskCreated, "second", nil))
 
@@ -1056,6 +1083,17 @@ func runResume(t *testing.T, root string, args ...string) (int, string, string) 
 	return code, string(stdout), string(stderr)
 }
 
+// repoAt is the repository and configuration a command started in root is
+// handed, as main hands them: the discovered repository and the defaults.
+func repoAt(t *testing.T, root string) (gitx.Repo, config.Config) {
+	t.Helper()
+	repo, err := gitx.Discover(t.Context(), root)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	return repo, config.Default()
+}
+
 // NAMING A SESSION IS A FILTER, NEVER A WAIVER.
 //
 // `--session` used to branch away from repository-wide discovery into a reader
@@ -1075,8 +1113,11 @@ func TestNamingASessionDoesNotWaiveRepositoryWideValidation(t *testing.T) {
 			event.New("session-named", "t-named", event.SourceSystem, event.TaskCreated, "the named account", nil))
 		// Two other records claim one identity. The named record is readable,
 		// unambiguous, and entirely beside the point.
+		// Only a legacy writer can leave two roots of one task: the Store
+		// creates a root only under the task's one lease, after proving no
+		// other record claims it (70B2a1).
 		for _, id := range []string{"session-one", "session-two"} {
-			writeSession(t, root, id,
+			writeRawSession(t, root, id,
 				event.New(id, "t-split", event.SourceSystem, event.TaskCreated, "one objective, two accounts", nil))
 		}
 
@@ -1140,7 +1181,7 @@ func TestNamingASessionDoesNotWaiveRepositoryWideValidation(t *testing.T) {
 		writeSession(t, root, "session-asking",
 			event.New("session-asking", "t-asking", event.SourceSystem, event.TaskCreated, "do the work", nil),
 			event.New("session-asking", "t-asking", event.SourceUser, event.WorkflowAwaitingAuthority,
-				"authority decision deferred", workflow.DeferredAuthority{TaskID: "t-asking",
+				"authority decision deferred", workflow.DeferredAuthority{TaskID: "t-asking", SessionID: "session-asking", ScopeRecorded: true,
 					Decision: authority.Decision{Level: authority.Human, Subject: "may this land?",
 						Options: []authority.Option{{ID: "1", Label: "yes"}}}}))
 
@@ -1182,4 +1223,489 @@ func TestNamingASessionDoesNotWaiveRepositoryWideValidation(t *testing.T) {
 			t.Fatalf("the refusal does not name the session that holds the task:\n%s", stderr)
 		}
 	})
+}
+
+// A1-W1 FRESH ID (objective 70B2a1): two fresh resume processes cannot mint the
+// same session identity through the production identity generator, even when
+// they resume in the same instant -- the clock alone is not an identity. The
+// generator is the one both entrypoints use: `resume` and the interactive
+// startup.
+func TestB2a1W1FreshID(t *testing.T) {
+	// One instant for every minter, as two processes started together would
+	// read it.
+	instant := event.New("", "", event.SourceSystem, event.Status, "", nil).Time
+	clock := session.ID(instant)
+	const minters = 64
+	ids := make([]string, minters)
+	var wg sync.WaitGroup
+	for i := range ids {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			id, err := resumingSession(instant)
+			if err != nil {
+				t.Errorf("minter %d: %v", i, err)
+				return
+			}
+			ids[i] = id
+		}()
+	}
+	wg.Wait()
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if id == clock {
+			t.Fatalf("the fresh identity %q is the clock's identity alone", id)
+		}
+		entropy, ok := strings.CutPrefix(id, clock+"-")
+		if !ok || len(entropy) != 32 || strings.Trim(entropy, "0123456789abcdef") != "" {
+			t.Fatalf("the fresh identity %q is not the instant joined to 128 bits of entropy", id)
+		}
+		if seen[id] {
+			t.Fatalf("two resumed processes minted the same session identity %q", id)
+		}
+		seen[id] = true
+	}
+}
+
+// 70B2a1 cycle-2 review f1: EVERY RESUME LANE IS HANDED A FRESH SESSION. The
+// identity a resume invocation acts under is opened once, before its lane is
+// chosen (openResumeIdentity): the holder's own record -- one physical ledger
+// -- and a session minted fresh for this process, never the holder's. The
+// command hands that one fresh session, and never the holder's SessionID, to
+// every lane it dispatches: interrupted work, a blocked turn, an owed review
+// and an answered question -- so each lane's Engine.ResumeTask binds it by a
+// fresh durable transition before its first ordinary event.
+func TestB2a1RF1EveryResumeLaneIsHandedAFreshSession(t *testing.T) {
+	root := t.TempDir()
+	const holder = "session-holder"
+	holderStore, err := session.New(root, holder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootEvent := event.New(holder, "t-fresh", event.SourceSystem, event.TaskCreated, "the objective", nil)
+	if err := seedAppend(t, holderStore, rootEvent); err != nil {
+		t.Fatal(err)
+	}
+	instant := rootEvent.Time
+	seen := map[string]bool{holder: true}
+	for i := 0; i < 2; i++ {
+		store, fresh, err := openResumeIdentity(root, holder, instant)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if seen[fresh] {
+			t.Fatalf("resume %d acts under %q, which is the holder's or an earlier resume's session", i, fresh)
+		}
+		seen[fresh] = true
+		// The holder's own record: one physical ledger, whose root the fresh
+		// session's lineage is proven from.
+		l, err := store.TaskSessionLineage("t-fresh")
+		if err != nil || l.HolderSessionID != holder {
+			t.Fatalf("the resume's store is not the holder's record: %+v, %v", l, err)
+		}
+	}
+	// Every lane the command dispatches is handed the fresh session minted
+	// before the lane was chosen, and none the holder's.
+	src, err := os.ReadFile("resume.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(src)
+	start := strings.Index(body, "func resumeAuthorityAnswered(")
+	end := strings.Index(body, "func settleResumed(")
+	if start < 0 || end < start {
+		t.Fatal("resumeAuthorityAnswered was not found in resume.go")
+	}
+	command := body[start:end]
+	opened := strings.Index(command, "store, sessionID, err := openResumeIdentity(repo.Root, holder.SessionID, ")
+	chosen := strings.Index(command, "selectResumeLane(")
+	if opened < 0 || chosen < 0 || opened > chosen {
+		t.Fatal("the resume identity is not opened before the lane is chosen")
+	}
+	for _, call := range []string{"resumeAwaitingReview(", "resumeBlockedExternal(", "resumeInterruptedWork(", "workflow.New("} {
+		at := strings.Index(command, call)
+		if at < 0 {
+			t.Fatalf("the command dispatches no %s", call)
+		}
+		line := command[at:]
+		line = line[:strings.Index(line, "\n")]
+		if !strings.Contains(line, "store, sessionID") || strings.Contains(line, "holder.SessionID") {
+			t.Fatalf("%s is not handed the fresh session: %s", call, line)
+		}
+	}
+	if strings.Count(command, "holder.SessionID") != 1 {
+		t.Fatal("the holder's SessionID reaches the command beyond opening the holder's record")
+	}
+}
+
+// RULING-189 CALLER COMPLETION (objective 70B2a1): a resume whose fresh session
+// cannot be bound -- an engine with no Store, a record with no root of the
+// task, a root proving no holder, and a binding the Store rejects -- completes
+// the caller's control path exactly once, with the typed pre-binding refusal
+// and a failing exit, instead of waiting for a workflow terminal that can
+// lawfully never be recorded. Nothing is appended to the task's history and
+// nothing is published on the bus in place of the refused session's events.
+// Every lane of `resume` settles through settleResumed. Bounded by the test
+// binary's timeout: a regression hangs here.
+func TestB2a1R193W12ARefusedResumeBindingEndsTheCallerTyped(t *testing.T) {
+	task := session.Interrupted{TaskID: "task-unbindable", Task: "the objective"}
+	// legacy is a record a legacy writer left behind: its events written to
+	// the file directly, because the Store refuses a root naming no session.
+	legacy := func(t *testing.T, evs ...event.Event) *session.Store {
+		t.Helper()
+		root := t.TempDir()
+		s, err := session.New(root, "session-holder")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var lines bytes.Buffer
+		for _, ev := range evs {
+			if err := json.NewEncoder(&lines).Encode(ev); err != nil {
+				t.Fatal(err)
+			}
+		}
+		path := filepath.Join(root, ".sensei-code", "sessions", "session-holder", "events.jsonl")
+		if err := os.WriteFile(path, lines.Bytes(), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	store := func(t *testing.T, evs ...event.Event) *session.Store {
+		t.Helper()
+		s, err := session.New(t.TempDir(), "session-holder")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, ev := range evs {
+			if err := seedAppend(t, s, ev); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return s
+	}
+	fresh := func(t *testing.T) string {
+		t.Helper()
+		id, err := resumingSession(event.New("", "", event.SourceSystem, event.Status, "", nil).Time)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	cases := map[string]func(t *testing.T) (*session.Store, string, error){
+		"no store": func(t *testing.T) (*session.Store, string, error) {
+			return nil, fresh(t), session.ErrNoStore
+		},
+		"rootless store": func(t *testing.T) (*session.Store, string, error) {
+			// The record roots another task only; the Store takes no record of
+			// a task it holds no root of.
+			return store(t, event.New("session-holder", "another-task", event.SourceSystem, event.TaskCreated, "another", nil)),
+				fresh(t), session.ErrNoTaskRoot
+		},
+		"root proving no holder": func(t *testing.T) (*session.Store, string, error) {
+			return legacy(t, event.New("", task.TaskID, event.SourceSystem, event.TaskCreated, task.Task, nil)),
+				fresh(t), session.ErrSessionlessRoot
+		},
+		"rejected binding": func(t *testing.T) (*session.Store, string, error) {
+			s := store(t, event.New("session-holder", task.TaskID, event.SourceSystem, event.TaskCreated, task.Task, nil))
+			lineage, err := s.TaskSessionLineage(task.TaskID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			b, err := lineage.BindingFor(fresh(t))
+			if err != nil {
+				t.Fatal(err)
+			}
+			lease, err := s.AcquireTaskInvocation(t.Context(), task.TaskID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = s.BindSessionLineage(t.Context(), lease, b)
+			lease.Release()
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The holder is in the lineage and no longer its tip: binding it
+			// again is a stale, competing transition.
+			return s, "session-holder", session.ErrSessionLineage
+		},
+	}
+	for name, build := range cases {
+		t.Run(name, func(t *testing.T) {
+			store, sessionID, want := build(t)
+			var before []event.Event
+			if store != nil {
+				var err error
+				if before, err = store.Load(); err != nil {
+					t.Fatal(err)
+				}
+			}
+			bus := event.NewBus()
+			events, unsubscribe := bus.Subscribe(64)
+			defer unsubscribe()
+			observed, unobserve := bus.Subscribe(64)
+			defer unobserve()
+			engine := &workflow.Engine{Bus: bus, Store: store, SessionID: sessionID}
+			attempt := engine.ResumeTask(t.Context(), task)
+			if code := settleResumed(t.Context(), engine, events, attempt, false, true, 0); code != exitFailed {
+				t.Fatalf("a refused binding ended the invocation with %d, not %d", code, exitFailed)
+			}
+			// The caller's outcome is the invocation's own typed refusal, and
+			// it names no bound session.
+			binding := attempt.Binding()
+			failure := binding.Refusal
+			if failure == nil || binding.CurrentSessionID != "" || binding.TaskID != task.TaskID ||
+				failure.Kind != session.SessionLineageBound || failure.SessionID != sessionID || !errorIs(failure, want) {
+				t.Fatalf("the caller's outcome is not the typed pre-binding refusal %v: %+v", want, binding)
+			}
+			if attempt.Failure() != failure {
+				t.Fatalf("the invocation's refusal is not its own failure: %v", attempt.Failure())
+			}
+			select {
+			case ev := <-observed:
+				t.Fatalf("a refused binding published %s on the bus", ev.Kind)
+			default:
+			}
+			if store == nil {
+				return
+			}
+			after, err := store.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(after) != len(before) {
+				t.Fatalf("a refused binding changed the task's history: %d records became %d", len(before), len(after))
+			}
+			for i := range before {
+				if after[i].ID != before[i].ID || after[i].SessionID != before[i].SessionID {
+					t.Fatalf("record %d changed under a refused binding", i)
+				}
+			}
+		})
+	}
+}
+
+// Review f1 (objective 70B2a1): the INTERACTIVE startup is a fresh-process
+// Resume entrypoint too. Reopening an existing conversation keeps the holder's
+// record -- one physical ledger -- but acts under a fresh SessionID minted by
+// the production generator, never the holder's; and a /resume of a task in that
+// record binds the fresh session to the task's lineage before it records
+// anything of the task, while the root stays owned by the holder.
+func TestB2a1InteractiveStartupResumesUnderAFreshBoundSession(t *testing.T) {
+	root := t.TempDir()
+	const holder = "session-holder"
+	const taskID = "task-interactive"
+	writeSession(t, root, holder,
+		event.New(holder, taskID, event.SourceUser, event.TaskCreated, "the objective", nil))
+
+	now := event.New("", "", event.SourceSystem, event.Status, "", nil).Time
+	recordID, sessionID, resumed, err := openConversation(root, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resumed || recordID != holder {
+		t.Fatalf("the existing conversation was not reopened: record %q resumed %v", recordID, resumed)
+	}
+	if sessionID == holder || sessionID == session.ID(now) || !strings.HasPrefix(sessionID, session.ID(now)+"-") {
+		t.Fatalf("the reopened conversation acts under %q, not a fresh identity from the production generator", sessionID)
+	}
+	if again, other, _, err := openConversation(root, now); err != nil {
+		t.Fatal(err)
+	} else if again != holder || other == sessionID {
+		t.Fatalf("a second startup reopened record %q as session %q; want the holder's record under another fresh session", again, other)
+	}
+	// The store as main constructs it: the holder's record, at the repository root.
+	store, err := session.New(root, recordID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lineage, err := store.TaskSessionLineage(taskID); err != nil || lineage.HolderSessionID != holder {
+		t.Fatalf("the reopened conversation is not the holder's record: %+v %v", lineage, err)
+	}
+
+	// /resume as the TUI performs it: the task found in the replayed history,
+	// continued by an engine over the reopened Store under the fresh session.
+	history, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	interrupted := session.FindInterrupted(history)
+	if len(interrupted) != 1 || interrupted[0].TaskID != taskID {
+		t.Fatalf("the replayed history offers %+v to resume", interrupted)
+	}
+	bus := event.NewBus()
+	events, unsubscribe := bus.Subscribe(256)
+	defer unsubscribe()
+	engine := &workflow.Engine{Bus: bus, Store: store, SessionID: sessionID}
+	attempt := engine.ResumeTask(t.Context(), interrupted[0])
+	// Bounded: a regression that never settles fails rather than hangs.
+	settleResumed(t.Context(), engine, events, attempt, false, true, 15_000_000_000)
+	// The invocation's own handle carries the verified binding: the task, and
+	// the fresh session the lineage now names current.
+	if b := attempt.Binding(); b.Refusal != nil || b.TaskID != taskID || b.CurrentSessionID != sessionID {
+		t.Fatalf("the resume's typed binding outcome is %+v; want task %s bound as %s", b, taskID, sessionID)
+	}
+
+	recorded, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bound := -1
+	for i, ev := range recorded {
+		if ev.Kind == event.TaskCreated && ev.SessionID != holder {
+			t.Fatalf("the root is owned by %q, not the holder %q", ev.SessionID, holder)
+		}
+		if ev.SessionID != sessionID || bound >= 0 {
+			continue
+		}
+		if ev.Kind != session.SessionLineageBound {
+			t.Fatalf("the fresh session recorded %s before its lineage binding", ev.Kind)
+		}
+		var b session.SessionLineageBinding
+		if err := json.Unmarshal(ev.Payload, &b); err != nil {
+			t.Fatal(err)
+		}
+		if b.TaskID != taskID || b.HolderSessionID != holder || b.ParentSessionID != holder || b.CurrentSessionID != sessionID {
+			t.Fatalf("the lineage transition is %+v; want %s -> %s under holder %s", b, holder, sessionID, holder)
+		}
+		bound = i
+	}
+	if bound < 0 {
+		t.Fatalf("the fresh session was never bound to the task's lineage: %d records", len(recorded))
+	}
+	if lineage, err := store.TaskSessionLineage(taskID); err != nil || lineage.HolderSessionID != holder || lineage.Tip() != sessionID {
+		t.Fatalf("the lineage is %+v %v; want holder %s tip %s", lineage, err, holder, sessionID)
+	}
+}
+
+// RULING-195 (70B2a1 r6 review f1): A RUN WHOSE GOVERNED APPEND FAILS
+// TERMINATES ITS CALLER. Through the production path a headless run takes --
+// a submission, the run's own control handle (Engine.RunAttempt) and
+// settleInvocation -- a run whose session record cannot take its events (no
+// Store, an event over the size bound, a record that cannot be written) ends
+// the caller exactly once, failing, with the typed failure of the record the
+// Store did not take, although no deadline is configured and the bus never
+// carries an ending: nothing of the task is published, and nothing of it is
+// recorded. Bounded by the test binary's timeout: a regression hangs here.
+func TestB2a1R195RunAppendFailureTerminatesItsCaller(t *testing.T) {
+	const objective = "the objective"
+	cases := map[string]struct {
+		store     func(t *testing.T, root string) *session.Store
+		objective string
+		want      func(f *workflow.RecordAppendFailure) bool
+	}{
+		"no store": {
+			store:     func(*testing.T, string) *session.Store { return nil },
+			objective: objective,
+			want:      func(f *workflow.RecordAppendFailure) bool { return errorIs(f, session.ErrNoStore) },
+		},
+		"an event over the size bound": {
+			store: func(t *testing.T, root string) *session.Store {
+				s, err := session.New(root, "session-run")
+				if err != nil {
+					t.Fatal(err)
+				}
+				return s
+			},
+			objective: strings.Repeat("x", 17<<20),
+			want:      func(f *workflow.RecordAppendFailure) bool { return errorIs(f, session.ErrSessionEventTooLarge) },
+		},
+		"a record that cannot be written": {
+			store: func(t *testing.T, root string) *session.Store {
+				s, err := session.New(root, "session-run")
+				if err != nil {
+					t.Fatal(err)
+				}
+				// The record's own path is a directory: every write fails.
+				if err := os.MkdirAll(filepath.Join(root, ".sensei-code", "sessions", "session-run", "events.jsonl"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				return s
+			},
+			objective: objective,
+			want:      func(f *workflow.RecordAppendFailure) bool { return strings.Contains(f.Detail, "is a directory") },
+		},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			store := c.store(t, root)
+			// The run holds every permission it needs to proceed (70B2a1 r7
+			// review f4): only the root its record did not take stops it.
+			cfg := config.Default()
+			bus := event.NewBus()
+			events, unsubscribe := bus.Subscribe(512)
+			defer unsubscribe()
+			observed, unobserve := bus.Subscribe(512)
+			defer unobserve()
+			engine := workflow.New(gitx.Repo{Root: root}, cfg, bus, store, "session-run")
+
+			taskID := engine.SubmitGovernedUnattended(t.Context(), c.objective)
+			attempt, err := engine.RunAttempt(taskID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if again, err := engine.RunAttempt(taskID); err != nil || again.ID() != attempt.ID() || !strings.HasPrefix(attempt.ID(), "invocation-") {
+				t.Fatalf("the run's handle is not one immutable invocation identity: %q %q %v", attempt.ID(), again.ID(), err)
+			}
+			if code := settleInvocation(t.Context(), engine, events, taskID, attempt, false, true, 0, "sensei-code run"); code != exitFailed {
+				t.Fatalf("a run whose record failed ended its caller with %d, not %d", code, exitFailed)
+			}
+			failure := attempt.Failure()
+			if failure == nil || failure.TaskID != taskID || failure.Kind != event.TaskCreated || !c.want(failure) {
+				t.Fatalf("the caller's outcome is not the typed failure of the record the Store did not take: %v", failure)
+			}
+			<-attempt.Ended()
+			for {
+				select {
+				case ev := <-observed:
+					if ev.TaskID == taskID {
+						t.Fatalf("a run whose record failed published %s on the bus", ev.Kind)
+					}
+					continue
+				default:
+				}
+				break
+			}
+			if store == nil {
+				return
+			}
+			if recorded, err := store.Load(); err == nil {
+				for _, ev := range recorded {
+					if ev.TaskID == taskID {
+						t.Fatalf("a run whose record failed recorded %s", ev.Kind)
+					}
+				}
+			}
+		})
+	}
+}
+
+// seedAppend writes a fixture's event to store as the Store's lawful writer
+// of it would: a root through the dedicated root creation and any other
+// record of the task under the task's live invocation lease, made operative
+// by the Store for the session its lineage names current (70B2a1 cycle-3
+// review f1). The lease is released once the event is written. No fixture
+// borrows a capability the Store did not issue.
+func seedAppend(t *testing.T, store *session.Store, ev event.Event) error {
+	t.Helper()
+	if store == nil {
+		return store.Append(t.Context(), nil, ev)
+	}
+	if ev.TaskID == "" {
+		return store.AppendDiagnostic(t.Context(), ev)
+	}
+	lease, err := store.AcquireTaskInvocation(t.Context(), ev.TaskID)
+	if err != nil {
+		return err
+	}
+	defer lease.Release()
+	if ev.Kind == event.TaskCreated {
+		return store.CreateTaskRoot(t.Context(), lease, ev)
+	}
+	if lineage, err := store.TaskSessionLineage(ev.TaskID); err == nil {
+		if _, err := store.ContinueTaskSession(t.Context(), lease, lineage.Tip()); err != nil {
+			return err
+		}
+	}
+	return store.Append(t.Context(), lease, ev)
 }

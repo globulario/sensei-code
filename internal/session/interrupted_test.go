@@ -6,8 +6,15 @@ import (
 	"github.com/globulario/sensei-code/internal/event"
 )
 
+// ev is a well-framed record of taskID, as the engine writes one.
 func ev(taskID string, source event.Source, kind event.Kind, summary string) event.Event {
-	return event.Event{TaskID: taskID, Source: source, Kind: kind, Summary: summary}
+	return event.New("s1", taskID, source, kind, summary, nil)
+}
+
+// answered is the user's answer to taskID's standing question, choosing
+// option 1, in the form the engine records it.
+func answered(taskID, summary string) event.Event {
+	return event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, summary, map[string]string{"option": "1"})
 }
 
 func TestPlannedButUnfinishedTaskIsResumable(t *testing.T) {
@@ -112,7 +119,7 @@ func TestATaskIsDiscoverableFromItsCreationUntilItEnds(t *testing.T) {
 		ev("t1", event.SourceSystem, event.TaskCreated, "widen the boundary"),
 		{TaskID: "t1", Source: event.SourceUser, Kind: event.WorkflowAwaitingAuthority,
 			Summary: "deferred", Payload: []byte(`{"condition":"c","decision":{"options":[{"id":"1"}]}}`)},
-		ev("t1", event.SourceUser, event.AuthorityResolved, "Authorize the architectural change"),
+		answered("t1", "Authorize the architectural change"),
 		ev("t1", event.SourceArchitect, event.Status, "re-planning"),
 	}
 	got := FindInterrupted(crashed)
@@ -216,7 +223,7 @@ func TestAnsweredAuthorityIsNoLongerPending(t *testing.T) {
 		ev("t1", event.SourceSystem, event.TaskCreated, "widen the boundary"),
 		{TaskID: "t1", Source: event.SourceUser, Kind: event.WorkflowAwaitingAuthority,
 			Summary: "deferred", Payload: []byte(`{"condition":"c"}`)},
-		ev("t1", event.SourceUser, event.AuthorityResolved, "Authorize the architectural change"),
+		answered("t1", "Authorize the architectural change"),
 		ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
 	})
 	if len(got) != 1 {
@@ -718,18 +725,23 @@ func TestB1W15ACheckpointRecordIsAppendedDurably(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := boundCheckpoint(ckptA)
-	if err := s.AppendDurable(checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s1", "t1", b)); err != nil {
+	// FIXTURE MIGRATION (70B2a1): the checkpoint records stand on the task's
+	// TaskCreated root, written by the session that owns them.
+	if err := appendTip(t, s, t.Context(), false, event.New("s1", "t1", event.SourceSystem, event.TaskCreated, "the task", nil)); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AppendDurable(checkpointEvent(event.CheckpointCommitted, event.SourceSystem, "s1", "t1", b)); err != nil {
+	b := boundCheckpoint(ckptA)
+	if err := appendTip(t, s, t.Context(), true, checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s1", "t1", b)); err != nil {
+		t.Fatal(err)
+	}
+	if err := appendTip(t, s, t.Context(), true, checkpointEvent(event.CheckpointCommitted, event.SourceSystem, "s1", "t1", b)); err != nil {
 		t.Fatal(err)
 	}
 	if got, found, err := s.CommittedCheckpoint("t1", "s1"); err != nil || !found || got != b {
 		t.Fatalf("the durably appended pair is not the committed checkpoint: %+v %v %v", got, found, err)
 	}
 	s.path = s.path + "/not-a-file"
-	if err := s.AppendDurable(checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s1", "t1", b)); err == nil {
+	if err := appendTip(t, s, t.Context(), true, checkpointEvent(event.CheckpointPrepared, event.SourceSystem, "s1", "t1", b)); err == nil {
 		t.Fatal("an append that could not be written was reported durable")
 	}
 }

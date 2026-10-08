@@ -105,7 +105,7 @@ func endIncomplete(t *testing.T, r *completionRig) incompleteTerminal {
 func terminate(t *testing.T, r *completionRig, err error) incompleteTerminal {
 	t.Helper()
 	drainEvents(r.h.events)
-	r.h.engine.terminateRun(context.Background(), "task-1", incompleteTask, err)
+	r.h.engine.terminateRun(fixtureCtx(r.h.engine, "task-1"), "task-1", incompleteTask, err)
 	out := incompleteTerminal{err: err, events: drainEvents(r.h.events)}
 	errors.As(err, &out.typed)
 	out.receipt = receiptFrom(t, out.events)
@@ -642,7 +642,7 @@ func receiptAndDisagreement(t *testing.T, e *Engine, claim runreceipt.CandidateS
 	t.Helper()
 	events, cancel := e.Bus.Subscribe(64)
 	defer cancel()
-	rc := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeFailed, claim)
+	rc := e.emitTerminalIn(liveInvocation(t, e, "task-1").ctx, "task-1", event.WorkflowFailed, event.SourceSystem, runreceipt.OutcomeFailed, claim, "failed", nil)
 	for _, ev := range drainEvents(events) {
 		if ev.Kind != event.RunReceipt {
 			continue
@@ -841,7 +841,7 @@ func TestDF41A4TheClaimedCandidateStateNeverWritesTheReceipt(t *testing.T) {
 		{"unrecorded", func(*Engine) {}, runreceipt.CandidateUnknown, "no receipt record was open"},
 	} {
 		for _, claim := range all {
-			e := &Engine{Bus: event.NewBus()}
+			e := withFixtureStore(t, &Engine{Bus: event.NewBus(), SessionID: "s1"}, "task-1")
 			c.observe(e)
 			rc, disagreement := receiptAndDisagreement(t, e, claim)
 			if rc.CandidateState != c.want {

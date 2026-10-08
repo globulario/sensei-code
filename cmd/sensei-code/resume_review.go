@@ -199,6 +199,6 @@ func resumeAwaitingReview(ctx context.Context, repo gitx.Repo, cfg config.Config
 
 	// No answer is carried, so the engine itself is the run control: it can be
 	// stopped, deferred or timed out, and it cannot answer a question.
-	resumedID := engine.Resume(ctx, target)
-	return streamUntilSettled(ctx, engine, events, resumedID, asJSON, quiet, timeout)
+	attempt := engine.ResumeTask(ctx, target)
+	return settleResumed(ctx, engine, events, attempt, asJSON, quiet, timeout)
 }

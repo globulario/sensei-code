@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"context"
+
 	"encoding/json"
 	"strings"
 
@@ -68,7 +70,7 @@ func recordedReviewKind(task session.Interrupted) string {
 // candidate that moved while it was waiting is named as a different candidate
 // that needs a fresh review, rather than looking like the same review asked
 // twice.
-func (e *Engine) reconcileWaitingReview(taskID string, w *waitingReview, binding roles.Binding) bool {
+func (e *Engine) reconcileWaitingReview(ctx context.Context, taskID string, w *waitingReview, binding roles.Binding) bool {
 	same := w.BaseSHA == binding.BaseSHA &&
 		w.CandidateDigest == binding.CandidateDigest &&
 		w.CandidateTree == binding.CandidateTree
@@ -91,6 +93,6 @@ func (e *Engine) reconcileWaitingReview(taskID string, w *waitingReview, binding
 			shortDigest(w.CandidateDigest) + " -> " + shortDigest(binding.CandidateDigest) +
 			"); that request no longer applies, and this candidate needs a fresh review"
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, summary, payload))
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status, summary, payload))
 	return same
 }

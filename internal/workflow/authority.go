@@ -1679,12 +1679,9 @@ func (e *Engine) disposeUnclosedGap(taskID, domain string, routing Routing, acti
 	if (closureOwnerFor(routing.Gap.Kind) == closureOwnerOutOfBand || isCoverageGapKind(routing.Gap.Kind)) && len(missing) > 0 {
 		routing.Basis = BasisLacksKnowledge
 		routing.Closes = remedyForCoverage(routing.Gap, action, e.Repo.Root, domain)
-		limit := &knowledgeLimitError{Condition: routing.Condition, Missing: missing, Closes: routing.Closes}
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-			"knowledge-limited: no actor reachable from a governed run can establish what "+
-				strings.Join(missing, ", ")+" lacks; this is not a decision a human can supply. "+
-				"closes: "+routing.Closes, routing))
-		return routing, limit
+		// Its account is recorded by the invocation that disposed of the gap
+		// (reportKnowledgeLimit): this owner decides, and names no invocation.
+		return routing, &knowledgeLimitError{Condition: routing.Condition, Missing: missing, Closes: routing.Closes}
 	}
 	routing.Route = RouteHuman
 	routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
@@ -1700,6 +1697,20 @@ func (e *Engine) disposeUnclosedGap(taskID, domain string, routing Routing, acti
 // disposition.
 func (e *Engine) disposeExhaustedGap(taskID, domain string, gap Routing, action Action) (Routing, error) {
 	return e.disposeUnclosedGap(taskID, domain, gap, action)
+}
+
+// reportKnowledgeLimit records, on behalf of the invocation ctx belongs to,
+// the account of a knowledge limit a disposal (disposeUnclosedGap) returned
+// for routing; any other err records nothing.
+func (e *Engine) reportKnowledgeLimit(ctx context.Context, taskID string, routing Routing, err error) {
+	limit, ok := err.(*knowledgeLimitError)
+	if !ok || limit == nil {
+		return
+	}
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+		"knowledge-limited: no actor reachable from a governed run can establish what "+
+			strings.Join(limit.Missing, ", ")+" lacks; this is not a decision a human can supply. "+
+			"closes: "+limit.Closes, routing))
 }
 
 // knowledgeLimitError reports a bounded knowledge gap that NO actor reachable

@@ -376,3 +376,282 @@ func TestADeadlineClaimsAStillLiveTask(t *testing.T) {
 		t.Fatalf("the task was not stopped: %v", ctrl.stopped)
 	}
 }
+
+// RULING-195 (70B2a1 r6 review f1): A HALTED INVOCATION ENDS ITS CALLER'S WAIT.
+// The engine halts a run whose governed event the session record did not
+// take, and publishes nothing in that event's place, so the bus below never
+// carries an ending. The caller -- with no deadline configured -- still
+// returns, once, failing, as soon as the invocation's handle reports the
+// halt, and not before.
+func TestB2a1R195AHaltedInvocationEndsItsCallersWaitWithoutABusEvent(t *testing.T) {
+	events := make(chan event.Event, 8)
+	events <- ev("task-1", event.Status)
+	halted, ended := make(chan struct{}), make(chan struct{})
+	streamed, stop := untilInvocationSettles(halted, ended, events)
+	defer stop()
+	done := make(chan int, 1)
+	go func() {
+		done <- streamUntilSettled(context.Background(), &fakeControl{}, streamed, "task-1", false, true, 0)
+	}()
+	select {
+	case code := <-done:
+		t.Fatalf("the caller returned %d before the invocation settled", code)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(halted)
+	select {
+	case code := <-done:
+		if code != exitFailed {
+			t.Fatalf("a halted invocation ended its caller with %d, not %d", code, exitFailed)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a halted invocation left its caller waiting for a bus event that cannot be published")
+	}
+}
+
+// RULING-195: AN ENDED INVOCATION'S EVENTS ARE DELIVERED, AND THEN THE WAIT
+// ENDS. Everything an invocation published is on the bus before it returns:
+// its ending reaches the caller and decides the exit, and an invocation that
+// returned with no ending at all ends the wait failing rather than hanging.
+func TestB2a1R195AnEndedInvocationDeliversWhatItPublishedThenEndsTheWait(t *testing.T) {
+	for name, c := range map[string]struct {
+		published []event.Event
+		want      int
+	}{
+		"its ending":   {[]event.Event{ev("task-1", event.Status), ev("task-1", event.WorkflowCompleted)}, exitCompleted},
+		"no ending":    {[]event.Event{ev("task-1", event.Status)}, exitFailed},
+		"nothing else": {nil, exitFailed},
+	} {
+		t.Run(name, func(t *testing.T) {
+			events := make(chan event.Event, 8)
+			for _, e := range c.published {
+				events <- e
+			}
+			halted, ended := make(chan struct{}), make(chan struct{})
+			close(ended)
+			streamed, stop := untilInvocationSettles(halted, ended, events)
+			defer stop()
+			done := make(chan int, 1)
+			go func() {
+				done <- streamUntilSettled(context.Background(), &fakeControl{}, streamed, "task-1", false, true, 0)
+			}()
+			select {
+			case code := <-done:
+				if code != c.want {
+					t.Fatalf("an ended invocation that published %d events exited %d, want %d", len(c.published), code, c.want)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("an ended invocation left its caller waiting")
+			}
+		})
+	}
+}
+
+// fakeInvocation is one governed invocation's control handle, as the engine's
+// RunAttempt presents it to the caller waiting on it.
+type fakeInvocation struct {
+	halted, ended chan struct{}
+	failure       error
+}
+
+func newFakeInvocation() *fakeInvocation {
+	return &fakeInvocation{halted: make(chan struct{}), ended: make(chan struct{})}
+}
+
+func (f *fakeInvocation) Halted() <-chan struct{} { return f.halted }
+func (f *fakeInvocation) Ended() <-chan struct{}  { return f.ended }
+func (f *fakeInvocation) Err() error {
+	select {
+	case <-f.halted:
+		return f.failure
+	default:
+		return nil
+	}
+}
+
+// RULING-203: AUDIT-REPAIR ENDS ON ITS PHASE'S TYPED HALT, NOT A BUS TERMINAL.
+// The audit-repair command waits for its observation and for each repair
+// through awaitAuditPhase. When the engine halts that phase's run because the
+// session record did not take one of its governed events, it publishes no
+// terminal, so the bus below never carries one. With no deadline configured,
+// the phase still ends -- once, failing, as soon as the run's handle reports
+// the halt and not before -- and the observation's failure opens no repair.
+// Waiting on the bus alone (the unrepaired command) never returns here.
+func TestB2a1R203AuditRepairPhaseEndsOnTheRunsTypedHaltWithoutABusTerminal(t *testing.T) {
+	events := make(chan event.Event, 8)
+	events <- ev("task-obs", event.Status)
+	inv := newFakeInvocation()
+	inv.failure = os.ErrPermission
+	var asked []string
+	attemptOf := func(taskID string) (invocationHandle, error) {
+		asked = append(asked, taskID)
+		return inv, nil
+	}
+	done := make(chan int, 1)
+	go func() {
+		done <- awaitAuditPhase(context.Background(), &fakeControl{}, attemptOf, events, "task-obs", true, 0)
+	}()
+	select {
+	case code := <-done:
+		t.Fatalf("the audit phase returned %d before its run settled", code)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(inv.halted)
+	select {
+	case code := <-done:
+		if code != exitFailed {
+			t.Fatalf("a halted audit phase exited %d, not %d", code, exitFailed)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a halted audit phase left audit-repair waiting for a bus terminal that cannot be published")
+	}
+	if len(asked) != 1 || asked[0] != "task-obs" {
+		t.Fatalf("the phase was not waited for through its own run's handle: %v", asked)
+	}
+}
+
+// RULING-203 controls: a phase whose run published its ending reports that
+// ending -- an observation is still observed, so the halt witness above is not
+// a wait that always fails -- and a task with no run handle fails at once
+// rather than waiting on the bus.
+func TestB2a1R203AuditRepairPhaseReportsItsEndingAndRefusesAMissingHandle(t *testing.T) {
+	t.Run("observed", func(t *testing.T) {
+		events := make(chan event.Event, 8)
+		events <- ev("task-obs", event.Status)
+		events <- ev("task-obs", event.WorkflowObserved)
+		inv := newFakeInvocation()
+		close(inv.ended)
+		attemptOf := func(string) (invocationHandle, error) { return inv, nil }
+		done := make(chan int, 1)
+		go func() {
+			done <- awaitAuditPhase(context.Background(), &fakeControl{}, attemptOf, events, "task-obs", true, 0)
+		}()
+		select {
+		case code := <-done:
+			if code != exitObserved {
+				t.Fatalf("an observed audit phase exited %d, want %d", code, exitObserved)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("an ended audit phase left audit-repair waiting")
+		}
+	})
+	t.Run("no run handle", func(t *testing.T) {
+		attemptOf := func(string) (invocationHandle, error) { return nil, os.ErrNotExist }
+		done := make(chan int, 1)
+		go func() {
+			done <- awaitAuditPhase(context.Background(), &fakeControl{}, attemptOf, make(chan event.Event), "task-x", true, 0)
+		}()
+		select {
+		case code := <-done:
+			if code != exitFailed {
+				t.Fatalf("a phase with no run handle exited %d, want %d", code, exitFailed)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("a phase with no run handle waited on the bus")
+		}
+	})
+}
+
+// RULING-203: THE AUDIT-REPAIR COMMAND ENDS ON ITS OBSERVATION'S TYPED HALT.
+// Through the command itself -- runAuditRepair, with no deadline -- an
+// observation whose objective is over the session record's size bound is
+// refused by the Store at its first governed record. The engine halts that run
+// and publishes nothing in its place, so no bus terminal will ever end the
+// observation phase. The command still ends, promptly and failing, reporting
+// the typed failure of the record the Store did not take; it prints no event
+// of the task, records none, and opens no repair. A command that waited on the
+// bus alone for the observation's ending never returns here.
+func TestB2a1R203AuditRepairEndsOnItsObservationsTypedHaltWithoutABusTerminal(t *testing.T) {
+	root := gitRepoRoot(t)
+	// The readiness the command checks before it observes: a Sensei CLI and an
+	// MCP server on PATH, and an awareness corpus. Stand-ins answer; nothing
+	// of them is run by the observation, which never reaches a provider.
+	bin := t.TempDir()
+	for _, name := range []string{"sensei", "awareness-mcp"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\necho stand-in\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := os.MkdirAll(filepath.Join(root, "docs", "awareness"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "docs", "awareness", "invariants.yaml"), []byte("invariants: []\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repo, cfg := repoAt(t, root)
+
+	dir := t.TempDir()
+	outFile, err := os.Create(filepath.Join(dir, "stdout"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	errFile, err := os.Create(filepath.Join(dir, "stderr"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	savedOut, savedErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = outFile, errFile
+	done := make(chan int, 1)
+	go func() {
+		done <- runAuditRepair(t.Context(), repo, cfg, []string{"--task", strings.Repeat("x", 17<<20), "--timeout", "0"})
+	}()
+	var code int
+	select {
+	case code = <-done:
+		os.Stdout, os.Stderr = savedOut, savedErr
+	case <-time.After(30 * time.Second):
+		os.Stdout, os.Stderr = savedOut, savedErr
+		t.Fatal("audit-repair left its caller waiting for an observation terminal the bus can never carry")
+	}
+	outFile.Close()
+	errFile.Close()
+	stdout, err := os.ReadFile(filepath.Join(dir, "stdout"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderr, err := os.ReadFile(filepath.Join(dir, "stderr"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code != exitFailed {
+		t.Fatalf("audit-repair whose observation the record refused exited %d, not %d\nstdout: %s\nstderr: %s", code, exitFailed, stdout, stderr)
+	}
+	var observation string
+	for _, line := range strings.Split(string(stdout), "\n") {
+		if fields := strings.Fields(line); len(fields) >= 2 && fields[0] == "observation" {
+			observation = fields[1]
+		}
+	}
+	if observation == "" {
+		t.Fatalf("audit-repair never submitted its observation: %s", stdout)
+	}
+	if !strings.Contains(string(stderr), "the session record did not take the "+string(event.TaskCreated)+" record of task "+observation) {
+		t.Fatalf("audit-repair did not report the typed failure of the record the Store refused: %s", stderr)
+	}
+	if !strings.Contains(string(stderr), "opening no repair work") {
+		t.Fatalf("audit-repair did not report that the failed observation opens no repair: %s", stderr)
+	}
+	for _, published := range []string{string(event.TaskCreated), "workflow.", "=== repair", "repair task"} {
+		if strings.Contains(string(stdout), published) {
+			t.Fatalf("audit-repair whose observation the record refused printed %q:\n%s", published, stdout)
+		}
+	}
+	// Nothing of the observation is recorded: no session record names it.
+	err = filepath.WalkDir(filepath.Join(root, ".sensei-code"), func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(raw), `"task_id":"`+observation+`"`) {
+			t.Errorf("the refused observation was recorded in %s", path)
+		}
+		return nil
+	})
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+}

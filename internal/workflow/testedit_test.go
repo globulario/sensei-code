@@ -295,7 +295,7 @@ func TestARepeatedResumeCannotMintTestEditAuthority(t *testing.T) {
 			t.Fatalf("coverageAtWorld has a side effect: %s", forbidden)
 		}
 	}
-	resume := funcBody(t, "internal/workflow/engine.go", "Resume")
+	resume := funcBody(t, "internal/workflow/engine.go", "ResumeTask")
 	if strings.Contains(resume, "e.derivedCoverage(") || !strings.Contains(resume, "e.coverageAtWorld(") {
 		t.Fatal("Resume re-establishes through the recording path")
 	}
@@ -952,7 +952,7 @@ func TestW8AnUnreadableInstrumentBindingIsRefusedAndNeverInferred(t *testing.T) 
 // The refusal reaches the terminal through the path a real resume takes, and
 // through no other: Resume hands every restoration error to the one classifier.
 func TestRestorationRefusalsAreClassifiedByTheOneTerminalClassifier(t *testing.T) {
-	resume := funcBody(t, "internal/workflow/engine.go", "Resume")
+	resume := funcBody(t, "internal/workflow/engine.go", "ResumeTask")
 	if !strings.Contains(resume, "e.restoreTestEditGrants(") || !strings.Contains(resume, "e.terminateRun(") {
 		t.Fatal("Resume no longer hands its restoration error to the one terminal classifier")
 	}
@@ -1892,19 +1892,20 @@ func df23Pin(t *testing.T, e *Engine, task, world string) {
 // that world, and it is made operative.
 func df23Route(t *testing.T, e *Engine, task string, d architectureDecision, grants []testEditGrant) planAttempt {
 	t.Helper()
-	a, err := e.beginPlanAttempt(task, attemptObjective, d)
+	rootFixtureTaskOnce(t, e, task, attemptObjective)
+	a, err := e.beginPlanAttempt(fixtureCtx(e, task), task, attemptObjective, d)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.recordTestEditGrants(task, "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants}); err != nil {
+	if err := e.recordTestEditGrants(fixtureCtx(e, task), task, "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants}); err != nil {
 		t.Fatal(err)
 	}
 	e.setTestEditGrants(task, grants)
-	if err := e.recordProspectiveGrants(task, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: a.World}); err != nil {
+	if err := e.recordProspectiveGrants(fixtureCtx(e, task), task, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: a.World}); err != nil {
 		t.Fatal(err)
 	}
 	e.setProspectiveGrants(task, nil)
-	if _, err := e.adoptPlanAttempt(task, attemptObjective, d); err != nil {
+	if _, err := e.adoptPlanAttempt(fixtureCtx(e, task), task, attemptObjective, d); err != nil {
 		t.Fatal(err)
 	}
 	return a
@@ -2141,6 +2142,9 @@ func TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit(t *testing.T) 
 		h := newGateHarness(t, roles.Policy{}, roles.Fresh, string(roles.Accept))
 		e := h.engine
 		e.Store = sessionStore(t)
+		// The harness's invocation was leased through the Store it replaced;
+		// the task's invocation is re-opened under this one.
+		endFixtureInvocation(e, "task-1")
 		commitFixtureFile(t, h.work, df23Bus, busSrc)
 		world := commitFixtureFile(t, h.work, df23Receipt, receiptSrc)
 		h.tc.Identity = candidateIdentityWithBase(world)
@@ -2156,22 +2160,23 @@ func TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit(t *testing.T) 
 			grants = append(grants, testEditGrant{Path: p, World: world, Facts: facts})
 		}
 		d := attemptPlan("objective 61", "main.go", df23Bus, df23Receipt)
-		a, err := e.beginPlanAttempt("task-1", "task", d)
+		rootFixtureTaskOnce(t, e, "task-1", "task")
+		a, err := e.beginPlanAttempt(fixtureCtx(e, "task-1"), "task-1", "task", d)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if a.World != world {
 			t.Fatalf("premise: the attempt was derived at the candidate's base, got %q", a.World)
 		}
-		if err := e.recordTestEditGrants("task-1", "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants}); err != nil {
+		if err := e.recordTestEditGrants(fixtureCtx(e, "task-1"), "task-1", "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants}); err != nil {
 			t.Fatal(err)
 		}
 		e.setTestEditGrants("task-1", grants)
-		if err := e.recordProspectiveGrants("task-1", "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: a.World}); err != nil {
+		if err := e.recordProspectiveGrants(fixtureCtx(e, "task-1"), "task-1", "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: a.World}); err != nil {
 			t.Fatal(err)
 		}
 		e.setProspectiveGrants("task-1", nil)
-		if _, err := e.adoptPlanAttempt("task-1", "task", d); err != nil {
+		if _, err := e.adoptPlanAttempt(fixtureCtx(e, "task-1"), "task-1", "task", d); err != nil {
 			t.Fatal(err)
 		}
 		for _, p := range edited {
@@ -2180,7 +2185,7 @@ func TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit(t *testing.T) 
 		}
 		h.tc.Files = []string{"main.go", df23Bus, df23Receipt}
 
-		_, _, _, _, err = e.runCandidate(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+		_, _, _, _, err = e.runCandidate(fixtureCtx(e, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 			"Rewrite main.go so it prints a number.", h.worker, h.work, "")
 		var o outcome
 		o.err = err
@@ -2362,11 +2367,12 @@ func df37bGrants(t *testing.T, governed ...string) ([]testEditGrant, []string) {
 // test-edit state exactly as routing does, and asks plan admission.
 func df37bAdmit(t *testing.T, e *Engine, task string, d architectureDecision, grants []testEditGrant) (planAttempt, error) {
 	t.Helper()
-	a, err := e.beginPlanAttempt(task, attemptObjective, d)
+	rootFixtureTaskOnce(t, e, task, attemptObjective)
+	a, err := e.beginPlanAttempt(fixtureCtx(e, task), task, attemptObjective, d)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := e.recordTestEditGrants(task, "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants}); err != nil {
+	if err := e.recordTestEditGrants(fixtureCtx(e, task), task, "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants}); err != nil {
 		t.Fatal(err)
 	}
 	e.setTestEditGrants(task, grants)
@@ -2736,7 +2742,7 @@ func TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview(t *tes
 		commitFixtureFile(t, h.work, df39FromEvents, strings.Replace(fromEventsSrc, "return 0", "return 1", 1))
 
 		var o outcome
-		o.result, _, _, _, o.err = e.runCandidate(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+		o.result, _, _, _, o.err = e.runCandidate(fixtureCtx(e, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 			"Rewrite main.go so it prints a number.", h.worker, h.work, "")
 		for _, ev := range drainEvents(h.events) {
 			switch ev.Kind {
@@ -2800,7 +2806,7 @@ func TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff(t *te
 		reviewer: answeringRunner{text: `{"decision":"accept","summary":"the candidate stands"}`, mode: roles.Unverified}}
 
 	var failed error
-	e.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+	e.implement(fixtureCtx(e, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 	seen := drainEvents(h.events)
 
@@ -3264,7 +3270,7 @@ func df48ResumeAfter(t *testing.T, r df48Rig, cut func(event.Event, []event.Even
 	}
 	interrupted := sessionStore(t)
 	for _, ev := range history[:at+1] {
-		if err := interrupted.Append(ev); err != nil {
+		if err := seedAppend(t, interrupted, ev); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -3715,30 +3721,36 @@ func TestDF48W5ALaterScopeRefusalOfAnyPathsConsumesTheOneReplan(t *testing.T) {
 		end  func(e *Engine)
 	}{
 		{"deferred", event.WorkflowAwaitingAuthority, "resumable", func(e *Engine) {
-			e.emitRunTerminal(df48Task, event.WorkflowAwaitingAuthority, event.SourceUser, "DEFERRED", "UNATTEMPTED", "deferred", nil)
+			// The standing question in its complete durable shape (70B2a1).
+			e.emitRunTerminal(fixtureCtx(e, df48Task), df48Task, event.WorkflowAwaitingAuthority, event.SourceUser, "DEFERRED", "UNATTEMPTED", "deferred",
+				json.RawMessage(`{"condition":"c","domain":"d","base_sha":"world","task_id":"`+df48Task+`","session_id":"`+e.SessionID+`",`+
+					`"scope_recorded":true,"decision":{"level":3,"subject":"may it change?","reason":"a human-owned boundary"}}`))
 		}},
 		{"external block", event.WorkflowBlockedExternal, "resumable", func(e *Engine) {
-			e.emitRunTerminal(df48Task, event.WorkflowBlockedExternal, event.SourceSystem, "BLOCKED_EXTERNAL", "UNATTEMPTED", "blocked", nil)
+			e.emitRunTerminal(fixtureCtx(e, df48Task), df48Task, event.WorkflowBlockedExternal, event.SourceSystem, "BLOCKED_EXTERNAL", "UNATTEMPTED", "blocked",
+				ExternalBlock{TaskID: df48Task, Role: string(roles.Architect), Provider: "chatgpt", Reason: "QUOTA", RetryAtState: RetryAtUnknown})
 		}},
 		{"timeout", event.WorkflowTimedOut, "resumable", func(e *Engine) {
-			e.emitRunTerminal(df48Task, event.WorkflowTimedOut, event.SourceSystem, "TIMED_OUT", "UNATTEMPTED", "timed out", nil)
+			e.emitRunTerminal(fixtureCtx(e, df48Task), df48Task, event.WorkflowTimedOut, event.SourceSystem, "TIMED_OUT", "UNATTEMPTED", "timed out", nil)
 		}},
 		{"caller stop", event.WorkflowStopped, "resumable", func(e *Engine) {
-			e.emitRunTerminal(df48Task, event.WorkflowStopped, event.SourceSystem, "STOPPED", "UNATTEMPTED", "stopped", nil)
+			e.emitRunTerminal(fixtureCtx(e, df48Task), df48Task, event.WorkflowStopped, event.SourceSystem, "STOPPED", "UNATTEMPTED", "stopped", nil)
 		}},
 		{"human-authority stop", event.WorkflowStopped, "retained", func(e *Engine) {
-			e.emitRunTerminal(df48Task, event.WorkflowStopped, event.SourceUser, "STOPPED", "UNATTEMPTED", "stopped", nil)
+			e.emitRunTerminal(fixtureCtx(e, df48Task), df48Task, event.WorkflowStopped, event.SourceUser, "STOPPED", "UNATTEMPTED", "stopped", nil)
 		}},
 		{"failure", event.WorkflowFailed, "retained", func(e *Engine) {
-			e.emitRunTerminal(df48Task, event.WorkflowFailed, event.SourceSystem, "FAILED", "UNATTEMPTED", "failed", nil)
+			e.emitRunTerminal(fixtureCtx(e, df48Task), df48Task, event.WorkflowFailed, event.SourceSystem, "FAILED", "UNATTEMPTED", "failed", nil)
 		}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			e, store := attemptEngine(t)
+			// FIXTURE MIGRATION (70B2a1): the task's records stand on its root.
+			rootFixtureTaskOnce(t, e, df48Task, attemptObjective)
 			arm(e)
 			c.end(e)
 			// Consumed exactly once: a later terminal resolves nothing.
-			e.emitRunTerminal(df48Task, event.WorkflowFailed, event.SourceSystem, "FAILED", "UNATTEMPTED", "again", nil)
+			e.emitRunTerminal(fixtureCtx(e, df48Task), df48Task, event.WorkflowFailed, event.SourceSystem, "FAILED", "UNATTEMPTED", "again", nil)
 			evs, err := store.Load()
 			if err != nil {
 				t.Fatal(err)
@@ -3757,9 +3769,10 @@ func TestDF48W5ALaterScopeRefusalOfAnyPathsConsumesTheOneReplan(t *testing.T) {
 	}
 	t.Run("unrecordable", func(t *testing.T) {
 		e, store := attemptEngine(t)
+		rootFixtureTaskOnce(t, e, df48Task, attemptObjective)
 		arm(e)
 		e.Repo.Root += "/\x00unwritable"
-		e.emitRunTerminal(df48Task, event.WorkflowCompleted, event.SourceSystem, "UNREVIEWED", "UNATTEMPTED", "completed", nil)
+		e.emitRunTerminal(fixtureCtx(e, df48Task), df48Task, event.WorkflowCompleted, event.SourceSystem, "UNREVIEWED", "UNATTEMPTED", "completed", nil)
 		evs, err := store.Load()
 		if err != nil {
 			t.Fatal(err)
@@ -3814,12 +3827,12 @@ func TestDF48W6OnlyAnOmissionByAValidOperativeAttemptReturnsToTheArchitect(t *te
 	a := df23Route(t, e, task, attemptPlan("plan A", df39A), nil)
 	stale := refuseProductionScope(inspectProductionScope(teDiffState(diff, df23Candidate), a), teWorld, "tree", "revision")
 	c := df23Route(t, e, task, attemptPlan("plan C", df39A), nil)
-	if got, err := e.continueAfterAdmissionRefusal(task, stale); err != stale || got.RefusalID != "" ||
+	if got, err := e.continueAfterAdmissionRefusal(fixtureCtx(e, task), task, stale); err != stale || got.RefusalID != "" ||
 		e.refusalRecurs(task, planAttemptRefusal{Class: refusalProductionScope}) {
 		t.Errorf("a refusal judged under the superseded attempt %s was returned or recorded: %+v %v", short12(a.ID), got, err)
 	}
 	current := refuseProductionScope(inspectProductionScope(teDiffState(diff, df23Candidate), c), teWorld, "tree", "revision")
-	if got, err := e.continueAfterAdmissionRefusal(task, current); err != nil || got.PlanAttemptID != c.ID || got.Class != refusalProductionScope {
+	if got, err := e.continueAfterAdmissionRefusal(fixtureCtx(e, task), task, current); err != nil || got.PlanAttemptID != c.ID || got.Class != refusalProductionScope {
 		t.Fatalf("authorized control: the omission by the operative attempt was not returned to the architect: %+v %v", got, err)
 	}
 
@@ -3842,7 +3855,7 @@ func TestDF48W6OnlyAnOmissionByAValidOperativeAttemptReturnsToTheArchitect(t *te
 			e.Runners = implementerResolver{architect: architect, session: "session-1",
 				reviewer: answeringRunner{text: `{"decision":"accept","summary":"ok"}`, mode: roles.Unverified}}
 			var failed error
-			e.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+			e.implement(fixtureCtx(e, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 				"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 			seen := drainEvents(h.events)
 			var parked *PlanAdmissionRefused

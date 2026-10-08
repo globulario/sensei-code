@@ -24,15 +24,48 @@ import (
 // "bufio.Scanner: token too long", which stranded a validated, audited candidate
 // whose review was owed.
 
-// bigEvent is one event whose payload is comfortably past the old ceiling.
+// largeSession is the session every governed record of these witnesses is
+// written under: the Store takes a task's records only from the session its
+// TaskCreated root makes current (70B2a1), so the fixtures root the task first.
+const largeSession = "session-large"
+
+// under is ev written by largeSession, with the event ID and timestamp every
+// recorded event carries: a root without them proves no holder (validTaskRoot).
+func under(e event.Event) event.Event {
+	framed := event.New(largeSession, e.TaskID, e.Source, e.Kind, e.Summary, nil)
+	e.SessionID, e.ID, e.Time = largeSession, framed.ID, framed.Time
+	return e
+}
+
+// owesReview is e carrying the complete durable shape of an owed review,
+// which the Store requires of a WorkflowAwaitingReview record (70B2a1).
+func owesReview(e event.Event) event.Event {
+	e.Payload = json.RawMessage(`{"review_kind":"advisory","independent_review":false,"obligations":["an independent review"]}`)
+	return e
+}
+
+// bigFrame is the one event ID and timestamp every bigEvent carries, so a
+// bigEvent's encoded length depends on its payload alone.
+var bigFrame = event.New(largeSession, "", event.SourceSystem, event.CandidateChanged, "", nil)
+
+// framedAs is e carrying frame's event ID and timestamp.
+func framedAs(frame, e event.Event) event.Event {
+	e.ID, e.Time = frame.ID, frame.Time
+	return e
+}
+
+// bigEvent is one framed event whose payload is comfortably past the old
+// ceiling: a run receipt carrying the whole candidate diff, in the closed
+// shape the Store requires of a receipt record (70B2a1).
 func bigEvent(taskID string, n int) event.Event {
-	return event.Event{
-		TaskID:  taskID,
-		Source:  event.SourceSystem,
-		Kind:    event.CandidateChanged,
-		Summary: "candidate diff",
-		Payload: json.RawMessage(`{"diff":"` + strings.Repeat("x", n) + `"}`),
-	}
+	return framedAs(bigFrame, event.Event{
+		SessionID: largeSession,
+		TaskID:    taskID,
+		Source:    event.SourceSystem,
+		Kind:      event.RunReceipt,
+		Summary:   "candidate diff",
+		Payload:   json.RawMessage(`{"receipt":{"diff":"` + strings.Repeat("x", n) + `"},"completeness":"complete","missing":[]}`),
+	})
 }
 
 // 1. A valid event past the default ceiling survives the round trip.
@@ -42,7 +75,10 @@ func TestAnEventLargerThanTheDefaultCeilingSurvivesTheRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	if err := store.Append(bigEvent("t1", size)); err != nil {
+	if err := appendTip(t, store, t.Context(), false, under(ev("t1", event.SourceSystem, event.TaskCreated, "the task"))); err != nil {
+		t.Fatalf("root: %v", err)
+	}
+	if err := appendTip(t, store, t.Context(), false, bigEvent("t1", size)); err != nil {
 		t.Fatalf("Append refused an event it is expected to accept: %v", err)
 	}
 
@@ -51,19 +87,21 @@ func TestAnEventLargerThanTheDefaultCeilingSurvivesTheRoundTrip(t *testing.T) {
 		t.Fatalf("Append wrote an event Load cannot read back; the writer created a record "+
 			"the reader cannot open: %v", err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("loaded %d events, want 1", len(got))
+	if len(got) != 2 {
+		t.Fatalf("loaded %d events, want the root and the large event", len(got))
 	}
 	// Byte-for-byte where it matters: a reader that silently shortened the payload
 	// would satisfy "no error" and lose the evidence.
 	var decoded struct {
-		Diff string `json:"diff"`
+		Receipt struct {
+			Diff string `json:"diff"`
+		} `json:"receipt"`
 	}
-	if err := json.Unmarshal(got[0].Payload, &decoded); err != nil {
+	if err := json.Unmarshal(got[1].Payload, &decoded); err != nil {
 		t.Fatalf("the payload did not survive as valid JSON: %v", err)
 	}
-	if len(decoded.Diff) != size {
-		t.Fatalf("payload came back %d bytes, want %d: the event was truncated, not read", len(decoded.Diff), size)
+	if len(decoded.Receipt.Diff) != size {
+		t.Fatalf("payload came back %d bytes, want %d: the event was truncated, not read", len(decoded.Receipt.Diff), size)
 	}
 }
 
@@ -79,12 +117,12 @@ func TestAPreservedCandidateStaysResumableAcrossALargeEvent(t *testing.T) {
 		t.Fatalf("new store: %v", err)
 	}
 	for _, e := range []event.Event{
-		ev("t1", event.SourceSystem, event.TaskCreated, "establish the census"),
-		ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+		under(ev("t1", event.SourceSystem, event.TaskCreated, "establish the census")),
+		planned(under(ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"))),
 		bigEvent("t1", 200_000), // the candidate diff that used to poison the record
-		ev("t1", event.SourceReviewer, event.WorkflowAwaitingReview, "preserved awaiting review"),
+		owesReview(under(ev("t1", event.SourceReviewer, event.WorkflowAwaitingReview, "preserved awaiting review"))),
 	} {
-		if err := store.Append(e); err != nil {
+		if err := appendTip(t, store, t.Context(), false, e); err != nil {
 			t.Fatalf("append: %v", err)
 		}
 	}
@@ -112,10 +150,10 @@ func TestOrdinarySmallEventsStillLoad(t *testing.T) {
 		t.Fatalf("new store: %v", err)
 	}
 	for i, e := range []event.Event{
-		ev("t1", event.SourceSystem, event.TaskCreated, "small task"),
-		ev("t1", event.SourceArchitect, event.PlanProposed, "small plan"),
+		under(ev("t1", event.SourceSystem, event.TaskCreated, "small task")),
+		planned(under(ev("t1", event.SourceArchitect, event.PlanProposed, "small plan"))),
 	} {
-		if err := store.Append(e); err != nil {
+		if err := appendTip(t, store, t.Context(), false, e); err != nil {
 			t.Fatalf("append %d: %v", i, err)
 		}
 	}
@@ -148,7 +186,7 @@ func TestAnOversizedEventIsRefusedBeforeItReachesDurableHistory(t *testing.T) {
 		t.Fatalf("new store: %v", err)
 	}
 	// A real record exists first: the refusal must not cost what was already written.
-	if err := store.Append(ev("t1", event.SourceSystem, event.TaskCreated, "establish the census")); err != nil {
+	if err := appendTip(t, store, t.Context(), false, under(ev("t1", event.SourceSystem, event.TaskCreated, "establish the census"))); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 	before, err := store.Load()
@@ -157,7 +195,7 @@ func TestAnOversizedEventIsRefusedBeforeItReachesDurableHistory(t *testing.T) {
 	}
 	sizeBefore := recordSize(t, store)
 
-	appendErr := store.Append(bigEvent("t1", maxSessionEvent+1024))
+	appendErr := appendTip(t, store, t.Context(), false, bigEvent("t1", maxSessionEvent+1024))
 	if appendErr == nil {
 		t.Fatal("Append accepted an event larger than the maximum; the writer can still create a " +
 			"durable record the reader cannot open")
@@ -211,9 +249,12 @@ func TestTheLargestAcceptedEventIsReadableBack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
+	if err := appendTip(t, store, t.Context(), false, under(ev("t1", event.SourceSystem, event.TaskCreated, "the task"))); err != nil {
+		t.Fatalf("root: %v", err)
+	}
 	// Exactly at the maximum: accepted, and READABLE BACK. This is the pair that must
 	// agree; either half alone proves nothing.
-	if err := store.Append(atMax); err != nil {
+	if err := appendTip(t, store, t.Context(), false, atMax); err != nil {
 		t.Fatalf("Append refused an event whose token is exactly the maximum (%d): %v", maxSessionEvent, err)
 	}
 	got, err := store.Load()
@@ -221,12 +262,12 @@ func TestTheLargestAcceptedEventIsReadableBack(t *testing.T) {
 		t.Fatalf("an event Append ACCEPTED at exactly the maximum could not be read back; the writer "+
 			"and reader disagree by at least one byte: %v", err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("loaded %d events, want 1", len(got))
+	if len(got) != 2 {
+		t.Fatalf("loaded %d events, want the root and the event at the maximum", len(got))
 	}
 
 	// Exactly one over: refused, and the record left readable.
-	if err := store.Append(oneOver); err == nil {
+	if err := appendTip(t, store, t.Context(), false, oneOver); err == nil {
 		t.Fatal("Append accepted an event one byte past the maximum; Load will refuse the record it " +
 			"just wrote")
 	}
@@ -234,8 +275,8 @@ func TestTheLargestAcceptedEventIsReadableBack(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the refused one-over append left the record unreadable: %v", err)
 	}
-	if len(after) != 1 {
-		t.Fatalf("the record holds %d events after a refused append, want 1", len(after))
+	if len(after) != 2 {
+		t.Fatalf("the record holds %d events after a refused append, want 2", len(after))
 	}
 }
 
@@ -317,7 +358,7 @@ func TestLoadRefusesAnOversizedRecordItDidNotWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new store: %v", err)
 	}
-	if err := store.Append(ev("t1", event.SourceSystem, event.TaskCreated, "a real event")); err != nil {
+	if err := appendTip(t, store, t.Context(), false, under(ev("t1", event.SourceSystem, event.TaskCreated, "a real event"))); err != nil {
 		t.Fatalf("append: %v", err)
 	}
 
@@ -344,4 +385,11 @@ func TestLoadRefusesAnOversizedRecordItDidNotWrite(t *testing.T) {
 	if got != nil {
 		t.Errorf("a refused load returned %d event(s); it must return nothing rather than a partial record", len(got))
 	}
+}
+
+// planned gives a plan.proposed fixture the payload every operative plan
+// transition carries (session.governedKinds).
+func planned(e event.Event) event.Event {
+	e.Payload = json.RawMessage(`{"decision":"proceed","summary":"","plan":"","plan_source":"architect"}`)
+	return e
 }

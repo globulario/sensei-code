@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"context"
+
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -179,13 +181,13 @@ func ParseExternalBlock(raw json.RawMessage) (ExternalBlock, error) {
 // The task is left exactly as it stands: no candidate disposal, no handoff, no
 // new identity. It is the one terminal both run and resume reach for this
 // condition, so a resumed task that is blocked again says so the same way.
-func (e *Engine) blockExternally(taskID string, err error) bool {
+func (e *Engine) blockExternally(ctx context.Context, taskID string, err error) bool {
 	role, b, ok := externalBlockFor(taskID, err)
 	if !ok {
 		return false
 	}
 	e.noteExternalBlock(taskID, b)
-	e.emitRunTerminal(taskID, event.WorkflowBlockedExternal, event.SourceSystem,
+	e.emitRunTerminal(ctx, taskID, event.WorkflowBlockedExternal, event.SourceSystem,
 		runreceipt.OutcomeBlockedExternal, e.candidateStateFor(taskID),
 		"the "+role.Label()+" turn this task is owed could not be served: "+b.Describe()+
 			". The task is preserved; resume it to retry that turn", b)

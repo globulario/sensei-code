@@ -239,6 +239,6 @@ func continueTask(ctx context.Context, repo gitx.Repo, cfg config.Config, store 
 	}
 
 	// No answer is carried, so the engine itself is the run control.
-	resumedID := engine.Resume(ctx, target)
-	return streamUntilSettled(ctx, engine, events, resumedID, asJSON, quiet, timeout)
+	attempt := engine.ResumeTask(ctx, target)
+	return settleResumed(ctx, engine, events, attempt, asJSON, quiet, timeout)
 }

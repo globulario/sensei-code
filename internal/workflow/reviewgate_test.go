@@ -101,6 +101,10 @@ func newGateHarness(t *testing.T, policy roles.Policy, mode roles.Session, decis
 	// incomplete obligation is committed to it before any exhaustion is
 	// reported. Nothing here writes, fakes or bypasses a checkpoint.
 	_, _, e.Store = blockedEngine(t, t.TempDir(), e.SessionID)
+	// FIXTURE MIGRATION (70B2a1, RULING-190): the task's records stand on its
+	// durable TaskCreated root, written under the engine's own session, as
+	// production Submit writes it first.
+	rootFixtureTask(t, e.Store, e.SessionID, "task-1", "task")
 	e.recordObjective("task-1", Objective{Text: "task", Provenance: SubmittedUnattended})
 	e.Config.Permissions = config.Permissions{
 		ReadRepository: true, WriteCandidates: true, CreateWorktrees: true,
@@ -222,13 +226,24 @@ func requireExhaustedCheckpointCommitted(t *testing.T, e *Engine, taskID, planAt
 
 func adoptFixturePlanAttempt(t *testing.T, e *Engine, taskID, objective, world, plan string, files []string, route func()) planAttempt {
 	t.Helper()
+	// FIXTURE MIGRATION (70B2a1, RULING-190, RULING-193 W4): the attempt is
+	// recorded on the task's durable TaskCreated root, in a durable record --
+	// an engine with no Store records no attempt -- which a fixture engine
+	// built without one is given here.
+	if e.Store == nil {
+		withFixtureStore(t, e)
+	}
+	rootFixtureTaskOnce(t, e, taskID, objective)
 	pin := candidateIdentityWithBase(world)
 	pin.TaskID = taskID
 	if err := pin.Save(e.Repo.Root); err != nil {
 		t.Fatal(err)
 	}
 	d := architectureDecision{Decision: "proceed", Summary: plan, Plan: plan, Files: files}
-	a, err := e.beginPlanAttempt(taskID, objective, d)
+	// Recorded on behalf of an admitted invocation of the task, as Run and
+	// Resume record it: never as unbound work (RULING-198).
+	ctx := fixtureCtx(e, taskID)
+	a, err := e.beginPlanAttempt(ctx, taskID, objective, d)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,15 +253,15 @@ func adoptFixturePlanAttempt(t *testing.T, e *Engine, taskID, objective, world, 
 	if route != nil {
 		route()
 	}
-	if err := e.recordTestEditGrants(taskID, "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World}); err != nil {
+	if err := e.recordTestEditGrants(ctx, taskID, "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World}); err != nil {
 		t.Fatal(err)
 	}
 	e.setTestEditGrants(taskID, nil)
-	if err := e.recordProspectiveGrants(taskID, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: a.World}); err != nil {
+	if err := e.recordProspectiveGrants(ctx, taskID, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: a.World}); err != nil {
 		t.Fatal(err)
 	}
 	e.setProspectiveGrants(taskID, nil)
-	if _, err := e.adoptPlanAttempt(taskID, objective, d); err != nil {
+	if _, err := e.adoptPlanAttempt(ctx, taskID, objective, d); err != nil {
 		t.Fatal(err)
 	}
 	return a
@@ -254,7 +269,7 @@ func adoptFixturePlanAttempt(t *testing.T, e *Engine, taskID, objective, world, 
 
 func (h *gateHarness) run(t *testing.T) candidateOutcome {
 	t.Helper()
-	outcome, _, _, _, err := h.engine.runCandidate(context.Background(), h.sc, certifiedStart{},
+	outcome, _, _, _, err := h.engine.runCandidate(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{},
 		"task-1", h.tc, "Rewrite main.go so it prints a number.", h.worker, h.work, "")
 	if err != nil {
 		t.Fatalf("the governed candidate loop failed: %v", err)
@@ -356,7 +371,7 @@ func TestTheBlockedRunSaysWhatWasNotEstablishedAndClaimsNoSuccess(t *testing.T) 
 func TestAnAdvisoryReviseStillDrivesTheWorkerRatherThanBlocking(t *testing.T) {
 	h := newGateHarness(t, requiresIndependentReview(), roles.Unverified, "revise")
 
-	outcome, _, _, _, err := h.engine.runCandidate(context.Background(), h.sc, certifiedStart{},
+	outcome, _, _, _, err := h.engine.runCandidate(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{},
 		"task-1", h.tc, "Rewrite main.go so it prints a number.", h.worker, h.work, "")
 
 	// One review cycle is configured, so a revise exhausts the budget and the

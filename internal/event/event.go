@@ -247,6 +247,14 @@ const (
 	// is a run ending.
 	CheckpointPrepared  Kind = "checkpoint.prepared"
 	CheckpointCommitted Kind = "checkpoint.committed"
+	// SessionLineageBound records one ordered session-lineage transition of a
+	// task (70B2a1): the fresh current session that continues the task, the
+	// parent session that was its tip immediately before, and the holder
+	// session that wrote the task's root. It is system-owned, written under
+	// the current session by session.Store.BindSessionLineage only, and never
+	// rewrites the SessionID of any record it continues. It is not a run
+	// ending.
+	SessionLineageBound Kind = "session.lineage.bound"
 )
 
 // Terminality is what a governed run's ending ends: the INVOCATION only, or

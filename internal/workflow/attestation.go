@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"context"
+
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/roles"
 )
@@ -37,7 +39,7 @@ type AttestationSource interface {
 // of the artifact actually consumed -- and the override must name the same one.
 // An override checked against its own idea of what it covers would be a record
 // agreeing with itself.
-func (e *Engine) attestedOrAdvisory(taskID string, advisory roles.Advisory, reviewDigest string) ReviewResult {
+func (e *Engine) attestedOrAdvisory(ctx context.Context, taskID string, advisory roles.Advisory, reviewDigest string) ReviewResult {
 	if !e.Config.Workflow.OwnerAttestation || e.Attestations == nil || reviewDigest == "" {
 		return advisoryReview(advisory)
 	}
@@ -45,7 +47,7 @@ func (e *Engine) attestedOrAdvisory(taskID string, advisory roles.Advisory, revi
 	if err != nil {
 		// Reported rather than swallowed: an unreadable override store is not
 		// "there is no override", and the difference decides a transition.
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			"the human-override record could not be read, so this review stands as advisory: "+err.Error(),
 			map[string]any{"review_kind": "advisory", "independent_review": false, "error": err.Error()}))
 		return advisoryReview(advisory)
@@ -55,7 +57,7 @@ func (e *Engine) attestedOrAdvisory(taskID string, advisory roles.Advisory, revi
 	}
 	result, err := attestedReview(advisory, att, reviewDigest)
 	if err != nil {
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			"a human override exists and does not cover this review, so it is not applied: "+err.Error(),
 			map[string]any{
 				"review_kind": "advisory", "independent_review": false,
@@ -70,7 +72,7 @@ func (e *Engine) attestedOrAdvisory(taskID string, advisory roles.Advisory, revi
 	// independent review it never had.
 	e.noteAdvisoryObligation(taskID, att.Describe()+
 		"; the adversarial-review obligation was overridden by a human and remains unmet")
-	e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.Status, att.Describe(), map[string]any{
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceUser, event.Status, att.Describe(), map[string]any{
 		"review_kind":                  "human_override",
 		"independent_review":           false,
 		"adversarial_obligation_unmet": true,

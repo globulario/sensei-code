@@ -236,6 +236,9 @@ if [ "$stage" = 1 ]; then git -C "$target" add -f "$f" || exit 1; fi
 
 	e := recordingEngine(t)
 	e.Repo.Root = dir
+	// FIXTURE MIGRATION (70B2a1, RULING-195): the decision is recorded on the
+	// task's durable TaskCreated root, as a submitted task's is.
+	rootFixtureTaskOnce(t, e, "task-r15b", "the task")
 	read, done := collect(t, e.Bus)
 	defer done()
 
@@ -246,7 +249,7 @@ if [ "$stage" = 1 ]; then git -C "$target" add -f "$f" || exit 1; fi
 	}
 
 	const title = "record the owned decision"
-	e.recordDecision(ctx, "task-r15b", &taskContext{
+	e.recordDecision(fixtureCtx(e, "task-r15b"), "task-r15b", &taskContext{
 		Task: "the task", Rationale: title, Invariants: []string{"inv.one"}, Domain: "github.com/x/y",
 	}, certifiedStart{}, []string{"a.txt"})
 

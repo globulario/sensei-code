@@ -60,7 +60,7 @@ func TestAnUnansweredReviewLeavesTheValidatedCandidateWaitingForReview(t *testin
 	h.engine.Config.Implementors = []config.Agent{h.worker, {Name: "codex", Command: "false", Graph: "none"}}
 
 	var failed error
-	h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+	h.engine.implement(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 	if failed != nil {
 		t.Fatalf("an unanswered review failed the run: %v", failed)

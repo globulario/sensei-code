@@ -181,10 +181,104 @@ func runHeadless(ctx context.Context, repo gitx.Repo, cfg config.Config, args []
 		}
 	}
 	taskID := submit(ctx, strings.TrimSpace(*task))
+	// The run's own control handle (70B2a1, RULING-195): how this caller
+	// learns that the engine halted the run because the session record did
+	// not take one of its governed events, which no bus event can tell it.
+	attempt, err := engine.RunAttempt(taskID)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sensei-code "+name+":", err)
+		return exitFailed
+	}
 	if !*quiet {
 		fmt.Printf("task %s  session %s\n", taskID, sessionID)
 	}
-	return streamUntilSettled(ctx, engine, events, taskID, *asJSON, *quiet, *timeout)
+	return settleInvocation(ctx, engine, events, taskID, attempt, *asJSON, *quiet, *timeout, "sensei-code "+name)
+}
+
+// invocationHandle is the engine's control handle of ONE governed invocation
+// -- a submitted Run (workflow.RunAttempt) or a Resume
+// (workflow.ResumeAttempt) -- bound to that invocation alone.
+type invocationHandle interface {
+	Halted() <-chan struct{}
+	Ended() <-chan struct{}
+	// Err is the typed failure (a *workflow.RecordAppendFailure) that halted
+	// the invocation, nil while it is not halted.
+	Err() error
+}
+
+// settleInvocation is how every governed invocation this binary starts is
+// waited for (70B2a1, RULING-195): its events are streamed until it settles,
+// through its own control handle. The engine halts an invocation whose
+// governed event the session record did not take, and publishes nothing in
+// that event's place; the handle's typed failure is then the invocation's
+// outcome, reported once, and the caller fails. An invocation that ended
+// ends the stream once what it published has been delivered, so the caller
+// never waits for a bus event that can lawfully never come.
+func settleInvocation(ctx context.Context, control runControl, events <-chan event.Event, taskID string,
+	handle invocationHandle, asJSON, quiet bool, timeout time.Duration, who string) int {
+	streamed, stopStreaming := untilInvocationSettles(handle.Halted(), handle.Ended(), events)
+	defer stopStreaming()
+	code := streamUntilSettled(ctx, control, streamed, taskID, asJSON, quiet, timeout)
+	if failure := handle.Err(); failure != nil {
+		fmt.Fprintln(os.Stderr, who+":", failure)
+		return exitFailed
+	}
+	return code
+}
+
+// untilInvocationSettles forwards events until the invocation settles. When
+// halted is closed -- the engine halted it because the session record did not
+// take one of its governed events -- the stream closes at once: no ending of
+// it can be recorded after that, so none is waited for. When ended is closed,
+// everything the invocation published is already waiting in events (the bus
+// delivers before the invocation can return), so that is forwarded and the
+// stream closes. The returned function stops the forwarding and returns only
+// once the forwarder has exited, so a caller that waits on events again --
+// audit-repair's next phase reads the same subscription -- never races a
+// stale forwarder for them.
+func untilInvocationSettles(halted, ended <-chan struct{}, events <-chan event.Event) (<-chan event.Event, func()) {
+	out := make(chan event.Event)
+	done, exited := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(exited)
+		defer close(out)
+		forward := func(ev event.Event) bool {
+			select {
+			case out <- ev:
+				return true
+			case <-halted:
+			case <-done:
+			}
+			return false
+		}
+		for {
+			select {
+			case ev, ok := <-events:
+				if !ok || !forward(ev) {
+					return
+				}
+			case <-halted:
+				return
+			case <-done:
+				return
+			case <-ended:
+				for {
+					select {
+					case ev, ok := <-events:
+						if !ok || !forward(ev) {
+							return
+						}
+					default:
+						return
+					}
+				}
+			}
+		}
+	}()
+	return out, func() {
+		close(done)
+		<-exited
+	}
 }
 
 // loadSuppliedPlan reads a plan file and validates it as a bound. Anything the
