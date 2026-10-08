@@ -101,3 +101,77 @@ decisions:
     source_files:
       - internal/workflow/architect_retry_test.go
       - internal/workflow/engine.go
+  - id: decision.sensei_code.implement_objective_70b2a1_at_the_durable_store_boundary_wit
+    title: "Implement OBJECTIVE 70B2a1 at the durable Store boundary within the verified 47-file envelope, using the preserved candidate only as implementation material and excluding all 70B2a2 history-filtering and restoration semantics."
+    status: accepted
+    architectural_plane: intended
+    rationale: |-
+      Law (OBJECTIVE 70B2a1, DF-41B2a1, RULING-188): A fresh resumed process receives a fresh SessionID, but may append governed continuation state to the existing task ledger only after one canonical durable session-lineage transition has established it as the current session for that task. Session authority is enforced at the durable append/history boundary. A caller-level Resume gate is not sufficient authority.
+      70B2a1 owns: fresh SessionID generation; physical holder-Store identity; canonical session-lineage record representation; lineage root/tip validation; serialized lineage transition; authorization of durable appends by SessionID; canonical classification of historical events as lineage-member or foreign; bounded record-lock lifecycle required to serialize those operations; propagation of durable append failure to the caller.
+      70B2a1 does not own: CLI lane selection; TUI resume behavior; authority-answer continuation policy; PlanAttempt/grant restoration semantics; checkpoint replay; incomplete-obligation reconstruction; DF-30 episode reconstruction (resume/discovery consumers are 70B2a2).
+      Full objective text: frozen objective sha256 badbe98e47a37aaa5a6dc9c03360805eaf1a5b22326849fae1ccf8966b8a3c81 (run 70B2a1-r15), preserved verbatim in the engine's pending record for task-1791479744199622016 and the operator archive.
+    context: "decision_authority: architectural; certified_by: github.com/globulario/sensei-code @ 05feaf64d2694e97ac42b6bb93fbb49b9851a1f1; decided_by: ChatGPT; human_authorization: none established: submitted unattended; no human presence was established"
+    consequences: "One physical ledger can contain successive resumed sessions only through a canonical lineage chain. Foreign, stale, unbound, competing, malformed, rootless, and mismatched-holder writes fail closed. Pre-binding Resume failures complete through a typed control result while leaving durable history unchanged. After binding, durable failures propagate to the originating invocation and cannot appear on the event bus as successful events. Existing authority, review, candidate, non-convergence, and checkpoint ownership contracts remain intact. CLI/TUI history filtering, checkpoint replay, and authority, plan, grant, gap, or DF-30 restoration remain deferred."
+    related_invariants:
+      - sensei_code.attestation.an_override_binds_to_a_canonical_review_not_a_receipt
+      - sensei_code.authority.only_an_explicit_answer_satisfies_a_boundary
+      - sensei_code.candidate.disposition_is_decided_and_evidence_outlives_removal
+      - sensei_code.derived.future_only_a_question_cannot_authorize_the_run_that_wrote_it
+      - sensei_code.resume.never_skips_a_human_decision
+      - sensei_code.reviewartifact.the_request_carries_the_response_contract
+      - sensei_code.reviewobligation.a_waiter_is_disposable_the_obligation_is_not
+      - sensei_code.reviewobservation.evidence_is_never_silence
+      - sensei_code.workflow.context_never_widens_worker_scope
+      - sensei_code.workflow.execution_is_authorized_once_at_run
+      - sensei_code.workflow.non_convergence_is_owed_an_architect_replan
+      - sensei_code.workflow.provider_unavailability_blocks_the_turn_not_the_task
+      - sensei_code.workflow.repeated_resume_cannot_mint_authority
+      - sensei_code.workflow.unexamined_planned_file_is_not_covered_by_its_neighbour
+    source_files:
+      - cmd/sensei-code/auditrepair.go
+      - cmd/sensei-code/main.go
+      - cmd/sensei-code/resume.go
+      - cmd/sensei-code/resume_blocked.go
+      - cmd/sensei-code/resume_review.go
+      - cmd/sensei-code/resume_test.go
+      - cmd/sensei-code/run.go
+      - cmd/sensei-code/run_test.go
+      - internal/event/event.go
+      - internal/session/interrupted_test.go
+      - internal/session/large_event_test.go
+      - internal/session/lineage.go
+      - internal/session/recordlock_unix.go
+      - internal/session/recordlock_windows.go
+      - internal/session/session_lineage_test.go
+      - internal/session/store.go
+      - internal/tui/clipboard_test.go
+      - internal/tui/model.go
+      - internal/workflow/adversarial.go
+      - internal/workflow/assisted.go
+      - internal/workflow/attestation.go
+      - internal/workflow/authority.go
+      - internal/workflow/authority_resume_identity_test.go
+      - internal/workflow/awaitingreview_test.go
+      - internal/workflow/candidate_observation_incomplete_test.go
+      - internal/workflow/disposal_test.go
+      - internal/workflow/emit_test.go
+      - internal/workflow/engine.go
+      - internal/workflow/engine_test.go
+      - internal/workflow/exact_objective_test.go
+      - internal/workflow/external_block.go
+      - internal/workflow/external_block_test.go
+      - internal/workflow/implementer_incomplete.go
+      - internal/workflow/implementer_incomplete_test.go
+      - internal/workflow/nonconvergence.go
+      - internal/workflow/nonconvergence_test.go
+      - internal/workflow/planattempt_test.go
+      - internal/workflow/receipt.go
+      - internal/workflow/resume_composition_test.go
+      - internal/workflow/review_lifecycle_fault_test.go
+      - internal/workflow/review_unanswered_test.go
+      - internal/workflow/review_unavailability_test.go
+      - internal/workflow/reviewgate_test.go
+      - internal/workflow/routine.go
+      - internal/workflow/testedit_test.go
+      - internal/workflow/waiting_review.go
+      - internal/workflow/waiting_review_test.go
