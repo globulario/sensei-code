@@ -214,6 +214,7 @@ invariants:
         - internal/workflow/authority.go
         - internal/workflow/engine.go
         - internal/session/store.go
+        - internal/tui/model.go
     required_tests:
       - internal/workflow/engine_test.go:TestDeferredAuthorityIsItsOwnTransition
       - internal/workflow/engine_test.go:TestDeferralCallsNoOneAfterwards
