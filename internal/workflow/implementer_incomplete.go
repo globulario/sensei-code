@@ -666,7 +666,7 @@ func (e *Engine) handOffCycle(ctx context.Context, tc *taskContext, workspace, t
 	if !counted {
 		return nil
 	}
-	e.reportIncompleteAttempt(taskID, c, map[string]any{"route": string(c.Route)})
+	e.reportIncompleteAttempt(ctx, taskID, c, map[string]any{"route": string(c.Route)})
 	if c.Exhausted() {
 		return e.exhaustCycle(ctx, tc, workspace, c, c.OpenOperations, "")
 	}
@@ -1198,7 +1198,7 @@ func (e *Engine) exhaustCycle(ctx context.Context, tc *taskContext, workspace st
 // live obligation.
 func (e *Engine) checkpointCycle(ctx context.Context, tc *taskContext, workspace string, c *cycleCompletion,
 	status session.CheckpointStatus, reason session.RetirementReason) error {
-	id, err := e.commitCheckpoint(c, status, reason, e.measureCandidate(ctx, tc, workspace))
+	id, err := e.commitCheckpoint(ctx, c, status, reason, e.measureCandidate(ctx, tc, workspace))
 	if err != nil {
 		return err
 	}

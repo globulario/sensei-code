@@ -36,7 +36,11 @@ func recordingEngine(t *testing.T) *Engine {
 	cfg := config.Default()
 	cfg.Permissions.ReadRepository = false
 	e := New(gitx.Repo{Root: root}, cfg, event.NewBus(), nil, "sess-exact")
-	return e
+	// FIXTURE MIGRATION (70B2a1, RULING-195): a task-bound event is published
+	// only once a durable Store has recorded it, so the engine records into a
+	// test-owned Store; run() writes each task's TaskCreated root first, as
+	// production Submit does.
+	return withFixtureStore(t, e)
 }
 
 func awaitObjective(t *testing.T, e *Engine, taskID string) Objective {
@@ -63,6 +67,20 @@ func TestTheRecordedObjectiveIsTheExactSubmittedBytes(t *testing.T) {
 	for _, want := range exact {
 		e := recordingEngine(t)
 		taskID := e.submit(context.Background(), want, SubmittedByLocalOperator, false)
+		// The run is waited out before the test's directories are removed: it
+		// records into them until its invocation has ended.
+		attempt, err := e.RunAttempt(taskID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() {
+			e.Stop(taskID)
+			select {
+			case <-attempt.Ended():
+			case <-time.After(10 * time.Second):
+				t.Error("the submitted run did not end")
+			}
+		})
 
 		got := awaitObjective(t, e, taskID)
 		if got.Text != want {

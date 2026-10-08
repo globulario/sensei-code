@@ -195,6 +195,108 @@ func tick() tea.Cmd {
 	return tea.Tick(tickInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
+// appendHaltedMsg is a turn, /run or /resume the engine ended with a typed
+// failure: a resume's session lineage could not be bound, or the session
+// record did not take one of the invocation's governed events (70B2a1,
+// RULING-195). It is the outcome of that invocation: no workflow ending of
+// the task can be recorded after it, so none will arrive on the bus. task is
+// set for a /resume, whose task can be resumed again.
+type appendHaltedMsg struct {
+	taskID  string
+	task    *session.Interrupted
+	failure *workflow.RecordAppendFailure
+}
+
+// haltOf waits for ONE invocation's halt, read from its own control handle:
+// halted is closed the moment the session record refused one of its governed
+// events, and that typed failure is returned AT ONCE -- not when the
+// invocation's provider or workflow code has finished unwinding (ended). An
+// invocation that ends unhalted returns nil, its ending having been recorded
+// and published, and so does the end of ctx. It returns exactly once.
+func haltOf(ctx context.Context, halted, ended <-chan struct{}, failure func() *workflow.RecordAppendFailure) *workflow.RecordAppendFailure {
+	select {
+	case <-halted:
+	case <-ended:
+	case <-ctx.Done():
+		return nil
+	}
+	return failure()
+}
+
+// waitRunHalted reports a /run or an assisted turn the engine halted because
+// the session record did not take one of its governed events, read from that
+// run's own control handle (workflow.RunAttempt), the moment it halts
+// (haltOf). A run that ended unhalted reports nothing here, its ending having
+// been recorded and published. It ends with the TUI's context.
+func waitRunHalted(ctx context.Context, engine *workflow.Engine, taskID string) tea.Cmd {
+	return func() tea.Msg {
+		attempt, err := engine.RunAttempt(taskID)
+		if err != nil {
+			return nil
+		}
+		return runHalted(ctx, attempt, taskID)
+	}
+}
+
+// haltHandle is the part of one invocation's control handle (a
+// workflow.RunAttempt or workflow.ResumeAttempt) the TUI reads its halt from.
+type haltHandle interface {
+	Halted() <-chan struct{}
+	Ended() <-chan struct{}
+	Failure() *workflow.RecordAppendFailure
+}
+
+// runHalted is the message a /run's halt becomes in Model.Update: its typed
+// failure the moment it halts, or nothing for a run that ended unhalted.
+func runHalted(ctx context.Context, attempt haltHandle, taskID string) tea.Msg {
+	if f := haltOf(ctx, attempt.Halted(), attempt.Ended(), attempt.Failure); f != nil {
+		return appendHaltedMsg{taskID: taskID, failure: f}
+	}
+	return nil
+}
+
+// resumeBoundMsg is a /resume whose fresh session the engine bound to the
+// task's session lineage: the run proceeds, and its events arrive on the bus.
+type resumeBoundMsg struct {
+	task    session.Interrupted
+	attempt *workflow.ResumeAttempt
+	binding workflow.ResumeBinding
+}
+
+// waitResumeBinding reports the pre-binding outcome of ONE /resume, read from
+// that invocation's own control handle rather than from the bus, where
+// nothing stands in for an event that did not occur: the verified binding
+// releases the wait, and a typed refusal ends the /resume. The engine settles
+// it exactly once, and its binding wait is bounded, so it always reports.
+func waitResumeBinding(ctx context.Context, attempt *workflow.ResumeAttempt, task session.Interrupted) tea.Cmd {
+	return func() tea.Msg {
+		select {
+		case <-attempt.Bound():
+		case <-ctx.Done():
+			return nil
+		}
+		b := attempt.Binding()
+		if b.Refusal != nil {
+			return appendHaltedMsg{taskID: task.TaskID, task: &task, failure: b.Refusal}
+		}
+		return resumeBoundMsg{task: task, attempt: attempt, binding: b}
+	}
+}
+
+// waitResumeHalted reports a bound /resume that the engine later halted
+// because the session record did not take one of its governed events. It is
+// bound to that invocation's handle and reports the moment it halts (haltOf);
+// an invocation that ended unhalted reports nothing here, its ending having
+// been recorded and published. It ends with the TUI's context.
+func waitResumeHalted(ctx context.Context, attempt haltHandle, task session.Interrupted) tea.Cmd {
+	return func() tea.Msg {
+		if f := haltOf(ctx, attempt.Halted(), attempt.Ended(), attempt.Failure); f != nil {
+			return appendHaltedMsg{taskID: task.TaskID, task: &task, failure: f}
+		}
+		return nil
+	}
+}
+
 func waitEvent(ch <-chan event.Event) tea.Cmd {
 	return func() tea.Msg {
 		e, ok := <-ch
@@ -312,6 +414,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingTask = ""
 		}
 		cmds = append(cmds, waitEvent(m.events))
+	case resumeBoundMsg:
+		m.lines = append(m.lines, dimStyle.Render("  resumed as session "+msg.binding.CurrentSessionID+", bound to the task's session lineage"), "")
+		return m, tea.Batch(append(cmds, waitResumeHalted(m.ctx, msg.attempt, msg.task))...)
+	case appendHaltedMsg:
+		// The halted /run or /resume ends here, once: its typed failure is
+		// reported and the composer is released; a resumed task -- whose
+		// record the halt left as it was -- can be resumed again.
+		detail := "the session record did not take the task's governed event"
+		if msg.failure != nil {
+			detail = msg.failure.Error()
+		}
+		label := "✗ RUN"
+		if msg.task != nil {
+			label = "✗ RESUME"
+		}
+		m.lines = append(m.lines, errorStyle.Render(label), "  "+detail, "")
+		if m.currentTask == msg.taskID {
+			m.busy = false
+			m.pending = nil
+			m.pendingTask = ""
+			m.currentTask = ""
+		}
+		if msg.task != nil {
+			m.resumable = append(m.resumable, *msg.task)
+		}
+		return m, tea.Batch(append(cmds, tea.ClearScreen)...)
 	case tea.ClipboardMsg:
 		m.pasteWaiting = false
 		text := msg.Content
@@ -521,7 +649,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.input.Reset()
 			m.currentTask = m.engine.SubmitAssisted(m.ctx, text)
 			m.scrollUp = 0
-			cmds = append(cmds, tea.ClearScreen)
+			cmds = append(cmds, waitRunHalted(m.ctx, m.engine, m.currentTask), tea.ClearScreen)
 			return m, tea.Batch(cmds...)
 		}
 	}
@@ -1085,8 +1213,9 @@ func (m Model) runCommand(c command.Command, arg string) (Model, tea.Cmd) {
 		m.busy = true
 		m.startedAt = time.Now()
 		m.frame = 0
-		m.currentTask = m.engine.Resume(m.ctx, task)
-		return m, tea.ClearScreen
+		attempt := m.engine.ResumeTask(m.ctx, task)
+		m.currentTask = attempt.TaskID
+		return m, tea.Batch(waitResumeBinding(m.ctx, attempt, task), tea.ClearScreen)
 	case "/run":
 		if strings.TrimSpace(arg) == "" {
 			m.lines = append(m.lines, dimStyle.Render("/run needs the work to carry out: /run add a --json flag to the report command"), "")
@@ -1096,7 +1225,7 @@ func (m Model) runCommand(c command.Command, arg string) (Model, tea.Cmd) {
 		m.startedAt = time.Now()
 		m.frame = 0
 		m.currentTask = m.engine.SubmitGoverned(m.ctx, strings.TrimSpace(arg))
-		return m, tea.ClearScreen
+		return m, tea.Batch(waitRunHalted(m.ctx, m.engine, m.currentTask), tea.ClearScreen)
 	case "/refactor":
 		if strings.TrimSpace(arg) == "" {
 			m.lines = append(m.lines, dimStyle.Render("/refactor needs a target: /refactor internal/tui"), "")
@@ -1109,7 +1238,7 @@ func (m Model) runCommand(c command.Command, arg string) (Model, tea.Cmd) {
 		m.frame = 0
 		m.currentTask = m.engine.SubmitGoverned(m.ctx, "Propose a governed refactor of "+arg+
 			". Read Sensei's evidence for it first, and keep the plan bounded.")
-		return m, tea.ClearScreen
+		return m, tea.Batch(waitRunHalted(m.ctx, m.engine, m.currentTask), tea.ClearScreen)
 	}
 
 	m.running = c.Name

@@ -450,7 +450,8 @@ func TestAStoppedRunIsReportedAsStoppedNotFailed(t *testing.T) {
 	events, done := bus.Subscribe(16)
 	defer done()
 
-	e := &Engine{Bus: bus, SessionID: "s1"}
+	// FIXTURE MIGRATION (70B2a1): the run records its root and its stop.
+	e := withFixtureStore(t, &Engine{Bus: bus, SessionID: "s1"})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	// ReadRepository is not granted, so the run refuses immediately and takes
@@ -542,11 +543,11 @@ func TestDeferredAuthorityIsItsOwnTransition(t *testing.T) {
 	bus := event.NewBus()
 	events, done := bus.Subscribe(16)
 	defer done()
-	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
+	e := withFixtureStore(t, &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}, "task-1")
 
 	decided := make(chan error, 1)
 	go func() {
-		_, err := e.awaitChoice(context.Background(), nil, "task-1",
+		_, err := e.awaitChoice(fixtureCtx(e, "task-1"), nil, "task-1",
 			"graph coverage is absent for the planned files", "dom", "base",
 			authority.Decision{Level: authority.Human, Subject: "Authorize?", Options: level3Options()},
 			level3Options())
@@ -594,7 +595,7 @@ func TestDeferralCallsNoOneAfterwards(t *testing.T) {
 	if !strings.Contains(funcBody(t, "internal/workflow/engine.go", "terminateRun"), "errAuthorityDeferred") {
 		t.Error("the governed run does not recognise a deferred decision")
 	}
-	for _, fn := range []string{"execute", "Resume"} {
+	for _, fn := range []string{"execute", "ResumeTask"} {
 		if !strings.Contains(funcBody(t, "internal/workflow/engine.go", fn), "terminateRun") {
 			t.Errorf("%s does not end through the classifier that recognises a deferral", fn)
 		}
@@ -1719,7 +1720,7 @@ func TestAClosureRoundLeavesTheCanonicalCheckoutClean(t *testing.T) {
 		t.Fatalf("the fixture is not a clean canonical checkout (clean=%v, err=%v)", clean, err)
 	}
 
-	e.recordClosureQuestion("task-writer", "coverage gap", closureDecision(t), certifiedStart{}, "model", 1)
+	e.recordClosureQuestion("task-writer", "coverage gap", closureDecision(t), certifiedStart{}, "model", 1, fixtureCtx(e, "task-writer"))
 
 	// The operation produced the derived state, in the owned location.
 	recipes, err := os.ReadFile(e.Repo.Root + "/" + ownedRecipesPath)
@@ -1763,7 +1764,7 @@ func TestACommittedRecipeIsStillReadBesideTheOwnedOverlay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	e.recordClosureQuestion("task-writer", "coverage gap", closureDecision(t), certifiedStart{}, "model", 1)
+	e.recordClosureQuestion("task-writer", "coverage gap", closureDecision(t), certifiedStart{}, "model", 1, fixtureCtx(e, "task-writer"))
 	if _, err := os.Stat(e.Repo.Root + "/" + ownedRecipesPath); !os.IsNotExist(err) {
 		t.Fatalf("a question already published was copied into the owned overlay: %v", err)
 	}
@@ -2036,6 +2037,32 @@ func failCheckpointIO(t *testing.T, fail func(op string, call int) bool) *[]stri
 	return &seen
 }
 
+// writeLegacyRecord appends evs to the session record of sessionID under root
+// directly, without the Store's authorization: what a legacy writer could have
+// left in the file, such as a TaskCreated root naming no session, which the
+// Store itself refuses to write (70B2a1).
+func writeLegacyRecord(t *testing.T, root, sessionID string, evs ...event.Event) {
+	t.Helper()
+	dir := root + "/.sensei-code/sessions/" + sessionID
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(dir+"/events.jsonl", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	for _, ev := range evs {
+		line, err := json.Marshal(ev)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Write(append(line, '\n')); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // fixtureEngine is an engine over a real session store and task-state root.
 func fixtureEngine(t *testing.T) *Engine {
 	t.Helper()
@@ -2169,7 +2196,7 @@ func commitLive(t *testing.T, e *Engine, c *cycleCompletion) string {
 	if !ok || status != "live" {
 		t.Fatalf("premise: the fixture obligation is %q, not live", status)
 	}
-	id, err := e.commitCheckpoint(c, status, "", fixtureCandidate)
+	id, err := e.commitCheckpoint(fixtureCtx(e, c.TaskID), c, status, "", fixtureCandidate)
 	if err != nil {
 		t.Fatalf("the live checkpoint was not committed: %v", err)
 	}
@@ -2309,7 +2336,7 @@ func TestB1W5AFifthStatusIsRefusedBeforeCommitment(t *testing.T) {
 	commitLive(t, e, c)
 	for _, status := range []string{"serving", "closed"} {
 		before, _ := committedRecords(t, e)
-		_, err := e.commitCheckpoint(c, "serving", "", fixtureCandidate)
+		_, err := e.commitCheckpoint(fixtureCtx(e, c.TaskID), c, "serving", "", fixtureCandidate)
 		var unrecorded *ObligationPersistenceFailed
 		if !errors.As(err, &unrecorded) || unrecorded.Attempts != 0 {
 			t.Fatalf("status %s was not refused before commitment: %v", status, err)
@@ -2355,7 +2382,7 @@ func TestB1W7AnInputTheOwnerCannotConstructDoesNotReplay(t *testing.T) {
 	before, _ := committedRecords(t, e)
 	retry(t, e, c)
 	c.Why["c2"] = "a reason no owner gave"
-	_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+	_, err := e.commitCheckpoint(fixtureCtx(e, c.TaskID), c, "live", "", fixtureCandidate)
 	var unrecorded *ObligationPersistenceFailed
 	if !errors.As(err, &unrecorded) || unrecorded.Attempts != 0 {
 		t.Fatalf("an obligation its inputs do not reproduce was not refused before commitment: %v", err)
@@ -2382,7 +2409,7 @@ func TestB1W8ACandidateThe70A4OwnerCannotConstructDoesNotReplay(t *testing.T) {
 			t.Fatalf("%s replayed", name)
 		}
 	}
-	if _, err := e.commitCheckpoint(c, "live", "", candidateInput{What: "x", Tree: "t", Failure: "unreadable"}); err == nil {
+	if _, err := e.commitCheckpoint(fixtureCtx(e, c.TaskID), c, "live", "", candidateInput{What: "x", Tree: "t", Failure: "unreadable"}); err == nil {
 		t.Fatal("a checkpoint whose candidate the owner refuses was committed")
 	}
 }
@@ -2543,7 +2570,8 @@ func TestB1W11AStringMatchedPlanAttemptContinuationDoesNotReplay(t *testing.T) {
 		}},
 	} {
 		before, _ := committedRecords(t, tc.e)
-		_, err := tc.e.commitCheckpoint(tc.c(), "live", "", fixtureCandidate)
+		c := tc.c()
+		_, err := tc.e.commitCheckpoint(fixtureCtx(tc.e, c.TaskID), c, "live", "", fixtureCandidate)
 		var unrecorded *ObligationPersistenceFailed
 		if !errors.As(err, &unrecorded) || unrecorded.Attempts != 0 {
 			t.Fatalf("%s was not refused before commitment: %v", name, err)
@@ -2634,7 +2662,7 @@ func TestB1W15APayloadThatDoesNotReadBackIsNeverCommitted(t *testing.T) {
 		return false
 	})
 	retry(t, e, c)
-	_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+	_, err := e.commitCheckpoint(fixtureCtx(e, c.TaskID), c, "live", "", fixtureCandidate)
 	var unrecorded *ObligationPersistenceFailed
 	if !errors.As(err, &unrecorded) || unrecorded.Attempts != maxCheckpointAttempts {
 		t.Fatalf("a corrupted read-back was not refused on every attempt: %v", err)
@@ -2666,7 +2694,7 @@ func TestB1W16TwoFailedWritesThenOneCommittedCheckpoint(t *testing.T) {
 func TestB1W17W18ThreeFailedWritesPreserveThePriorCheckpoint(t *testing.T) {
 	e := fixtureEngine(t)
 	c := fixtureObligation(t, e, codeObligationFinding("c1"))
-	_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+	_, err := e.commitCheckpoint(fixtureCtx(e, c.TaskID), c, "live", "", fixtureCandidate)
 	if err == nil {
 		t.Fatal("premise: an obligation that is not live was committed live")
 	}
@@ -2674,7 +2702,7 @@ func TestB1W17W18ThreeFailedWritesPreserveThePriorCheckpoint(t *testing.T) {
 	_, committedBefore := committedRecords(t, e)
 	failCheckpointIO(t, func(op string, _ int) bool { return op == checkpointWrite })
 	retry(t, e, c)
-	_, err = e.commitCheckpoint(c, "live", "", fixtureCandidate)
+	_, err = e.commitCheckpoint(fixtureCtx(e, c.TaskID), c, "live", "", fixtureCandidate)
 	var unrecorded *ObligationPersistenceFailed
 	if !errors.As(err, &unrecorded) || unrecorded.Attempts != maxCheckpointAttempts ||
 		unrecorded.Prior != PriorCheckpointKnown || unrecorded.PriorCheckpointID != prior {
@@ -2692,7 +2720,7 @@ func TestB1W17W18ThreeFailedWritesPreserveThePriorCheckpoint(t *testing.T) {
 	if canonicalAttempt(t, fresh, "task-c", "the plan").ID != c.PlanAttemptID {
 		t.Fatal("premise: the fresh session did not make the obligation's plan attempt operative")
 	}
-	_, err = fresh.commitCheckpoint(c, "live", "", fixtureCandidate)
+	_, err = fresh.commitCheckpoint(fixtureCtx(fresh, c.TaskID), c, "live", "", fixtureCandidate)
 	if !errors.As(err, &unrecorded) || unrecorded.Prior != PriorCheckpointAbsent || unrecorded.PriorCheckpointID != "" {
 		t.Fatalf("a store read that found no checkpoint is not established absence: %v", err)
 	}
@@ -2706,7 +2734,7 @@ func TestB1W19AnUnreadableStoreIsUnknownNotAbsent(t *testing.T) {
 	commitLive(t, e, c)
 	failCheckpointIO(t, func(op string, _ int) bool { return op == checkpointLoad })
 	retry(t, e, c)
-	_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+	_, err := e.commitCheckpoint(fixtureCtx(e, c.TaskID), c, "live", "", fixtureCandidate)
 	var unrecorded *ObligationPersistenceFailed
 	if !errors.As(err, &unrecorded) || unrecorded.Prior != PriorCheckpointUnknown || unrecorded.PriorCheckpointID != "" {
 		t.Fatalf("an unreadable store was not reported as UNKNOWN: %v", err)
@@ -2733,7 +2761,7 @@ func TestB1W19AReadThatFailsAfterASuccessfulOneIsUnknown(t *testing.T) {
 				return op == checkpointWrite || (op == checkpointLoad && call > 1)
 			})
 			retry(t, e, c)
-			_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+			_, err := e.commitCheckpoint(fixtureCtx(e, c.TaskID), c, "live", "", fixtureCandidate)
 			var unrecorded *ObligationPersistenceFailed
 			if !errors.As(err, &unrecorded) || unrecorded.Attempts != maxCheckpointAttempts ||
 				unrecorded.Prior != PriorCheckpointUnknown || unrecorded.PriorCheckpointID != "" {
@@ -2773,7 +2801,7 @@ func TestB1W19APriorCheckpointThatDoesNotVerifyIsUnknown(t *testing.T) {
 		}
 		_, committedBefore := committedRecords(t, e)
 		retry(t, e, c)
-		_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+		_, err := e.commitCheckpoint(fixtureCtx(e, c.TaskID), c, "live", "", fixtureCandidate)
 		var unrecorded *ObligationPersistenceFailed
 		if !errors.As(err, &unrecorded) || unrecorded.Prior != PriorCheckpointUnknown || unrecorded.PriorCheckpointID != "" {
 			t.Fatalf("%s: an unverifiable prior checkpoint was reported %v", name, err)
@@ -2814,20 +2842,33 @@ func TestB1W17APersistenceFailureIsNeverHandedToAnotherImplementer(t *testing.T)
 	}
 }
 
-// W21 NIL STORE. With no store nothing is committed: the first counted retry
-// already fails typed, no exhaustion, retirement or success is produced, and
-// what is known of a prior checkpoint is UNKNOWN.
+// W21 NIL STORE. With no store nothing is committed. A bound run with no
+// store halts at its FIRST governed record with the typed ErrNoStore failure
+// (70B2a1, RULING-195: nil-Store refusal is mandatory, and no Store is no
+// exemption), so it never reaches a counted retry, an exhaustion, a
+// retirement or a success. The checkpoint owner itself, reached directly with
+// no store, fails typed and produces none of them either, and what is known
+// of a prior checkpoint is UNKNOWN.
 func TestB1W21ANilStoreCannotProduceDurableState(t *testing.T) {
 	r := exhaustingRig(t, 2)
 	r.h.engine.Store = nil
 	_, err := r.run()
 	var incomplete *ImplementerIncomplete
 	var unrecorded *ObligationPersistenceFailed
-	if errors.As(err, &incomplete) || !errors.As(err, &unrecorded) {
-		t.Fatalf("a nil store produced something other than the typed persistence failure: %v", err)
+	if errors.As(err, &incomplete) {
+		t.Fatalf("a nil store produced the typed incomplete state: %v", err)
 	}
-	if unrecorded.Status != "live" || unrecorded.Prior != PriorCheckpointUnknown || !equalInts(r.cycles(), 1, 2) {
-		t.Fatalf("the nil store's failure is not the first retry's, over an UNKNOWN prior: %+v (cycles %v)", unrecorded, r.cycles())
+	r.h.engine.mu.Lock()
+	inv := r.h.engine.admitted["task-1"]
+	r.h.engine.mu.Unlock()
+	if inv == nil {
+		t.Fatal("premise: the run was not made on behalf of an invocation")
+	}
+	if f := r.h.engine.invocationFailure(inv); f == nil || !wraps(f, errNoStoreSentinel) || !isHalted(inv) {
+		t.Fatalf("a nil-store run was not halted with the typed ErrNoStore failure: %v (run: %v)", f, err)
+	}
+	if got := r.cycles(); len(got) > 1 {
+		t.Fatalf("a nil-store run advanced past its first cycle: %v", got)
 	}
 	fixture := fixtureEngine(t)
 	c := fixtureObligation(t, fixture, codeObligationFinding("c1"))
@@ -2868,7 +2909,7 @@ func TestB1W3W7TheCycleOwnerAdmitsOnlyLiveSequences(t *testing.T) {
 	if len(c.Steps) != held || c.Attempts != maxIncompleteImplementerAttempts {
 		t.Fatalf("a refused transition changed the cycle: %+v", c)
 	}
-	if _, err := e.commitCheckpoint(c, "exhausted", "", fixtureCandidate); err != nil {
+	if _, err := e.commitCheckpoint(fixtureCtx(e, c.TaskID), c, "exhausted", "", fixtureCandidate); err != nil {
 		t.Fatalf("premise: the exhausted checkpoint was not committed: %v", err)
 	}
 	got := committedOf(t, e, "task-c")
@@ -2904,7 +2945,7 @@ func TestB1W3W7TheCycleOwnerAdmitsOnlyLiveSequences(t *testing.T) {
 	if err := done.admit(replayStep{Kind: stepAccount, Judging: judgeUnsettled}); err == nil {
 		t.Fatal("an invocation was accounted to a completed cycle")
 	}
-	if _, err := e.commitCheckpoint(done, "retired", "completed", fixtureCandidate); err != nil {
+	if _, err := e.commitCheckpoint(fixtureCtx(e, done.TaskID), done, "retired", "completed", fixtureCandidate); err != nil {
 		t.Fatalf("premise: the completed cycle was not retired: %v", err)
 	}
 	tomb := committedOf(t, e, "task-c")
@@ -2919,7 +2960,7 @@ func TestB1W3W7TheCycleOwnerAdmitsOnlyLiveSequences(t *testing.T) {
 	// A completed retirement of a cycle that never progressed is refused.
 	live := obligationUnder(e.operativePlanAttempt("task-c"), codeObligationFinding("c1"))
 	retry(t, e, live)
-	if _, err := e.commitCheckpoint(live, "retired", "completed", fixtureCandidate); err == nil {
+	if _, err := e.commitCheckpoint(fixtureCtx(e, live.TaskID), live, "retired", "completed", fixtureCandidate); err == nil {
 		t.Fatal("a cycle that never progressed was retired as completed")
 	}
 }
@@ -2942,7 +2983,7 @@ func TestB1W11ThePlanAttemptMustBeOperativeAtTheCheckpointBoundary(t *testing.T)
 	}
 	retry(t, e, c)
 	before, _ := committedRecords(t, e)
-	_, err := e.commitCheckpoint(c, "live", "", fixtureCandidate)
+	_, err := e.commitCheckpoint(fixtureCtx(e, c.TaskID), c, "live", "", fixtureCandidate)
 	var unrecorded *ObligationPersistenceFailed
 	if !errors.As(err, &unrecorded) || unrecorded.Attempts != 0 {
 		t.Fatalf("a live checkpoint naming a superseded plan attempt was not refused: %v", err)
@@ -2957,7 +2998,7 @@ func TestB1W11ThePlanAttemptMustBeOperativeAtTheCheckpointBoundary(t *testing.T)
 	if _, err := disputed.transition(routeDisputeEscalation); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.commitCheckpoint(disputed, "retired", "superseded_plan_attempt", fixtureCandidate); err != nil {
+	if _, err := e.commitCheckpoint(fixtureCtx(e, disputed.TaskID), disputed, "retired", "superseded_plan_attempt", fixtureCandidate); err != nil {
 		t.Fatalf("the retirement of an obligation whose attempt was superseded was refused: %v", err)
 	}
 	current := obligationUnder(e.operativePlanAttempt("task-c"), codeObligationFinding("c1"))
@@ -2965,7 +3006,7 @@ func TestB1W11ThePlanAttemptMustBeOperativeAtTheCheckpointBoundary(t *testing.T)
 	if _, err := current.transition(routeDisputeEscalation); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.commitCheckpoint(current, "retired", "superseded_plan_attempt", fixtureCandidate); err == nil {
+	if _, err := e.commitCheckpoint(fixtureCtx(e, current.TaskID), current, "retired", "superseded_plan_attempt", fixtureCandidate); err == nil {
 		t.Fatal("an obligation of the operative attempt was retired as superseded")
 	}
 
@@ -3169,5 +3210,422 @@ func TestB1W22EveryLoadBearingInputMovesTheReplayDigest(t *testing.T) {
 	}
 	if rep, err := got.replay("", nil); err != nil || rep.Digest != got.replayDigest {
 		t.Fatalf("premise: the unchanged inputs do not replay to the committed digest: %v", err)
+	}
+}
+
+// A1-W10 APPEND ERROR, THROUGH THE CHECKPOINT OWNER (70B2a1 review f1): a
+// checkpoint's PREPARED record that the session record cannot write -- an
+// I/O failure, not a session-authority refusal -- halts the task through the
+// one append-failure owner. It is not retried as a lost operation would be,
+// nothing is published, and once the record is writable again nothing more
+// of the task is recorded or published, its terminal included.
+func TestB2a1W10ACheckpointRecordTheStoreCannotWriteHaltsTheTask(t *testing.T) {
+	root := t.TempDir()
+	e, events, store := blockedEngine(t, root, "session-1")
+	c := fixtureObligation(t, e, codeObligationFinding("c1"))
+	retry(t, e, c)
+	before, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	drainEvents(events)
+	// The obligation's fixture already admitted task-c's invocation; the
+	// checkpoint is committed on its behalf, so it is the one that must halt.
+	_ = fixtureCtx(e, "task-c")
+	e.mu.Lock()
+	inv := e.admitted["task-c"]
+	e.mu.Unlock()
+	record := root + "/.sensei-code/sessions/session-1/events.jsonl"
+	failCheckpointIO(t, func(op string, _ int) bool {
+		if op == checkpointPrepare {
+			// The Store itself fails: the record cannot be opened to write.
+			if err := os.Chmod(record, 0o400); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return false
+	})
+	_, err = e.commitCheckpoint(fixtureCtx(e, c.TaskID), c, "live", "", fixtureCandidate)
+	if err := os.Chmod(record, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var unrecorded *ObligationPersistenceFailed
+	if !errors.As(err, &unrecorded) || unrecorded.Attempts != 1 {
+		t.Fatalf("an unwritable PREPARED record was not the typed persistence failure of one attempt: %v", err)
+	}
+	f := e.invocationFailure(inv)
+	if f == nil || f.Kind != event.CheckpointPrepared || !errors.Is(f, os.ErrPermission) {
+		t.Fatalf("the unwritable PREPARED record did not halt the task with its own write failure: %v", f)
+	}
+	if !isHalted(inv) {
+		t.Fatal("the invocation was not halted")
+	}
+	e.emitIn(fixtureCtx(e, "task-c"), event.New(e.SessionID, "task-c", event.SourceSystem, event.WorkflowFailed, "dependent terminal", nil))
+	if got := drainEvents(events); len(got) != 0 {
+		t.Fatalf("after the failed checkpoint record the task published %v", got)
+	}
+	after, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) != len(before) {
+		t.Fatalf("after the failed checkpoint record the record took %d events", len(after)-len(before))
+	}
+}
+
+// emitterCensus is one classified emission site of the workflow package.
+type emitterCensus struct {
+	at, fn, call, class string
+}
+
+// boundEmitters are the emission entry points that take, as their first
+// argument, the context naming the invocation they record on behalf of.
+var boundEmitters = map[string]bool{"emitIn": true, "emitDurableIn": true, "emitterFor": true,
+	"emitRunTerminal": true, "emitTerminalIn": true, "withOperationGuard": true}
+
+// classifyEmitters classifies every emission site of the given production
+// sources (RULING-198): each is INVOCATION-BOUND -- its invocation is named
+// by ctx, inv.ctx or a value-preserving context.WithoutCancel(ctx), or by an
+// explicit producer handle -- or a TASKLESS DIAGNOSTIC, an event of no task
+// handed to emitDiagnostic, the one path of a record of no task, or the
+// emission sites of the record path itself (record's delegation to
+// recordUnit, recordUnit's and an operation guard's delegation to
+// recordHeld, recordHeld's bus delivery) and of emitDiagnostic's own bus
+// delivery. Anything else is returned as unclassified: a nil producer, an
+// emission under a context of no invocation, the unbound emitReceipt, a
+// taskless event through a task emitter, a diagnostic not provably of no
+// task, a bus publication outside recordHeld and emitDiagnostic, or a ctx
+// made from context.Background or context.TODO.
+func classifyEmitters(fset *token.FileSet, files map[string]parsedSource) (census []emitterCensus, unclassified []string) {
+	var src []byte
+	render := func(n ast.Node) string {
+		return string(src[fset.Position(n.Pos()).Offset:fset.Position(n.End()).Offset])
+	}
+	boundContext := func(arg ast.Expr) bool {
+		switch a := arg.(type) {
+		case *ast.Ident:
+			return a.Name == "ctx"
+		case *ast.SelectorExpr:
+			id, ok := a.X.(*ast.Ident)
+			return ok && id.Name == "inv" && a.Sel.Name == "ctx"
+		case *ast.CallExpr:
+			return render(a) == "context.WithoutCancel(ctx)"
+		}
+		return false
+	}
+	for _, parsed := range files {
+		src = parsed.src
+		for _, decl := range parsed.f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				switch x := n.(type) {
+				case *ast.AssignStmt:
+					for i, lhs := range x.Lhs {
+						if id, ok := lhs.(*ast.Ident); ok && id.Name == "ctx" && i < len(x.Rhs) {
+							if r := render(x.Rhs[i]); strings.Contains(r, "context.Background") || strings.Contains(r, "context.TODO") {
+								unclassified = append(unclassified, fmt.Sprintf("%s: %s makes ctx from no invocation: %s", fset.Position(x.Pos()), fn.Name.Name, r))
+							}
+						}
+					}
+				case *ast.CallExpr:
+					sel, ok := x.Fun.(*ast.SelectorExpr)
+					if !ok {
+						return true
+					}
+					site := emitterCensus{at: fset.Position(x.Pos()).String(), fn: fn.Name.Name, call: sel.Sel.Name}
+					switch {
+					case sel.Sel.Name == "Publish":
+						switch fn.Name.Name {
+						case "recordHeld":
+							site.class = "bus delivery of the record path"
+						case "emitDiagnostic":
+							site.class = "bus delivery of the taskless diagnostic path"
+						}
+					case (sel.Sel.Name == "record" && len(x.Args) == 4) || (sel.Sel.Name == "recordUnit" && len(x.Args) >= 4):
+						switch arg := render(x.Args[0]); {
+						case arg == "nil":
+						case arg == "invocationOf(ctx)" || arg == "inv":
+							site.class = "invocation-bound"
+						case sel.Sel.Name == "recordUnit" && fn.Name.Name == "record" && arg == "producer":
+							site.class = "the record path's own unit"
+						}
+					case sel.Sel.Name == "recordHeld" && len(x.Args) >= 5:
+						// Only under the gate its caller holds, for the
+						// producer that caller validated.
+						if render(x.Args[1]) == "producer" && (fn.Name.Name == "recordUnit" || fn.Name.Name == "withOperationGuard") {
+							site.class = "the record path's own unit"
+						}
+					case sel.Sel.Name == "emitDiagnostic" && len(x.Args) == 1:
+						if ev, ok := x.Args[0].(*ast.CallExpr); ok && render(ev.Fun) == "event.New" && len(ev.Args) > 1 && render(ev.Args[1]) == `""` {
+							site.class = "taskless diagnostic"
+						}
+					case sel.Sel.Name == "emitReceipt":
+						// the unbound form: never a production emission
+					case boundEmitters[sel.Sel.Name] && len(x.Args) > 0:
+						if !boundContext(x.Args[0]) {
+							break
+						}
+						site.class = "invocation-bound"
+						if len(x.Args) > 1 {
+							if ev, ok := x.Args[1].(*ast.CallExpr); ok && render(ev.Fun) == "event.New" && len(ev.Args) > 1 && render(ev.Args[1]) == `""` {
+								// a taskless event through a task emitter:
+								// refused, never a diagnostic of convenience
+								site.class = ""
+							}
+						}
+					default:
+						return true
+					}
+					if site.class == "" {
+						unclassified = append(unclassified, fmt.Sprintf("%s: %s: %s", site.at, fn.Name.Name, render(x)))
+						return true
+					}
+					census = append(census, site)
+				}
+				return true
+			})
+		}
+	}
+	return census, unclassified
+}
+
+// parsedSource is one parsed Go file and the bytes it was parsed from.
+type parsedSource struct {
+	f   *ast.File
+	src []byte
+}
+
+// workflowSources parses the workflow package's production files.
+func workflowSources(t *testing.T) (*token.FileSet, map[string]parsedSource) {
+	t.Helper()
+	fset := token.NewFileSet()
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]parsedSource{}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		src, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f, err := parser.ParseFile(fset, name, src, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[name] = parsedSource{f: f, src: src}
+	}
+	return fset, files
+}
+
+// RULING-198 EMITTER CENSUS (70B2a1): EVERY TASK-BOUND GOVERNED EMISSION OF
+// THE WORKFLOW PACKAGE NAMES ITS ORIGINATING INVOCATION. Every emission site
+// of every production file -- the ten measured emitters and engine.go alike --
+// is classified invocation-bound or taskless diagnostic, and none is left
+// unclassified: no nil producer, no unbound emit or emitReceipt, no emission
+// under a context made from context.Background, and no bus delivery outside
+// the record path. The invocations those contexts name are admitted only by
+// the package's exported entry points, each of which is pinned here with the
+// admission it reaches, so a new entry point is unclassified until it is.
+// The census lists every site it classified, per file.
+func TestB2a1R198EveryEmitterIsClassified(t *testing.T) {
+	fset, files := workflowSources(t)
+	census, unclassified := classifyEmitters(fset, files)
+	for _, u := range unclassified {
+		t.Errorf("unclassified emission: %s", u)
+	}
+	perFile := map[string]map[string]int{}
+	for _, site := range census {
+		file := site.at[:strings.Index(site.at, ":")]
+		if perFile[file] == nil {
+			perFile[file] = map[string]int{}
+		}
+		perFile[file][site.class]++
+	}
+	for file, classes := range perFile {
+		t.Logf("%s: %v", file, classes)
+	}
+	// The ten measured emitter files of the r8 census, and engine.go, each
+	// hold classified emission sites. implementer_incomplete.go emits through
+	// engine.go's helpers (reportIncompleteAttempt, commitCheckpoint), whose
+	// ctx it passes.
+	for _, file := range []string{"engine.go", "adversarial.go", "assisted.go", "attestation.go", "authority.go", "receipt.go",
+		"routine.go", "waiting_review.go", "external_block.go", "nonconvergence.go"} {
+		if perFile[file]["invocation-bound"] == 0 {
+			t.Errorf("premise: the census classified no invocation-bound emission in %s", file)
+		}
+	}
+	if len(census) < 150 {
+		t.Fatalf("premise: only %d emission sites were classified; the census is not reading the package", len(census))
+	}
+	// The exported entry points that take a caller's context, and the
+	// admission each reaches before anything is recorded.
+	admits := map[string]string{
+		"SubmitAssisted": "runAssisted", "SubmitGoverned": "submit", "SubmitGovernedUnattended": "submit",
+		"SubmitGovernedWithPlan": "submit", "SubmitGovernedLocal": "submit", "SubmitObservation": "submit",
+		"Submit": "SubmitAssisted", "Resume": "ResumeTask", "ResumeTask": "admitInvocation",
+	}
+	for _, parsed := range files {
+		for _, decl := range parsed.f.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Recv == nil || !fn.Name.IsExported() || len(fn.Type.Params.List) == 0 {
+				continue
+			}
+			sel, ok := fn.Type.Params.List[0].Type.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "Context" {
+				continue
+			}
+			via, known := admits[fn.Name.Name]
+			if !known {
+				t.Errorf("exported entry point %s takes a caller's context and is not classified", fn.Name.Name)
+				continue
+			}
+			found := false
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				if call, ok := n.(*ast.CallExpr); ok {
+					if s, ok := call.Fun.(*ast.SelectorExpr); ok && s.Sel.Name == via {
+						found = true
+					}
+				}
+				return true
+			})
+			if !found {
+				t.Errorf("exported entry point %s no longer reaches %s", fn.Name.Name, via)
+			}
+		}
+	}
+	for _, chain := range [][2]string{{"submit", "run"}, {"run", "openRun"}, {"runAssisted", "openRun"}, {"openRun", "admit"}} {
+		if !strings.Contains(sourceOf(t, "internal/workflow/"+fileOf(files, chain[0]), chain[0]), "e."+chain[1]+"(") {
+			t.Errorf("%s no longer reaches %s", chain[0], chain[1])
+		}
+	}
+}
+
+// fileOf names the production file that declares function name.
+func fileOf(files map[string]parsedSource, name string) string {
+	for file, parsed := range files {
+		for _, decl := range parsed.f.Decls {
+			if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == name {
+				return file
+			}
+		}
+	}
+	return ""
+}
+
+// The census is not decoration: every unbound shape it exists to refuse, set
+// into an otherwise bound function, is reported unclassified, and the bound
+// shapes beside it are not.
+func TestB2a1R198TheEmitterCensusRejectsEveryUnboundShape(t *testing.T) {
+	const preamble = "package workflow\n\nfunc (e *Engine) f(ctx context.Context, inv *invocation, ev event.Event) {\n"
+	for name, tc := range map[string]struct {
+		body string
+		bad  bool
+	}{
+		"a bound emission":                        {"\te.emitIn(ctx, ev)\n", false},
+		"a bound terminal":                        {"\te.emitRunTerminal(ctx, ev.TaskID, ev.Kind, ev.Source, \"\", \"\", \"\", nil)\n", false},
+		"a record by its producer":                {"\t_ = e.record(inv, e.Store, ev, false)\n", false},
+		"a taskless diagnostic":                   {"\t_ = e.emitDiagnostic(event.New(e.SessionID, \"\", event.SourceSystem, event.Status, \"x\", nil))\n", false},
+		"a unit by its producer":                  {"\t_ = e.recordUnit(invocationOf(ctx), e.Store, true, ev, ev)\n", false},
+		"a unit of no producer":                   {"\t_ = e.recordUnit(nil, e.Store, true, ev, ev)\n", true},
+		"a bound terminal unit":                   {"\te.emitTerminalIn(ctx, ev.TaskID, ev.Kind, ev.Source, \"\", \"\", \"\", nil)\n", false},
+		"a terminal unit under no invocation":     {"\te.emitTerminalIn(context.Background(), ev.TaskID, ev.Kind, ev.Source, \"\", \"\", \"\", nil)\n", true},
+		"a taskless event through a task emitter": {"\te.emitIn(ctx, event.New(e.SessionID, \"\", event.SourceSystem, event.Status, \"x\", nil))\n", true},
+		"a diagnostic not provably taskless":      {"\t_ = e.emitDiagnostic(ev)\n", true},
+		"a task event as a diagnostic":            {"\t_ = e.emitDiagnostic(event.New(e.SessionID, ev.TaskID, event.SourceSystem, event.Status, \"x\", nil))\n", true},
+		"a nil producer":                          {"\t_ = e.record(nil, e.Store, ev, false)\n", true},
+		"an emission under no invocation":         {"\te.emitIn(context.Background(), ev)\n", true},
+		"a terminal under no invocation":          {"\te.emitRunTerminal(context.TODO(), ev.TaskID, ev.Kind, ev.Source, \"\", \"\", \"\", nil)\n", true},
+		"the unbound receipt":                     {"\te.emitReceipt(ev.TaskID, ev.Kind, \"\", \"\")\n", true},
+		"a bus delivery outside record":           {"\te.Bus.Publish(ev)\n", true},
+		"a ctx made from no invocation":           {"\tctx = context.Background()\n\te.emitIn(ctx, ev)\n", true},
+		"an emitter bound to another value":       {"\tother := ctx\n\tgo e.emitterFor(other)(ev)\n", true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fset := token.NewFileSet()
+			src := []byte(preamble + tc.body + "}\n")
+			f, err := parser.ParseFile(fset, "synthetic.go", src, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			census, unclassified := classifyEmitters(fset, map[string]parsedSource{"synthetic.go": {f: f, src: src}})
+			if bad := len(unclassified) > 0; bad != tc.bad {
+				t.Fatalf("unclassified = %v, want unclassified %v (classified %v)", unclassified, tc.bad, census)
+			}
+			if !tc.bad && len(census) == 0 {
+				t.Fatal("a bound shape was not classified at all")
+			}
+		})
+	}
+}
+
+// fixtureCtx is the context a fixture drives an engine helper of taskID
+// under, outside Run and Resume: an ADMITTED invocation of the task in e,
+// under e's current session -- the live one when one is live, else one
+// admitted here for the fixture -- so the helper records on that
+// invocation's behalf exactly as Run and Resume would. A fixture never
+// records under a context of no invocation: that is unbound work, which
+// borrows no task authority (emissionOwner, RULING-198).
+func fixtureCtx(e *Engine, taskID string) context.Context {
+	e.mu.Lock()
+	live := e.admitted[taskID]
+	e.mu.Unlock()
+	if live != nil && !live.ended {
+		e.mu.Lock()
+		unleased := live.lease == nil
+		e.mu.Unlock()
+		if unleased {
+			leaseFixtureInvocation(e, live)
+		}
+		return live.ctx
+	}
+	inv, err := e.admitInvocation(context.Background(), taskID)
+	if err != nil {
+		panic("fixtureCtx: no invocation of " + taskID + " could be admitted: " + err.Error())
+	}
+	leaseFixtureInvocation(e, inv)
+	return inv.ctx
+}
+
+// leaseFixtureInvocation gives a fixture's admitted invocation what a Run or
+// Resume holds (70B2a1 cycle-3 review f1): its task's invocation lease in
+// e.Store, made operative by the Store for inv's session when the record's
+// lineage already names it current. With no root yet the lease is live and
+// operative for no session, as a Run's is before its root is created; with
+// another session current it stays inoperative, and that invocation records
+// nothing. With no Store, or a lease another holder keeps, it holds none.
+func leaseFixtureInvocation(e *Engine, inv *invocation) {
+	if e.Store == nil {
+		return
+	}
+	lease, err := e.Store.AcquireTaskInvocation(context.Background(), inv.taskID)
+	if err != nil {
+		return
+	}
+	if lineage, err := e.Store.TaskSessionLineage(inv.taskID); err == nil && lineage.Tip() == inv.sessionID {
+		_, _ = e.Store.ContinueTaskSession(context.Background(), lease, inv.sessionID)
+	}
+	noteFixtureLease(e.Store, inv.taskID, lease)
+	e.mu.Lock()
+	inv.lease = lease
+	e.mu.Unlock()
+}
+
+// endFixtureInvocation ends the live invocation of taskID a fixture opened in
+// e, giving back the task's lease, so another engine or Store can open the
+// task's next invocation -- one operative invocation of a task at a time.
+func endFixtureInvocation(e *Engine, taskID string) {
+	e.mu.Lock()
+	live := e.admitted[taskID]
+	e.mu.Unlock()
+	if live != nil {
+		e.endInvocation(live)
 	}
 }

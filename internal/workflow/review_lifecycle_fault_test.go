@@ -101,7 +101,7 @@ func TestAnUnrecordableReviewRequestReachesNoOtherParticipant(t *testing.T) {
 	h := lifecycleHarness(t, runner)
 
 	var failed error
-	h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+	h.engine.implement(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 
 	if failed == nil {
@@ -136,7 +136,7 @@ func TestACallerCancellationReachesNoOtherParticipant(t *testing.T) {
 	}()
 
 	var failed error
-	h.engine.implement(ctx, h.sc, certifiedStart{}, "task-1", h.tc,
+	h.engine.implement(invocationUnder(t, h.engine, ctx, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 
 	if failed == nil {
@@ -166,7 +166,7 @@ func TestAMalformedObligationReachesNoOtherParticipant(t *testing.T) {
 	h := lifecycleHarness(t, runner)
 
 	var failed error
-	h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+	h.engine.implement(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 
 	if failed == nil {
@@ -195,7 +195,7 @@ func TestALifecycleConflictIsRoutedAsALifecycleFault(t *testing.T) {
 	h := lifecycleHarness(t, runner)
 
 	var failed error
-	h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+	h.engine.implement(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 	if !errors.Is(failed, roles.ErrReviewLifecycleFault) {
 		t.Fatalf("a lifecycle conflict did not route as a lifecycle fault: %v", failed)
@@ -248,7 +248,7 @@ func TestACallerStopDuringImplementationReachesNoOtherParticipant(t *testing.T) 
 	cancel()
 
 	var failed error
-	h.engine.implement(ctx, h.sc, certifiedStart{}, "task-1", h.tc,
+	h.engine.implement(invocationUnder(t, h.engine, ctx, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 
 	if failed == nil {
@@ -354,7 +354,7 @@ func TestAnObservationFaultReachesNoOtherParticipantAndIsNotSilence(t *testing.T
 			h := lifecycleHarness(t, runner)
 
 			var failed error
-			h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+			h.engine.implement(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 				"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 
 			// NOT A FINISHED WORKFLOW. An observation fault leaves the review

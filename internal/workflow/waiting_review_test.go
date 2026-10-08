@@ -81,7 +81,7 @@ func TestAResumedWaitingReviewNamesWhetherItsCandidateIsTheOneItsRequestWasAbout
 			h.engine.Runners = roleResolver{reviewer: recordingUnansweredRunner{seen: &seen}, name: "chatgpt", session: "session-1"}
 			plan := "Rewrite main.go so it prints a number."
 
-			h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc, plan, "", func(error) {})
+			h.engine.implement(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc, plan, "", func(error) {})
 			if !contains(drainEvents(h.events), event.WorkflowAwaitingReview) || len(seen) != 1 || seen[0].CandidateDigest == "" {
 				t.Fatalf("the first run did not leave a bound candidate waiting for review: %+v", seen)
 			}
@@ -93,7 +93,7 @@ func TestAResumedWaitingReviewNamesWhetherItsCandidateIsTheOneItsRequestWasAbout
 			h.tc.WaitingReview = recorded
 
 			var failed error
-			h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc, plan, "", func(err error) { failed = err })
+			h.engine.implement(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc, plan, "", func(err error) { failed = err })
 			if failed != nil {
 				t.Fatalf("the resumed review failed the run: %v", failed)
 			}

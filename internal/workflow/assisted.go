@@ -37,6 +37,11 @@ import (
 // message does.
 func (e *Engine) SubmitAssisted(ctx context.Context, task string) string {
 	taskID := fmt.Sprintf("task-%d", time.Now().UTC().UnixNano())
+	// The turn's control handle exists before it starts, so RunAttempt hands
+	// the submitter the invocation the turn records under (openRun).
+	e.mu.Lock()
+	e.runSlot(taskID)
+	e.mu.Unlock()
 	go e.runAssisted(ctx, taskID, strings.TrimSpace(task))
 	return taskID
 }
@@ -238,8 +243,8 @@ func (e *Engine) Submit(ctx context.Context, task string) string {
 
 // announceMode records the mode and its provenance as an event, so the UI shows
 // what a task actually is rather than what the configuration might suggest.
-func (e *Engine) announceMode(taskID string, m TaskMode) {
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ModeSelected, m.Describe(), map[string]string{
+func (e *Engine) announceMode(ctx context.Context, taskID string, m TaskMode) {
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.ModeSelected, m.Describe(), map[string]string{
 		"mode":       string(m.Mode),
 		"provenance": string(m.Provenance),
 	}))
@@ -374,11 +379,20 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 	e.beginReceipt(taskID)
 	// The conversational lane never plans, and that is a fact about the lane.
 	e.notePlanAbsent(taskID)
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
-	e.announceMode(taskID, assistedMode())
+	// A turn is an invocation of its task as a governed run is: it records
+	// under its own admitted, leased invocation, rooted by its TaskCreated,
+	// and its RunAttempt is its caller's typed outcome when the session
+	// record refuses one of its records.
+	inv, ok := e.openRun(ctx, taskID, task)
+	if !ok {
+		return
+	}
+	defer e.endInvocation(inv)
+	ctx = inv.ctx
+	e.announceMode(ctx, taskID, assistedMode())
 
 	fail := func(err error) {
-		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
+		e.emitRunTerminal(ctx, taskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, runreceipt.CandidateNone, err.Error(), nil)
 	}
 	if task == "" {
@@ -414,7 +428,7 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 			consulted.Add(assist.Observation{Source: "workspace status", State: assist.Unavailable, Reason: wsErr.Error()})
 		} else {
 			workspaceEvidence = firstText(workspaceStatus)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, workspaceEvidence, workspaceStatus.Structured))
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, workspaceEvidence, workspaceStatus.Structured))
 			if status, decodeErr := sensei.DecodeWorkspaceStatus(workspaceStatus); decodeErr == nil {
 				e.bindGraphDomainOnly(taskID, status)
 				domain = status.Binding.RepositoryDomain
@@ -440,7 +454,7 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 		subjectRevision := repositoryHead(ctx, e.Repo)
 		if preflight, pfErr := sc.CallTool("awareness_preflight", args); pfErr == nil {
 			preflightEvidence = firstText(preflight)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, preflightEvidence,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, preflightEvidence,
 				e.preflightRecord(args, preflight.Structured,
 					subjectRevision, sensei.PreflightGraphDigest(preflight))))
 			if decision, decodeErr := sensei.DecodePreflight(preflight); decodeErr == nil {
@@ -538,7 +552,7 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 		Prompt: assistedPrompt(e.Repo.Root, domain, config.DisplayName(e.Config.Architect.Name), task, conversation,
 			observations, workspaceEvidence, preflightEvidence, renderRetrieved(retrieved),
 			repoEvidence.Render(), standing.Render()),
-	}, e.emit)
+	}, e.emitterFor(ctx))
 	if err != nil {
 		fail(err)
 		return
@@ -549,18 +563,18 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 		fail(errArchitectSilent)
 		return
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke, answer, nil))
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke, answer, nil))
 	// The evidence drawer is emitted for every turn, including the turns where
 	// everything was fine. A provenance surface that only appears when
 	// something is wrong is one nobody learns to read.
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ContextConsulted, consulted.Render(), consulted))
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.ContextConsulted, consulted.Render(), consulted))
 	if err := thread.Record(e.Config.Architect.Name, result.SessionID, base, time.Now().UTC()).Save(e.Repo.Root); err != nil {
 		// Losing the record costs continuity on the next turn and nothing else,
 		// so it is reported rather than raised.
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			"architect conversation identity not recorded: "+err.Error(), nil))
 	}
-	e.emitRunTerminal(taskID, event.WorkflowCompleted, event.SourceSystem,
+	e.emitRunTerminal(ctx, taskID, event.WorkflowCompleted, event.SourceSystem,
 		runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone, "", nil)
 }
 

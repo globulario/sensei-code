@@ -118,15 +118,12 @@ func main() {
 	// Starting a new session inside storage that could not even be listed would
 	// write this run's history where the previous one is unaccounted for, and
 	// the first symptom would be a task nobody can find.
-	sessionID, resumed, err := session.Latest(repo.Root)
+	recordID, sessionID, resumed, err := openConversation(repo.Root, time.Now())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "sensei-code:", err)
 		os.Exit(1)
 	}
-	if !resumed {
-		sessionID = session.ID(time.Now())
-	}
-	store, err := session.New(repo.Root, sessionID)
+	store, err := session.New(repo.Root, recordID)
 	fatalIf(err)
 	var history []event.Event
 	if resumed {
@@ -160,6 +157,30 @@ func main() {
 	p := tea.NewProgram(tui.New(ctx, engine, events, history))
 	_, err = p.Run()
 	fatalIf(err)
+}
+
+// openConversation names the session record the interactive startup
+// continues and the SessionID this process acts under. A new conversation is a
+// new record written by this process, so the two are one. A reopened one keeps
+// the holder's record -- one physical ledger -- but this process is not the one
+// that wrote it, so it acts under a FRESH session minted by the same rule as
+// `resume` (resumingSession, 70B2a1). A task it continues through /resume is
+// bound to that task's session lineage by Engine.Resume before anything of it
+// is recorded; the record's historical events keep the sessions that wrote
+// them.
+func openConversation(root string, now time.Time) (recordID, sessionID string, resumed bool, err error) {
+	recordID, resumed, err = session.Latest(root)
+	if err != nil {
+		return "", "", false, err
+	}
+	if !resumed {
+		recordID = session.ID(now)
+		return recordID, recordID, false, nil
+	}
+	if sessionID, err = resumingSession(now); err != nil {
+		return "", "", false, err
+	}
+	return recordID, sessionID, true, nil
 }
 
 func fatalIf(err error) {

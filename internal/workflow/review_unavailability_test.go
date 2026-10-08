@@ -99,7 +99,7 @@ func candidateFingerprint(t *testing.T, work string) map[string]string {
 // very transition these witnesses are about.
 func runBlocked(t *testing.T, h *gateHarness) (candidateOutcome, error) {
 	t.Helper()
-	outcome, _, _, _, err := h.engine.runCandidate(context.Background(), h.sc, certifiedStart{},
+	outcome, _, _, _, err := h.engine.runCandidate(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{},
 		"task-1", h.tc, "Rewrite main.go so it prints a number.", h.worker, h.work, "")
 	if err != nil && !errors.Is(err, roles.ErrReviewUnobtainable) {
 		t.Fatalf("the governed candidate loop failed for an unrelated reason: %v", err)

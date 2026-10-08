@@ -75,11 +75,18 @@ func runAuditRepair(ctx context.Context, repo gitx.Repo, cfg config.Config, args
 		defer cancel()
 	}
 	engine := workflow.New(repo, cfg, bus, store, sessionID)
+	attemptOf := func(taskID string) (invocationHandle, error) {
+		attempt, err := engine.RunAttempt(taskID)
+		if err != nil {
+			return nil, err
+		}
+		return attempt, nil
+	}
 
 	// Phase 1: observation, to its own terminal state.
 	observation := engine.SubmitObservation(ctx, strings.TrimSpace(*task))
 	fmt.Printf("observation %s  session %s\n", observation, sessionID)
-	if code := streamUntilSettled(ctx, engine, events, observation, false, *quiet, *timeout); code != exitObserved {
+	if code := awaitAuditPhase(ctx, engine, attemptOf, events, observation, *quiet, *timeout); code != exitObserved {
 		fmt.Fprintf(os.Stderr, "sensei-code audit-repair: the audit did not complete (exit %d); opening no repair work\n", code)
 		return code
 	}
@@ -128,11 +135,28 @@ func runAuditRepair(ctx context.Context, repo gitx.Repo, cfg config.Config, args
 		fmt.Printf("\n=== repair %s from %s\n", f.ID, f.ObservationTask)
 		repair := engine.SubmitGovernedUnattended(ctx, f.RepairObjective())
 		fmt.Printf("repair task %s\n", repair)
-		if code := streamUntilSettled(ctx, engine, events, repair, false, *quiet, *timeout); code != exitCompleted {
+		if code := awaitAuditPhase(ctx, engine, attemptOf, events, repair, *quiet, *timeout); code != exitCompleted {
 			worst = code
 		}
 	}
 	return worst
+}
+
+// awaitAuditPhase waits for one audit-repair phase -- the observation, or one
+// repair -- through its run's own control handle (70B2a1, RULING-203), as
+// every governed invocation this binary starts is waited for
+// (settleInvocation). The engine halts a run whose governed event the session
+// record did not take and publishes nothing in its place, so no bus terminal
+// will ever end that phase; the handle's typed failure does, once, failing. A
+// task with no run handle is a failure, never a wait.
+func awaitAuditPhase(ctx context.Context, control runControl, attemptOf func(taskID string) (invocationHandle, error),
+	events <-chan event.Event, taskID string, quiet bool, timeout time.Duration) int {
+	attempt, err := attemptOf(taskID)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sensei-code audit-repair:", err)
+		return exitFailed
+	}
+	return settleInvocation(ctx, control, events, taskID, attempt, false, quiet, timeout, "sensei-code audit-repair")
 }
 
 func truncate(s string, n int) string {

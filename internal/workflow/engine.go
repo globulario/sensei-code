@@ -119,6 +119,17 @@ type Engine struct {
 	// timedOut records that a task's cancellation was a deadline, so the
 	// terminal can distinguish an expired budget from a human withdrawal.
 	timedOut map[string]bool
+	// admitted holds, per task, its one admitted Run or Resume
+	// (admitInvocation): the live one, or the last one once it has ended.
+	// Each owns its context and its failure; none is shared or reused.
+	admitted map[string]*invocation
+	// runs holds, per task, the handle of the one run submitted for it
+	// (RunAttempt, claimRun), created on first use and never replaced.
+	runs map[string]*invocation
+	// recordGates serializes, per task, every emission's failure check,
+	// append, failure fence and publication (record). One per task, created
+	// on first use and never replaced.
+	recordGates map[string]chan struct{}
 	// receipts holds what each task has MEASURED so far, recorded at the moment
 	// of measurement rather than reconstructed at the end. See receipt.go.
 	receipts map[string]*receiptFacts
@@ -197,7 +208,7 @@ const closureBudget = 1
 // decoded, so by construction it names the graph the engine reached. Every
 // agent request for the task carries it, and each provider is launched so it
 // can reach this graph and no other.
-func (e *Engine) bindGraph(taskID string, start certifiedStart) {
+func (e *Engine) bindGraph(ctx context.Context, taskID string, start certifiedStart) {
 	b := &agent.GraphBinding{
 		Command: e.Config.Sensei.Command,
 		Args:    append([]string(nil), e.Config.Sensei.Args...),
@@ -227,11 +238,11 @@ func (e *Engine) bindGraph(taskID string, start certifiedStart) {
 	commit := strings.TrimSpace(start.GraphBuildCommit())
 	switch {
 	case commit == "":
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 			"the certified start carried no graph build commit; this task has no graph identity "+
 				"and any turn that requires one will refuse", nil))
 	case !canonicalCommit(commit):
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 			fmt.Sprintf("the certified start carried %q as a graph build commit, which is not a canonical "+
 				"40-character object id; it is refused rather than expanded, so this task has no graph identity", commit), nil))
 	default:
@@ -244,7 +255,7 @@ func (e *Engine) bindGraph(taskID string, start certifiedStart) {
 	}
 	e.graphs[taskID] = b
 	e.mu.Unlock()
-	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 		fmt.Sprintf("graph binding for every agent in this task: domain %s, build %s, via %s %s",
 			b.Domain, short12(b.Digest), b.Command, strings.Join(b.Args, " ")), nil))
 }
@@ -1075,30 +1086,843 @@ func (e *Engine) RotateSession() error {
 	return nil
 }
 
-func (e *Engine) emit(ev event.Event) {
-	if e.Store != nil {
-		_ = e.Store.Append(ev)
-	}
-	if e.Bus != nil {
-		e.Bus.Publish(ev)
-	}
+// emitIn records ev and only then publishes it, on behalf of exactly the
+// invocation ctx belongs to (invocationOf). Its callers do not act on the
+// outcome, so record owns it: an event the session record refuses or cannot
+// take is never published, and it halts that invocation. Once the invocation
+// has ended or been superseded, the emission is refused -- recorded nowhere
+// and published nowhere -- and it is never attributed to a later invocation
+// of the task (RULING-195). Under a ctx of no invocation it borrows no
+// invocation's authority: once this engine has admitted an invocation of the
+// task, such an emission is refused as unbound (emissionOwner, RULING-198).
+func (e *Engine) emitIn(ctx context.Context, ev event.Event) {
+	_ = e.record(invocationOf(ctx), e.Store, ev, false)
 }
 
-// emitDurable is emit for a record later authority stands on: the append is
-// acknowledged, and a record that could not be written is returned as the
-// error it is and never published as though it had been. An engine with no
-// session store keeps no durable record at all, so nothing can later be
-// resumed from one; there the event is published as emit publishes it.
-func (e *Engine) emitDurable(ev event.Event) error {
+// emitDurableIn is emitIn for a record later authority stands on, whose
+// caller is told of the failure: a record that could not be written is
+// returned as the typed failure it is (a *RecordAppendFailure) and never
+// published as though it had been. Its append is Store.AppendDurable: the
+// record is synced before it is published or the caller is told it was
+// written.
+func (e *Engine) emitDurableIn(ctx context.Context, ev event.Event) error {
+	if err := e.record(invocationOf(ctx), e.Store, ev, true); err != nil {
+		return fmt.Errorf("the %s record could not be written durably: %w", ev.Kind, err)
+	}
+	return nil
+}
+
+// emitterFor is the emission function handed to work that can outlive the
+// call that started it -- a role turn's provider reports its events from a
+// goroutine of its own -- bound to the exact invocation ctx belongs to
+// (invocationOf) when it is made. What it emits is recorded on behalf of THAT
+// invocation only: once it has ended, or when the event is of another task,
+// the emission is refused, so it can never append, publish or fence through a
+// later invocation of the task (RULING-195). Bound to no invocation, it
+// borrows none (emissionOwner).
+func (e *Engine) emitterFor(ctx context.Context) func(event.Event) {
+	inv := invocationOf(ctx)
+	return func(ev event.Event) { _ = e.record(inv, e.Store, ev, false) }
+}
+
+// record is the ONE emission path of the engine (70B2a1, RULING-193 B,
+// RULING-195). ev is appended to store -- through Store.AppendDurable when
+// durable, Store.Append otherwise -- and published only once that append
+// succeeded.
+//
+// A record of a task is made on behalf of exactly one invocation of it, its
+// OWNER (emissionOwner): producer, the invocation the emitting work was bound
+// to (emitIn, emitDurableIn, emitterFor). A producer is never resolved to
+// another invocation of its task, and work bound to no invocation is never
+// resolved to any: once an invocation of the task has been admitted in this
+// engine, unbound work is refused as unbound, typed, halting nothing, so it
+// cannot borrow the authority of whichever invocation happens to be live
+// (RULING-198). Only a task no invocation of this engine was ever admitted
+// for has records with no owner, authorized by the session record's lineage
+// alone. An ended invocation owns nothing, so nothing it left running records
+// or publishes anything.
+//
+// The owner is validated twice: before the wait, and again under the task's
+// record gate, which every emission of the task and the ending of every
+// invocation of it take (endInvocation). Under that gate, one emission at a
+// time, the owner is proven live, current and unhalted, the event is
+// appended, a failure fences the owner, and only an appended event is
+// published: no other emission of the task can append or publish between a
+// failed append and the halt it causes, and an invocation cannot end between
+// its validation and its publication.
+//
+// The append waits for the record lock under the owner's context, so its
+// caller's cancellation reaches a wait in progress (appendContext). Once that
+// caller has withdrawn, only the invocation's ACCOUNT OF ITS ENDING is
+// recorded -- the exact kinds of its ending capability (endingAccount) --
+// under an explicit bound; any other emission it makes is refused as
+// withdrawn, recorded nowhere and published nowhere.
+//
+// Every failure of an attempted append -- its lineage does not authorize the
+// writer, the record lock could not be taken or its wait was cancelled, the
+// event is over the size bound, the write failed, or there is no Store at
+// all -- is returned as a *RecordAppendFailure and publishes nothing. It halts
+// the owner, so nothing more of that invocation is recorded or published, not
+// even once the condition has cleared, and its caller is handed the failure
+// through the invocation's own control handle (RunAttempt, ResumeAttempt). No
+// Store is no exemption: a task-bound event that cannot be recorded did not
+// occur, and nothing stands in for it on the bus.
+//
+// A record of no task is never made here: it carries no task authority and
+// belongs to no invocation, so it is a diagnostic, and only emitDiagnostic
+// records one. A taskless event handed to record is refused, and fences its
+// producer, rather than published as a diagnostic of convenience.
+func (e *Engine) record(producer *invocation, store *session.Store, ev event.Event, durable bool) error {
+	return e.recordUnit(producer, store, durable, ev)
+}
+
+// recordUnit is record for ONE SEMANTIC UNIT of events of one task -- a run's
+// receipt and the terminal it accounts for -- which must be recorded and seen
+// together or not at all. Every event of the unit is validated against its
+// owner exactly as record validates one; then, under the task's record gate,
+// the whole unit is appended ALL OR NOTHING (session.Store.AppendUnit), and
+// only once all of it is durable is any of it published, in order. A refusal
+// or failure of any part publishes none of it, records none of it, fences the
+// owner once, and is returned once as the failure of the unit's last event --
+// the ending the unit exists to record. A unit of one event is record's own
+// append.
+func (e *Engine) recordUnit(producer *invocation, store *session.Store, durable bool, evs ...event.Event) error {
+	if len(evs) == 0 {
+		return nil
+	}
+	last := evs[len(evs)-1]
+	for _, ev := range evs {
+		if ev.TaskID == "" {
+			return e.fence(producer, newRecordAppendFailure(ev, fmt.Errorf("%w: a %s record names no task", errTasklessEmission, ev.Kind)))
+		}
+		if ev.TaskID != last.TaskID {
+			return e.fence(producer, newRecordAppendFailure(last, fmt.Errorf("%w: a unit of task %s carries a %s record of task %s",
+				errInvocationForeign, last.TaskID, ev.Kind, ev.TaskID)))
+		}
+	}
+	owner := func() (*invocation, error) {
+		var inv *invocation
+		for _, ev := range evs {
+			var err error
+			if inv, err = e.emissionOwner(producer, ev); err != nil {
+				return inv, err
+			}
+		}
+		return inv, nil
+	}
+	inv, err := owner()
+	if err != nil {
+		return refusedEmission(last, err)
+	}
+	ctx, cancel := appendContext(inv)
+	defer cancel()
+	release, err := e.enterRecordGate(ctx, last.TaskID)
+	if err != nil {
+		return e.fence(inv, newRecordAppendFailure(last, err))
+	}
+	defer release()
+	return e.recordHeld(ctx, producer, store, durable, evs...)
+}
+
+// recordHeld is recordUnit once its caller holds the task's record gate:
+// every event of the unit is revalidated against its owner, appended all or
+// nothing, and published only once appended. Only recordUnit and an
+// operation guard (withOperationGuard), each holding the gate of exactly the
+// task evs name, call it.
+func (e *Engine) recordHeld(ctx context.Context, producer *invocation, store *session.Store, durable bool, evs ...event.Event) error {
+	if len(evs) == 0 {
+		return nil
+	}
+	last := evs[len(evs)-1]
+	var inv *invocation
+	for _, ev := range evs {
+		if ev.TaskID != last.TaskID {
+			return e.fence(producer, newRecordAppendFailure(last, fmt.Errorf("%w: a unit of task %s carries a %s record of task %s",
+				errInvocationForeign, last.TaskID, ev.Kind, ev.TaskID)))
+		}
+		var err error
+		if inv, err = e.emissionOwner(producer, ev); err != nil {
+			return refusedEmission(last, err)
+		}
+	}
+	var err error
+	// The owner's write capability: its task's invocation lease, which the
+	// Store verifies, under the record lock, is live and operative for the
+	// session every event of the unit names. Nothing ambient stands in for it.
+	e.mu.Lock()
+	lease := inv.lease
+	e.mu.Unlock()
+	switch {
+	case store == nil:
+		err = fmt.Errorf("%w: task %s", session.ErrNoStore, last.TaskID)
+	case len(evs) == 1:
+		err = appendToStore(ctx, store, lease, durable, last)
+	default:
+		err = appendUnitToStore(ctx, store, lease, evs)
+	}
+	if err != nil {
+		return e.fence(inv, newRecordAppendFailure(last, err))
+	}
+	if e.Bus != nil {
+		for _, ev := range evs {
+			e.Bus.Publish(ev)
+		}
+	}
+	return nil
+}
+
+// emitDiagnostic is the ONE path of a record of no task (RULING-198): a
+// diagnostic, which belongs to no invocation and carries no task authority.
+// It must be a diagnostic of the closed taskless registry
+// (session.ValidDiagnosticEvent) -- framing, kind, source and payload -- or it
+// is refused, recorded nowhere and published nowhere. A valid one is appended
+// under an explicit bound when there is a Store, and published only once that
+// append succeeded, or when there is no Store to record it in.
+func (e *Engine) emitDiagnostic(ev event.Event) error {
+	if ev.TaskID != "" {
+		return newRecordAppendFailure(ev, fmt.Errorf("%w: a %s record of task %s is not a diagnostic", errTasklessEmission, ev.Kind, ev.TaskID))
+	}
+	if err := session.ValidDiagnosticEvent(ev); err != nil {
+		return newRecordAppendFailure(ev, err)
+	}
 	if e.Store != nil {
-		if err := e.Store.Append(ev); err != nil {
-			return fmt.Errorf("the %s record could not be written durably: %w", ev.Kind, err)
+		bounded, cancel := context.WithTimeout(context.Background(), terminalAppendWait)
+		err := appendDiagnosticToStore(bounded, e.Store, ev)
+		cancel()
+		if err != nil {
+			return newRecordAppendFailure(ev, err)
 		}
 	}
 	if e.Bus != nil {
 		e.Bus.Publish(ev)
 	}
 	return nil
+}
+
+// refusedEmission is the typed refusal of an emission its owner may not
+// make: the owner's own failure when it is halted, else err as the typed
+// account of ev.
+func refusedEmission(ev event.Event, err error) *RecordAppendFailure {
+	var f *RecordAppendFailure
+	if errors.As(err, &f) {
+		return f
+	}
+	return newRecordAppendFailure(ev, err)
+}
+
+// RecordAppendFailure is the typed account of a governed event the session
+// record refused or could not write -- an unauthorized session, a lineage
+// that cannot be established, a record lock that could not be taken, a write
+// that failed and was undone, no Store at all, an invocation that may no
+// longer record. The event was neither recorded nor published.
+//
+// The one exception is Indeterminate: the Store could neither commit the
+// write nor undo it (session.ErrAppendIndeterminate, or a lineage transition's
+// session.ErrSessionLineageIndeterminate). The event was not published, but
+// whether the record holds it is unknown, and the failure never says it is
+// absent.
+type RecordAppendFailure struct {
+	TaskID        string     `json:"task_id"`
+	SessionID     string     `json:"session_id"`
+	Kind          event.Kind `json:"kind"`
+	Detail        string     `json:"detail"`
+	Indeterminate bool       `json:"indeterminate,omitempty"`
+	cause         error
+}
+
+func newRecordAppendFailure(ev event.Event, err error) *RecordAppendFailure {
+	return &RecordAppendFailure{TaskID: ev.TaskID, SessionID: ev.SessionID, Kind: ev.Kind, Detail: err.Error(),
+		Indeterminate: errors.Is(err, session.ErrAppendIndeterminate) || errors.Is(err, session.ErrSessionLineageIndeterminate),
+		cause:         err}
+}
+
+func (f *RecordAppendFailure) Error() string {
+	outcome := "; it was neither recorded nor published"
+	if f.Indeterminate {
+		outcome = "; it was not published, and whether the session record holds it is unknown"
+	}
+	return "the session record did not take the " + string(f.Kind) + " record of task " + f.TaskID +
+		" by session " + f.SessionID + ": " + f.Detail + outcome
+}
+
+func (f *RecordAppendFailure) Unwrap() error { return f.cause }
+
+// appendToStore is the one call through which the engine appends one event of
+// a task to a session store -- its root through the Store's dedicated root
+// creation, any other ordinary or durable -- under the context the append
+// waits for the record lock under and the emitting invocation's lease, the
+// write capability the Store verifies. It is a variable only so a test can
+// observe that context or fail the append; production never replaces it.
+var appendToStore = func(ctx context.Context, s *session.Store, lease *session.TaskLease, durable bool, ev event.Event) error {
+	switch {
+	case ev.Kind == event.TaskCreated:
+		return s.CreateTaskRoot(ctx, lease, ev)
+	case durable:
+		return s.AppendDurable(ctx, lease, ev)
+	}
+	return s.Append(ctx, lease, ev)
+}
+
+// appendUnitToStore is the one call through which the engine appends a unit
+// of more than one event (recordUnit): durably, all or nothing, under the
+// emitting invocation's lease. It is a variable only so a test can observe or
+// fail the unit; production never replaces it.
+var appendUnitToStore = func(ctx context.Context, s *session.Store, lease *session.TaskLease, evs []event.Event) error {
+	return s.AppendUnit(ctx, lease, evs...)
+}
+
+// appendDiagnosticToStore is the one call through which the engine appends a
+// record of no task (emitDiagnostic): the Store's separate diagnostic path,
+// which no task capability reaches.
+var appendDiagnosticToStore = func(ctx context.Context, s *session.Store, ev event.Event) error {
+	return s.AppendDiagnostic(ctx, ev)
+}
+
+// terminalAppendWait bounds an append that no live caller's context bounds:
+// the account of an ending after its caller withdrew, an emission no
+// invocation owns, and a taskless diagnostic. The Store's own bound applies
+// as well.
+const terminalAppendWait = 30 * time.Second
+
+// ErrTaskInvocationLive refuses an invocation of a task while another
+// invocation of the same task is live in this engine. It is that attempt's
+// own outcome: the live invocation is neither halted, cancelled nor otherwise
+// touched, and nothing of the task is recorded or published.
+var ErrTaskInvocationLive = errors.New("another invocation of this task is still live in this engine")
+
+// ErrNoRunInvocation is a RunAttempt asked for a task this engine has no
+// submitted run of.
+var ErrNoRunInvocation = errors.New("this engine has no submitted run of the task")
+
+var (
+	// errInvocationEnded refuses an emission on behalf of an invocation that
+	// has ended: what it left running records nothing more.
+	errInvocationEnded = errors.New("the invocation that made this emission has ended")
+	// errInvocationSuperseded refuses an emission whose invocation is no
+	// longer the task's admitted one.
+	errInvocationSuperseded = errors.New("the invocation that made this emission is not the task's admitted invocation")
+	// errInvocationUnbound refuses a task-bound emission that names no
+	// invocation of a task this engine has admitted one of: it is never
+	// attributed to that invocation (RULING-198).
+	errInvocationUnbound = errors.New("the emission names no invocation of its task")
+	// errInvocationForeign refuses an emission bound to an invocation of
+	// another task.
+	errInvocationForeign = errors.New("the invocation that made this emission belongs to another task")
+	// errInvocationSession refuses an emission whose event names a session
+	// other than the one its invocation was created under: an invocation
+	// records under its own immutable session and no other.
+	errInvocationSession = errors.New("the emission names a session other than its invocation's")
+	// errTasklessEmission refuses a record of no task handed to the task
+	// emission path, and a task record handed to the diagnostic one.
+	errTasklessEmission = errors.New("a record of no task is a diagnostic, and only a diagnostic names no task")
+	// errInvocationWithdrawn refuses an emission, other than the account of
+	// its ending, by an invocation whose caller has withdrawn.
+	errInvocationWithdrawn = errors.New("the invocation's caller has withdrawn; only the account of its ending is recorded")
+)
+
+// invocation is ONE Run or Resume of a task (RULING-193 B, RULING-195), and
+// the handle every emission made on its behalf is validated against. Its ID
+// is minted once, from crypto/rand, and never changes; the handle is created
+// before the invocation is admitted, so its caller can hold it from the
+// start. Once admitted it owns its context, derived from its caller's and
+// carrying the handle itself (invocationOf), and its own failure: the first
+// governed event of its task the session record did not take while it was
+// the task's invocation. Nothing is shared with any other invocation, so a
+// later invocation can neither report nor overwrite this one's failure.
+type invocation struct {
+	id     string
+	taskID string
+	// sessionID is the session the invocation records under, captured once
+	// when it is created and never changed: every task-bound event it emits
+	// must name exactly this session (emissionOwner), whatever the engine's
+	// current session later becomes.
+	sessionID string
+	ctx       context.Context
+	cancel    context.CancelFunc
+	// halted is closed when failure is set, and over is closed when ended is
+	// set; all four are guarded by Engine.mu, and each is set once.
+	halted  chan struct{}
+	failure *RecordAppendFailure
+	over    chan struct{}
+	ended   bool
+	// claimed is set once a submitted run has taken this handle (claimRun).
+	claimed bool
+	// lease is the task's invocation lease in its Store (leaseInvocation),
+	// held from before the invocation records anything until it ends, and the
+	// capability its lineage binding presents (bindLineage); nil while it
+	// holds none. Guarded by Engine.mu.
+	lease *session.TaskLease
+}
+
+// leaseInvocation takes, for the admitted inv, its task's invocation lease in
+// store (session.Store.AcquireTaskInvocation): the authority, across every
+// Engine and process, that inv is the task's one operative invocation. The
+// in-process admission is only its fast path. The lease is held until inv
+// ends (endInvocation). A lease that cannot be taken -- another invocation
+// holds it, inv's caller cancelled the bounded wait, or there is no Store --
+// halts inv with the typed failure, as a pre-binding refusal that records
+// and publishes nothing; kind names the event inv was about to record. The
+// bounded wait ends with ctx.
+func (e *Engine) leaseInvocation(ctx context.Context, inv *invocation, store *session.Store, kind event.Kind) *RecordAppendFailure {
+	lease, err := store.AcquireTaskInvocation(ctx, inv.taskID)
+	if err != nil {
+		return e.fence(inv, newRecordAppendFailure(event.New(e.SessionID, inv.taskID, event.SourceSystem, kind, "", nil), err))
+	}
+	e.mu.Lock()
+	inv.lease = lease
+	e.mu.Unlock()
+	return nil
+}
+
+// invocationKey is the context key under which an admitted invocation's
+// context carries the invocation itself.
+type invocationKey struct{}
+
+// invocationOf is the invocation ctx was derived from, nil outside one.
+func invocationOf(ctx context.Context) *invocation {
+	if ctx == nil {
+		return nil
+	}
+	inv, _ := ctx.Value(invocationKey{}).(*invocation)
+	return inv
+}
+
+// newInvocation is a fresh, unadmitted handle of one invocation of taskID
+// under sessionID, with its immutable, collision-resistant identity.
+func newInvocation(taskID, sessionID string) *invocation {
+	return &invocation{id: "invocation-" + rand.Text(), taskID: taskID, sessionID: sessionID,
+		halted: make(chan struct{}), over: make(chan struct{})}
+}
+
+// admitInvocation admits a fresh invocation of taskID, bound to ctx (admit).
+func (e *Engine) admitInvocation(ctx context.Context, taskID string) (*invocation, error) {
+	inv := newInvocation(taskID, e.SessionID)
+	if err := e.admit(ctx, inv); err != nil {
+		return nil, err
+	}
+	return inv, nil
+}
+
+// admit admits inv as its task's one live invocation, bound to ctx. A task
+// admits one live invocation at a time: while one is live, another is
+// refused with ErrTaskInvocationLive, and the live one is untouched. An ended
+// invocation is replaced by the fresh one, which has no failure of its own;
+// a handle is admitted once at most.
+func (e *Engine) admit(ctx context.Context, inv *invocation) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if live := e.admitted[inv.taskID]; live != nil && !live.ended {
+		return fmt.Errorf("%w: task %s", ErrTaskInvocationLive, inv.taskID)
+	}
+	if inv.ctx != nil || inv.ended {
+		return fmt.Errorf("%w: invocation %s of task %s was already admitted or settled", ErrTaskInvocationLive, inv.id, inv.taskID)
+	}
+	if e.admitted == nil {
+		e.admitted = map[string]*invocation{}
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	inv.ctx, inv.cancel = context.WithValue(ctx, invocationKey{}, inv), cancel
+	e.admitted[inv.taskID] = inv
+	return nil
+}
+
+// refuseInvocation settles inv, which was never admitted, as refused with f:
+// halted and ended at once, owning nothing of its task.
+func (e *Engine) refuseInvocation(inv *invocation, f *RecordAppendFailure) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if inv.failure == nil {
+		inv.failure = f
+		close(inv.halted)
+	}
+	if !inv.ended {
+		inv.ended = true
+		close(inv.over)
+	}
+}
+
+// endInvocation ends inv: it is no longer live, and its context is cancelled.
+// It takes the task's record gate to do so, so an emission validated as inv's
+// has appended and published, or refused, before inv ends, and none is
+// validated as inv's after. Its failure stays its own.
+func (e *Engine) endInvocation(inv *invocation) {
+	if release, err := e.enterRecordGate(context.Background(), inv.taskID); err == nil {
+		defer release()
+	}
+	e.mu.Lock()
+	if !inv.ended {
+		inv.ended = true
+		close(inv.over)
+	}
+	lease := inv.lease
+	inv.lease = nil
+	e.mu.Unlock()
+	if inv.cancel != nil {
+		inv.cancel()
+	}
+	lease.Release()
+}
+
+// emissionOwner is the invocation ev is recorded on behalf of (record):
+// producer, and nothing else. Every task-bound event is made on behalf of an
+// invocation: work bound to none is refused (errInvocationUnbound), typed and
+// halting nothing, whether or not an invocation of the task was ever admitted
+// here, so it never borrows the authority of whichever invocation is live
+// (RULING-198). It refuses -- typed, halting nothing -- a producer of another
+// task, an event naming a session other than the producer's own
+// (errInvocationSession), an ended or superseded invocation, a halted one
+// (with its own failure), and a withdrawn one's emission other than its
+// ending account.
+func (e *Engine) emissionOwner(producer *invocation, ev event.Event) (*invocation, error) {
+	if producer == nil {
+		return nil, fmt.Errorf("%w: the %s record of task %s by session %s names no invocation",
+			errInvocationUnbound, ev.Kind, ev.TaskID, ev.SessionID)
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if producer.taskID != ev.TaskID {
+		return nil, fmt.Errorf("%w: invocation %s of task %s cannot record task %s", errInvocationForeign,
+			producer.id, producer.taskID, ev.TaskID)
+	}
+	if producer.sessionID != ev.SessionID {
+		return nil, fmt.Errorf("%w: invocation %s of task %s records under session %s, not %s", errInvocationSession,
+			producer.id, ev.TaskID, producer.sessionID, ev.SessionID)
+	}
+	inv := producer
+	switch {
+	case inv.failure != nil:
+		return inv, inv.failure
+	case inv.ended:
+		return inv, fmt.Errorf("%w: invocation %s of task %s", errInvocationEnded, inv.id, ev.TaskID)
+	case e.admitted[ev.TaskID] != inv:
+		return inv, fmt.Errorf("%w: invocation %s of task %s", errInvocationSuperseded, inv.id, ev.TaskID)
+	case inv.ctx.Err() != nil && !endingAccount(ev.Kind):
+		return inv, fmt.Errorf("%w: invocation %s of task %s, refused %s", errInvocationWithdrawn, inv.id, ev.TaskID, ev.Kind)
+	}
+	return inv, nil
+}
+
+// endingAccount is the ENDING CAPABILITY of an invocation whose caller has
+// withdrawn: the closed set of the exact records its terminal path creates --
+// every run ending (event.RunTerminality), its receipt, the disposition of
+// the candidate material the ending settles, and the task's TaskCreated root
+// they stand on, which a run withdrawn before it began still owes (the Store
+// refuses a second root). Nothing else a withdrawn invocation emits -- a
+// status, a plan attempt, a grant -- is recorded. No flag widens it: it is
+// read by membership, for the withdrawn invocation that owns the emission
+// alone.
+func endingAccount(k event.Kind) bool {
+	if _, ending := event.RunTerminality(k); ending {
+		return true
+	}
+	switch k {
+	case event.RunReceipt, event.TaskCreated, event.CandidateResolved:
+		return true
+	}
+	return false
+}
+
+// appendContext is the context an emission owned by inv waits under, for the
+// task's record gate and for the record lock. While inv's caller is live it
+// is inv's own context, so that caller's cancellation or deadline reaches a
+// wait already in progress (RULING-191 C). Once the caller has withdrawn, the
+// only emission inv may still make is the account of its ending (owner),
+// which must outlive it; and an emission no invocation owns has no caller
+// context at all. Both wait under an explicit bound, terminalAppendWait.
+func appendContext(inv *invocation) (context.Context, context.CancelFunc) {
+	switch {
+	case inv == nil:
+		return context.WithTimeout(context.Background(), terminalAppendWait)
+	case inv.ctx.Err() == nil:
+		return context.WithCancel(inv.ctx)
+	}
+	return context.WithTimeout(context.WithoutCancel(inv.ctx), terminalAppendWait)
+}
+
+// enterRecordGate takes taskID's record gate, waiting at most as long as ctx
+// allows, and returns its release. The gate serializes every emission of the
+// task (record) and the ending of each of its invocations; it is created
+// once per task and never replaced.
+func (e *Engine) enterRecordGate(ctx context.Context, taskID string) (func(), error) {
+	e.mu.Lock()
+	if e.recordGates == nil {
+		e.recordGates = map[string]chan struct{}{}
+	}
+	gate := e.recordGates[taskID]
+	if gate == nil {
+		gate = make(chan struct{}, 1)
+		e.recordGates[taskID] = gate
+	}
+	e.mu.Unlock()
+	select {
+	case gate <- struct{}{}:
+		return func() { <-gate }, nil
+	case <-ctx.Done():
+		return nil, fmt.Errorf("%w; nothing was appended: %w", session.ErrRecordLockCanceled, ctx.Err())
+	}
+}
+
+// invocationFailure is inv's failure, nil while it has none or when no
+// invocation owns the emission.
+func (e *Engine) invocationFailure(inv *invocation) *RecordAppendFailure {
+	if inv == nil {
+		return nil
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return inv.failure
+}
+
+// fence halts inv with f, the first failure only, and cancels its context,
+// before its caller -- record, holding the task's record gate -- lets any
+// other emission of the task through. Nothing is published in its place: an
+// event the record does not hold has not occurred. The record stands as it
+// was. An emission no invocation owns halts nothing; its failure is only
+// returned.
+func (e *Engine) fence(inv *invocation, f *RecordAppendFailure) *RecordAppendFailure {
+	if inv == nil {
+		return f
+	}
+	e.mu.Lock()
+	if inv.failure == nil {
+		inv.failure = f
+		close(inv.halted)
+	}
+	f = inv.failure
+	e.mu.Unlock()
+	if inv.cancel != nil {
+		inv.cancel()
+	}
+	return f
+}
+
+// halted reports whether the invocation ctx belongs to is halted. It reads
+// that invocation alone, never the task's live one: work bound to no
+// invocation records nothing of the task in any case (emissionOwner).
+func (e *Engine) halted(ctx context.Context) bool {
+	inv := invocationOf(ctx)
+	if inv == nil {
+		return false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return inv.failure != nil
+}
+
+// RunAttempt is the caller-facing control handle of ONE submitted Run
+// (RULING-195): the run's own invocation, held from submission on. Ended is
+// closed exactly once, when the invocation has returned -- its ending
+// recorded and published, or the run halted -- and Halted when the session
+// record did not take one of its governed events, whose typed failure is
+// then Failure. A run that could not be admitted at all is ended and halted
+// at once with that refusal. No bus event stands in for any of these.
+type RunAttempt struct {
+	TaskID string
+	e      *Engine
+	inv    *invocation
+}
+
+// RunAttempt is the control handle of the run this engine was submitted for
+// taskID, which every Submit entry point mints. It is created when first
+// asked for -- by the caller or by the run itself (claimRun) -- so a caller
+// that asks right after submitting holds it before the run starts. A task
+// with no submitted run is ErrNoRunInvocation.
+func (e *Engine) RunAttempt(taskID string) (*RunAttempt, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	inv := e.runs[taskID]
+	if inv == nil {
+		if _, submitted := e.stops[taskID]; !submitted {
+			return nil, fmt.Errorf("%w: %s", ErrNoRunInvocation, taskID)
+		}
+		inv = e.runSlot(taskID)
+	}
+	return &RunAttempt{TaskID: taskID, e: e, inv: inv}, nil
+}
+
+// runSlot is the handle of the run submitted for taskID, created on first
+// use. Its callers hold e.mu.
+func (e *Engine) runSlot(taskID string) *invocation {
+	if e.runs == nil {
+		e.runs = map[string]*invocation{}
+	}
+	inv := e.runs[taskID]
+	if inv == nil {
+		inv = newInvocation(taskID, e.SessionID)
+		e.runs[taskID] = inv
+	}
+	return inv
+}
+
+// claimRun is the handle run invokes taskID under: the one RunAttempt
+// reports. A task ID names one run; a second run of it is given a handle of
+// its own, which is refused, and the first is untouched.
+func (e *Engine) claimRun(taskID string) (*invocation, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	inv := e.runSlot(taskID)
+	if inv.claimed {
+		return newInvocation(taskID, e.SessionID), false
+	}
+	inv.claimed = true
+	return inv, true
+}
+
+// ID is the run's immutable invocation identity.
+func (a *RunAttempt) ID() string { return a.inv.id }
+
+// Ended is closed once the run has returned, or was refused before it began.
+func (a *RunAttempt) Ended() <-chan struct{} { return a.inv.over }
+
+// Halted is closed once the run is halted by a governed event the session
+// record did not take; Failure is then that failure.
+func (a *RunAttempt) Halted() <-chan struct{} { return a.inv.halted }
+
+// Failure is the typed failure that halted the run, nil while it is not
+// halted.
+func (a *RunAttempt) Failure() *RecordAppendFailure { return a.e.invocationFailure(a.inv) }
+
+// Err is Failure as an error: nil -- never a typed nil -- while the run is
+// not halted.
+func (a *RunAttempt) Err() error { return failureErr(a.Failure()) }
+
+// failureErr is f as an error, keeping an absent failure nil.
+func failureErr(f *RecordAppendFailure) error {
+	if f == nil {
+		return nil
+	}
+	return f
+}
+
+// ResumeBinding is the typed pre-binding outcome of ONE Resume invocation
+// (RULING-189 CALLER COMPLETION): either the task's session lineage, read
+// back from the holder Store, names CurrentSessionID as the task's current
+// session -- the invocation is bound and its run proceeds -- or Refusal is
+// the typed failure that kept it from binding, and nothing of the task was
+// recorded or published under that session. Exactly one of CurrentSessionID
+// and Refusal is set.
+//
+// A refusal leaves the task's history as it was, with one exception the
+// Store names itself: a Refusal wrapping session.ErrSessionLineageIndeterminate
+// is a transition whose write could neither be completed nor undone, and what
+// the record holds is then unknown rather than unchanged.
+type ResumeBinding struct {
+	TaskID           string
+	CurrentSessionID string
+	Refusal          *RecordAppendFailure
+}
+
+// ResumeAttempt is the caller-facing control handle of ONE Resume invocation,
+// created before the invocation starts and bound to that invocation alone --
+// its binding, its failure and its ending -- so successive or competing
+// Resumes of one task each have their own. Bound is closed exactly once, when
+// Binding is settled: the verified binding or the typed refusal. No bus event
+// stands in for either.
+type ResumeAttempt struct {
+	TaskID string
+	e      *Engine
+	inv    *invocation
+	once   sync.Once
+	bound  chan struct{}
+	result ResumeBinding
+}
+
+// refusedResumeAttempt is the settled, ended attempt of an invocation that
+// was never admitted: its outcome and its failure are the refusal, and it
+// belongs to no invocation of the task.
+func refusedResumeAttempt(e *Engine, taskID string, refusal *RecordAppendFailure) *ResumeAttempt {
+	inv := newInvocation(taskID, e.SessionID)
+	e.refuseInvocation(inv, refusal)
+	a := &ResumeAttempt{TaskID: taskID, e: e, inv: inv, bound: make(chan struct{})}
+	a.settle(ResumeBinding{TaskID: taskID, Refusal: refusal})
+	return a
+}
+
+// settle completes the attempt's pre-binding outcome; only the first call
+// counts.
+func (a *ResumeAttempt) settle(b ResumeBinding) {
+	a.once.Do(func() {
+		a.result = b
+		close(a.bound)
+	})
+}
+
+// ID is the resumed invocation's immutable identity.
+func (a *ResumeAttempt) ID() string { return a.inv.id }
+
+// Bound is closed once the invocation's pre-binding outcome is settled. It
+// always is: the binding's wait for the record lock is bounded and ends with
+// the caller's context.
+func (a *ResumeAttempt) Bound() <-chan struct{} { return a.bound }
+
+// Binding is the invocation's pre-binding outcome, waiting for it if needed.
+func (a *ResumeAttempt) Binding() ResumeBinding {
+	<-a.bound
+	return a.result
+}
+
+// Ended is closed once this invocation has returned, after its outcome --
+// and any failure that halted it (Failure) -- is final.
+func (a *ResumeAttempt) Ended() <-chan struct{} { return a.inv.over }
+
+// Halted is closed once this invocation is halted by a governed event the
+// session record did not take; Failure is then that failure.
+func (a *ResumeAttempt) Halted() <-chan struct{} { return a.inv.halted }
+
+// Failure is the typed failure that halted this invocation, nil while it is
+// not halted. A pre-binding refusal is one.
+func (a *ResumeAttempt) Failure() *RecordAppendFailure {
+	return a.e.invocationFailure(a.inv)
+}
+
+// Err is Failure as an error: nil -- never a typed nil -- while the
+// invocation is not halted.
+func (a *ResumeAttempt) Err() error { return failureErr(a.Failure()) }
+
+// bindLineage makes inv's session the current session of the task it
+// resumes and returns the lineage that proves it. The task's lineage is
+// proven from the holder Store's TaskCreated root. A session that is already
+// its tip -- the process that holds the task resuming it again, in the same
+// process -- continues as it is; any other is bound through the Store's one
+// binding operation, under inv's task lease, which refuses a stale or
+// competing tip under the record lock and returns the lineage only as the
+// committed record reads back. A FRESH process never reaches the first case:
+// every resume entrypoint mints a fresh session before it dispatches a lane
+// (cmd/sensei-code openResumeIdentity, openConversation), so its session is
+// always bound by a fresh durable transition.
+//
+// It fails CLOSED. No Store (session.ErrNoStore) and a record holding no root
+// of the task (session.ErrNoTaskRoot) establish no lineage, and neither the
+// caller's projection of the task nor this engine's memory of it stands in
+// for one; an unestablishable lineage and a refused or failed binding are
+// the same. Each halts inv before anything of the task is recorded or
+// published, and is returned as the typed failure it is.
+func (e *Engine) bindLineage(inv *invocation, taskID string) (session.SessionLineage, *RecordAppendFailure) {
+	e.mu.Lock()
+	lease := inv.lease
+	e.mu.Unlock()
+	lineage, err := e.Store.TaskSessionLineageContext(inv.ctx, taskID)
+	switch {
+	case err != nil:
+	case lineage.Tip() == inv.sessionID:
+		// Already current: the Store proves it again under the record lock
+		// and makes inv's lease operative for it, writing nothing.
+		lineage, err = e.Store.ContinueTaskSession(inv.ctx, lease, inv.sessionID)
+	default:
+		var b session.SessionLineageBinding
+		if b, err = lineage.BindingFor(inv.sessionID); err == nil {
+			lineage, err = e.Store.BindSessionLineage(inv.ctx, lease, b)
+		}
+	}
+	if err == nil && lineage.Tip() != inv.sessionID {
+		err = fmt.Errorf("%w: the lineage names %q, not %q, as task %s's current session",
+			session.ErrSessionLineage, lineage.Tip(), inv.sessionID, taskID)
+	}
+	if err != nil {
+		return session.SessionLineage{}, e.fence(inv, newRecordAppendFailure(
+			event.New(inv.sessionID, taskID, event.SourceSystem, session.SessionLineageBound, "", nil), err))
+	}
+	return lineage, nil
 }
 
 // Errors shared by both workflows, named so the two state machines refuse in
@@ -1208,7 +2032,7 @@ func (e *Engine) preserveQuestion(ctx context.Context, taskID, condition, domain
 		q.Gap = &gap
 	}
 	q.PlanAttemptID = planAttemptFrom(ctx)
-	e.emitRunTerminal(taskID, event.WorkflowAwaitingAuthority, event.SourceUser,
+	e.emitRunTerminal(ctx, taskID, event.WorkflowAwaitingAuthority, event.SourceUser,
 		runreceipt.OutcomeDeferred, e.candidateStateFor(taskID), summary, q)
 }
 
@@ -1294,7 +2118,7 @@ func (e *Engine) terminateAuthorityOutcome(ctx context.Context, taskID, task str
 	case errors.Is(err, errAuthorityDeferred):
 		return
 	case errors.Is(err, errStoppedByHumanAuthority):
-		e.emitRunTerminal(taskID, event.WorkflowStopped, event.SourceUser,
+		e.emitRunTerminal(ctx, taskID, event.WorkflowStopped, event.SourceUser,
 			runreceipt.OutcomeStopped, e.candidateStateFor(taskID), humanStopNote, nil)
 		e.reportOutcome(context.WithoutCancel(ctx), behaviourStopped, task, humanStopNote)
 	default:
@@ -1308,7 +2132,7 @@ func (e *Engine) terminateAuthorityOutcome(ctx context.Context, taskID, task str
 		} else if errors.As(err, &unrecorded) {
 			payload = unrecorded
 		}
-		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
+		e.emitRunTerminal(ctx, taskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(taskID), err.Error(), payload)
 		e.reportOutcome(ctx, behaviourFailure, task, err.Error())
 	}
@@ -1519,14 +2343,66 @@ func (c taskContext) intent() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// openRun opens the invocation a submitted run of taskID -- governed or
+// assisted -- records and publishes under, and returns it admitted, leased and
+// rooted; its caller ends it (endInvocation). A submitted run is an invocation
+// of its task exactly as a resumed one is: its emissions wait for the record
+// lock under its caller's context while it is live (appendContext), and a
+// failed one halts it (fence). Its task ID is minted for this submission, so
+// no other invocation of it can be live; one reusing a live task's ID is
+// refused here, before anything of it is recorded or published, and the live
+// one is untouched.
+//
+// Its handle is the one RunAttempt hands the submitter, so a refusal here is
+// that caller's typed outcome, not silence: a run that is not opened (false)
+// is already ended, halted with its refusal, and records nothing more.
+func (e *Engine) openRun(ctx context.Context, taskID, task string) (*invocation, bool) {
+	inv, first := e.claimRun(taskID)
+	refusal := func(err error) *RecordAppendFailure {
+		return newRecordAppendFailure(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil), err)
+	}
+	if !first {
+		e.refuseInvocation(inv, refusal(fmt.Errorf("%w: task %s already names a submitted run", ErrTaskInvocationLive, taskID)))
+		return nil, false
+	}
+	if err := e.admit(ctx, inv); err != nil {
+		e.refuseInvocation(inv, refusal(err))
+		return nil, false
+	}
+	// The admission above is this engine's fast path; the task's authority
+	// is the Store's invocation lease, held until the run ends, so no other
+	// Engine or process can run or resume the task meanwhile. It waits as
+	// the run's root does (appendContext): under the caller's context while
+	// the caller is live, and -- for a run its caller withdrew before it
+	// began, which still owes the account of its ending -- under an explicit
+	// bound.
+	leaseCtx, cancelLease := appendContext(inv)
+	refused := e.leaseInvocation(leaseCtx, inv, e.Store, event.TaskCreated)
+	cancelLease()
+	// THE ROOT IS A PREREQUISITE. A task whose TaskCreated the session record
+	// did not take has not been created: the run ends here, halted with that
+	// failure as its RunAttempt outcome, before any objective, mode, receipt,
+	// Sensei, provider or candidate effect of the task exists.
+	if refused != nil || e.record(inv, e.Store, event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil), false) != nil {
+		e.endInvocation(inv)
+		return nil, false
+	}
+	return inv, true
+}
+
 func (e *Engine) run(ctx context.Context, taskID, task string, how Provenance) {
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
+	inv, ok := e.openRun(ctx, taskID, task)
+	if !ok {
+		return
+	}
+	defer e.endInvocation(inv)
+	ctx = inv.ctx
 	// Recorded before anything reads it, and never written again. The mode
 	// event used to be the only place provenance went, so it was announced and
 	// then dropped: nothing downstream could tell a task a human asked for from
 	// one an AI submitted with identical wording.
 	e.recordObjective(taskID, Objective{Text: task, Provenance: how})
-	e.announceMode(taskID, governedMode(how))
+	e.announceMode(ctx, taskID, governedMode(how))
 	e.execute(ctx, taskID, task)
 }
 
@@ -1676,6 +2552,12 @@ func (e *Engine) markObserving(taskID string) {
 // reached a human decision therefore turned a preserved, deferred obligation
 // into a final failure (canonical review of #194 at b23a8ae).
 func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err error) {
+	// A run halted because its record did not take a governed event is
+	// accounted for by its invocation's failure; nothing that depends on the
+	// missing record is recorded, reported or published after it.
+	if e.halted(ctx) {
+		return
+	}
 	// A deferred authority decision has already recorded itself -- receipt
 	// and terminal event together, with the question attached. Reporting it
 	// again as a failure or a stop would describe the same moment three
@@ -1692,10 +2574,12 @@ func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err erro
 	// that goes silent when stopped leaves no account of why it ended.
 	if ctx.Err() != nil {
 		// A deadline and a withdrawal both cancel the context, and they are
-		// different evidence. The invocation owes an account either way.
+		// different evidence. The invocation owes an account either way, and
+		// this is it: its ending capability (endingAccount) records exactly
+		// the terminal, receipt and disposition records that follow.
 		if e.timedOutBy(taskID) {
 			const note = "the execution budget expired; the task was stopped and its candidate left in place"
-			e.emitRunTerminal(taskID, event.WorkflowTimedOut, event.SourceSystem,
+			e.emitRunTerminal(ctx, taskID, event.WorkflowTimedOut, event.SourceSystem,
 				runreceipt.OutcomeTimedOut, e.candidateStateFor(taskID), note, nil)
 			e.reportOutcome(context.WithoutCancel(ctx), "timed_out", task, note)
 			return
@@ -1705,14 +2589,14 @@ func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err erro
 		// recording it as one would teach the behavioural record that this
 		// task shape breaks. STOPPED says what happened, and a receipt
 		// carrying it is complete.
-		e.emitRunTerminal(taskID, event.WorkflowStopped, event.SourceSystem,
+		e.emitRunTerminal(ctx, taskID, event.WorkflowStopped, event.SourceSystem,
 			runreceipt.OutcomeStopped, e.candidateStateFor(taskID), note, nil)
 		e.reportOutcome(context.WithoutCancel(ctx), "stopped", task, note)
 		return
 	}
 	// A provider that proved it cannot serve a role turn ends the
 	// invocation, not the task.
-	if e.blockExternally(taskID, err) {
+	if e.blockExternally(ctx, taskID, err) {
 		return
 	}
 	// A resume that could not re-establish the authority its record holds ends
@@ -1720,7 +2604,7 @@ func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err erro
 	// FindInterrupted, so the refusal destroyed the obligation it was
 	// protecting (2026-09-23; see testedit.go's restoration section). Nothing
 	// failed: a check declined to execute under authority it could not verify.
-	if e.refuseRestoration(taskID, err) {
+	if e.refuseRestoration(ctx, taskID, err) {
 		return
 	}
 	// A candidate precondition that refused before anything executed ends the
@@ -1728,13 +2612,13 @@ func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err erro
 	// and a dirty checkout is not the state a candidate governs -- and it is
 	// typed here, ahead of the generic failure, because as WorkflowFailed it
 	// was final to FindInterrupted (task-1790489127599728062, 2026-09-27).
-	if e.refuseCandidatePrecondition(taskID, err) {
+	if e.refuseCandidatePrecondition(ctx, taskID, err) {
 		return
 	}
 	// The same plan refused at admission twice, unchanged, after its refusal
 	// was returned to the architect, ends the invocation, not the task: a
 	// refusal of a plan does not establish that the objective is impossible.
-	if e.parkPlanAdmission(taskID, err) {
+	if e.parkPlanAdmission(ctx, taskID, err) {
 		return
 	}
 	// One classifier for both authority paths. A person choosing Stop is not
@@ -1747,17 +2631,17 @@ func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err erro
 
 // refuseCandidatePrecondition ends the invocation with the typed refusal a
 // candidate precondition deserves, and reports whether err was one.
-func (e *Engine) refuseCandidatePrecondition(taskID string, err error) bool {
+func (e *Engine) refuseCandidatePrecondition(ctx context.Context, taskID string, err error) bool {
 	const kept = ". Nothing was executed; the task is preserved and still resumable"
 	var moved *candidate.ErrBaseMoved
 	if errors.As(err, &moved) && moved != nil {
-		e.emitRunTerminal(taskID, event.WorkflowBaseMovedRefused, event.SourceSystem,
+		e.emitRunTerminal(ctx, taskID, event.WorkflowBaseMovedRefused, event.SourceSystem,
 			runreceipt.OutcomeBaseMovedRefused, e.candidateStateFor(taskID), moved.Error()+kept, moved)
 		return true
 	}
 	var dirty *candidate.ErrDirtyCanonical
 	if errors.As(err, &dirty) && dirty != nil {
-		e.emitRunTerminal(taskID, event.WorkflowDirtyCanonicalRefused, event.SourceSystem,
+		e.emitRunTerminal(ctx, taskID, event.WorkflowDirtyCanonicalRefused, event.SourceSystem,
 			runreceipt.OutcomeDirtyCanonicalRefused, e.candidateStateFor(taskID), dirty.Error()+kept, dirty)
 		return true
 	}
@@ -1844,7 +2728,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		fail(fmt.Errorf("Sensei workspace status: %w", err))
 		return
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(workspaceStatus), workspaceStatus.Structured))
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(workspaceStatus), workspaceStatus.Structured))
 
 	preflightArgs := map[string]any{"task": task, "files": []string{}, "mode": "compact"}
 	// Scope preflight to the domain Sensei just stated in the workspace identity
@@ -1869,7 +2753,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	}
 	// The start gate's verdict decides whether the lane may proceed at all, so
 	// its request travels with it (self-improvement program, priority 4).
-	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(preflight),
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(preflight),
 		e.preflightRecord(preflightArgs, preflight.Structured,
 			subjectRevision, sensei.PreflightGraphDigest(preflight))))
 
@@ -1885,7 +2769,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	start, err := certifyStartForLane(workspaceStatus, preflight, head,
 		domainFromRemote(e.Repo.OriginURL(ctx)), awarenessAddress(e.Config.Sensei.Args), e.observes(taskID))
 	if err != nil {
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
 		e.reportOutcome(ctx, "blocked", task, err.Error())
 		fail(err)
 		return
@@ -1893,7 +2777,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// Bound only now. A start the gate refuses installs no graph binding at
 	// all: there is no certified generation to name, and a task that never
 	// started must not leave one behind for a later turn to read.
-	e.bindGraph(taskID, start)
+	e.bindGraph(ctx, taskID, start)
 
 	e.noteWorld(taskID, head, start.GraphDigest())
 
@@ -1958,7 +2842,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// Assembled before the architect is asked anything, and emitted, so what it
 	// was given is a record rather than an assumption.
 	retrievedEvidence, repositoryEvidence, standingContext, recordedHistory, consulted := e.architecturalContext(ctx, sc, domain, task)
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ContextConsulted, consulted.Render(), consulted))
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.ContextConsulted, consulted.Render(), consulted))
 	var decision architectureDecision
 	if supplied, ok := e.suppliedPlan(taskID); ok {
 		// The bound was handed in. It is routed exactly as an architect's
@@ -1975,11 +2859,11 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		return
 	}
 	if decision.Decision == "reply" {
-		e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke, decision.Message, decision))
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke, decision.Message, decision))
 		// A conversational answer carries no plan and no review. Claimed, not
 		// implied: this branch returns before the plan is ever assembled.
 		e.notePlanAbsent(taskID)
-		e.emitRunTerminal(taskID, event.WorkflowCompleted, event.SourceSystem,
+		e.emitRunTerminal(ctx, taskID, event.WorkflowCompleted, event.SourceSystem,
 			runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone, "", nil)
 		return
 	}
@@ -1996,7 +2880,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// The human's "no" did not disappear with it: a running task can be stopped
 	// (see Stop), which costs nothing when unused, where a mandatory prompt
 	// taxed every run.
-	if _, err := e.adoptPlanAttempt(taskID, task, decision); err != nil {
+	if _, err := e.adoptPlanAttempt(ctx, taskID, task, decision); err != nil {
 		fail(err)
 		return
 	}
@@ -2031,7 +2915,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 // the pull request and stops there; merging is never its decision.
 func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskContext, workspace, worker string) publication {
 	if !e.Config.Permissions.Push {
-		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceGit, event.Status,
 			"no pull request offered: "+publish.ErrPushNotGranted.Error(), nil))
 		return publication{State: notOffered}
 	}
@@ -2090,14 +2974,14 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 		if effects := done.Effects(); effects != "" {
 			detail += "\n" + effects
 		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, detail, map[string]any{
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceGit, event.Status, detail, map[string]any{
 			// No "committed" here: publication does not commit. The candidate's
 			// identity was minted at acceptance and is reported by the receipt.
 			"pushed": done.Pushed, "candidate": e.candidateCommitFor(taskID),
 		}))
 		return publication{State: failed, Err: err, Result: done}
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.PullRequestOpened,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceGit, event.PullRequestOpened,
 		"pull request opened, not merged and not admitted: "+done.URL, map[string]string{"url": done.URL}))
 	return publication{State: opened, Result: done}
 }
@@ -2141,12 +3025,12 @@ func (p publication) Settled() bool {
 // reportUndeliveredNotes says so when the human typed guidance that no worker
 // cycle ever read. Silently discarding it would leave the architect believing
 // they had steered a run they did not touch.
-func (e *Engine) reportUndeliveredNotes(taskID string) {
+func (e *Engine) reportUndeliveredNotes(ctx context.Context, taskID string) {
 	notes := e.takeNotes(taskID)
 	if len(notes) == 0 {
 		return
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 		fmt.Sprintf("the task finished before your guidance was read, so it was not delivered: %s",
 			strings.Join(notes, " / ")), nil))
 }
@@ -2177,7 +3061,7 @@ func (e *Engine) emitChangeReport(ctx context.Context, sc *sensei.Client, taskID
 			change.Governing = governingInvariants(result.Structured)
 		}
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.ChangeReported, change.Render(tc.Task), change))
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.ChangeReported, change.Render(tc.Task), change))
 	return change.Render(tc.Task)
 }
 
@@ -2227,7 +3111,7 @@ func (e *Engine) reportOutcome(ctx context.Context, status, task, note string) {
 		Theme:  "sensei_code.candidate_workflow",
 		Note:   strings.TrimSpace(task + " -- " + note),
 	}); err != nil && !errors.Is(err, behavioral.ErrNotConfigured) {
-		e.emit(event.New(e.SessionID, "", event.SourceSystem, event.Status,
+		_ = e.emitDiagnostic(event.New(e.SessionID, "", event.SourceSystem, event.Status,
 			"behavioral outcome not recorded: "+err.Error(), nil))
 	}
 }
@@ -2312,14 +3196,14 @@ func (e *Engine) recordDecision(ctx context.Context, taskID string, tc *taskCont
 	}
 	err := decision.Write(ctx, record)
 	if err == nil {
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.DecisionRecorded,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.DecisionRecorded,
 			"architectural decision recorded for review: "+record.Title+
 				" (pending promotion at "+decision.PendingPath(record.WriteRoot)+")", nil))
 		return
 	}
 	// Not recording is a gap in the shared memory, so it is said out loud
 	// rather than swallowed.
-	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.DecisionRecorded,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.DecisionRecorded,
 		"decision not recorded: "+err.Error(), nil))
 }
 
@@ -2576,7 +3460,7 @@ func (e *Engine) planAttemptsOf(taskID string) *taskPlanAttempts {
 // The start record is the prerequisite of everything bound to the attempt, so
 // its write is acknowledged: a start that could not be recorded is returned as
 // an error and nothing is derived under an identity no record establishes.
-func (e *Engine) beginPlanAttempt(taskID, task string, d architectureDecision) (planAttempt, error) {
+func (e *Engine) beginPlanAttempt(ctx context.Context, taskID, task string, d architectureDecision) (planAttempt, error) {
 	world := strings.TrimSpace(e.governedBase(taskID))
 	source, digest := e.planSource(taskID), e.planDigest(taskID)
 	id, err := planAttemptID(taskID, task, world, source, digest, d)
@@ -2584,7 +3468,7 @@ func (e *Engine) beginPlanAttempt(taskID, task string, d architectureDecision) (
 		return planAttempt{}, err
 	}
 	a := planAttempt{ID: id, TaskID: taskID, World: world, PlanSource: source, PlanDigest: digest, Plan: d, objective: task}
-	if err := e.emitDurable(event.New(e.SessionID, taskID, event.SourceSystem, event.PlanAttemptStarted,
+	if err := e.emitDurableIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.PlanAttemptStarted,
 		"plan attempt "+short12(id)+" routed; plan-local authority derived for it binds to this identity", a)); err != nil {
 		return planAttempt{}, fmt.Errorf("plan attempt %s cannot be routed: %w", short12(id), err)
 	}
@@ -2626,8 +3510,8 @@ func (e *Engine) operativePlanAttempt(taskID string) planAttempt {
 // written, as that attempt's recorded authority. A record that could not be
 // written is returned as the error it is: nothing is installed for it, and the
 // attempt it belongs to cannot be adopted (requireRecordedGrantState).
-func (e *Engine) recordProspectiveGrants(taskID, summary string, rec prospectiveRecord) error {
-	if err := e.emitDurable(event.New(e.SessionID, taskID, event.SourceSystem, event.ProspectiveGranted, summary, rec)); err != nil {
+func (e *Engine) recordProspectiveGrants(ctx context.Context, taskID, summary string, rec prospectiveRecord) error {
+	if err := e.emitDurableIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.ProspectiveGranted, summary, rec)); err != nil {
 		e.noteGrantRecordFailure(taskID, rec.PlanAttemptID, err)
 		return err
 	}
@@ -2637,8 +3521,8 @@ func (e *Engine) recordProspectiveGrants(taskID, summary string, rec prospective
 	return nil
 }
 
-func (e *Engine) recordTestEditGrants(taskID, summary string, rec testEditRecord) error {
-	if err := e.emitDurable(event.New(e.SessionID, taskID, event.SourceSystem, event.TestEditGranted, summary, rec)); err != nil {
+func (e *Engine) recordTestEditGrants(ctx context.Context, taskID, summary string, rec testEditRecord) error {
+	if err := e.emitDurableIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.TestEditGranted, summary, rec)); err != nil {
 		e.noteGrantRecordFailure(taskID, rec.PlanAttemptID, err)
 		return err
 	}
@@ -2937,7 +3821,7 @@ func (r *PlanAdmissionRefused) Describe() string {
 // Any other error, any other class, and a refusal whose record could not be
 // written are returned exactly as they would have been: no implementer starts
 // under a refused attempt in any branch.
-func (e *Engine) continueAfterAdmissionRefusal(taskID string, cause error) (planAttemptRefusal, error) {
+func (e *Engine) continueAfterAdmissionRefusal(ctx context.Context, taskID string, cause error) (planAttemptRefusal, error) {
 	var refusal *planAdmissionRefusal
 	if !errors.As(cause, &refusal) || !refusal.class.returnsToArchitect() {
 		return planAttemptRefusal{}, cause
@@ -2952,12 +3836,12 @@ func (e *Engine) continueAfterAdmissionRefusal(taskID string, cause error) (plan
 		// production_scope refusal naming other paths -- is recorded first,
 		// so the parked refusal is bound to a durable record; an identity
 		// already recorded is not recorded again.
-		if err := e.recordPlanAdmissionRefusal(taskID, cause, rec.Continuation); err != cause {
+		if err := e.recordPlanAdmissionRefusal(ctx, taskID, cause, rec.Continuation); err != cause {
 			return planAttemptRefusal{}, err
 		}
 		return planAttemptRefusal{}, &PlanAdmissionRefused{planAttemptRefusal: rec, cause: cause}
 	}
-	if err := e.recordPlanAdmissionRefusal(taskID, cause, rec.Continuation); err != cause {
+	if err := e.recordPlanAdmissionRefusal(ctx, taskID, cause, rec.Continuation); err != cause {
 		return planAttemptRefusal{}, err
 	}
 	return rec, nil
@@ -2966,13 +3850,13 @@ func (e *Engine) continueAfterAdmissionRefusal(taskID string, cause error) (plan
 // parkPlanAdmission ends the invocation as PLAN_ADMISSION_REFUSED when err
 // carries a repeated plan-admission refusal, and reports whether it did.
 // Nothing is executed and no authority is written; the task stays resumable.
-func (e *Engine) parkPlanAdmission(taskID string, err error) bool {
+func (e *Engine) parkPlanAdmission(ctx context.Context, taskID string, err error) bool {
 	var r *PlanAdmissionRefused
 	if !errors.As(err, &r) || r == nil {
 		return false
 	}
 	e.notePlanAdmissionRefused(taskID, r.planAttemptRefusal)
-	e.emitRunTerminal(taskID, event.WorkflowPlanAdmissionRefused, event.SourceSystem,
+	e.emitRunTerminal(ctx, taskID, event.WorkflowPlanAdmissionRefused, event.SourceSystem,
 		runreceipt.OutcomePlanAdmissionRefused, e.candidateStateFor(taskID),
 		r.Error()+". No implementer started under it; the task is preserved and still resumable", r)
 	return true
@@ -3126,20 +4010,20 @@ func (e *Engine) takeRestoredRefusals(taskID string) (*planAttemptRefusal, []pla
 // The refusal's write is acknowledged. Only once it is written is the attempt
 // marked refused; a refusal that could not be written is returned beside its
 // cause, and is not suppressed as though it had been recorded.
-func (e *Engine) closePlanAdmission(taskID string, cause error) error {
-	return e.recordPlanAdmissionRefusal(taskID, cause, "")
+func (e *Engine) closePlanAdmission(ctx context.Context, taskID string, cause error) error {
+	return e.recordPlanAdmissionRefusal(ctx, taskID, cause, "")
 }
 
 // recordPlanAdmissionRefusal is closePlanAdmission's recorder, writing the
 // continuation the caller decided on the record: only the shared continuation
 // boundary records a return to the architect.
-func (e *Engine) recordPlanAdmissionRefusal(taskID string, cause error, continuation string) error {
+func (e *Engine) recordPlanAdmissionRefusal(ctx context.Context, taskID string, cause error, continuation string) error {
 	rec, ok := e.admissionRefusalOf(taskID, cause)
 	if !ok || e.refusalRecorded(taskID, rec.RefusalID) {
 		return cause
 	}
 	rec.Continuation = continuation
-	if err := e.emitDurable(event.New(e.SessionID, taskID, event.SourceSystem, event.PlanAttemptRefused,
+	if err := e.emitDurableIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.PlanAttemptRefused,
 		"plan attempt "+short12(rec.PlanAttemptID)+" refused at admission: "+rec.Reason, rec)); err != nil {
 		return errors.Join(cause, err)
 	}
@@ -3160,7 +4044,7 @@ func (e *Engine) recordPlanAdmissionRefusal(taskID string, cause error, continua
 // d must be the plan routing admitted last. A plan that does not reproduce the
 // pending attempt's identity was never admitted as itself, and making it
 // operative would attach another attempt's authority to it.
-func (e *Engine) adoptPlanAttempt(taskID, task string, d architectureDecision) (planAttempt, error) {
+func (e *Engine) adoptPlanAttempt(ctx context.Context, taskID, task string, d architectureDecision) (planAttempt, error) {
 	pending := e.pendingPlanAttempt(taskID)
 	id, err := planAttemptID(taskID, task, pending.World, e.planSource(taskID), e.planDigest(taskID), d)
 	if err != nil {
@@ -3177,7 +4061,7 @@ func (e *Engine) adoptPlanAttempt(taskID, task string, d architectureDecision) (
 	// The task's answer scope is read in before the transition is written, so
 	// the transition is counted once: here, and not again by a later read.
 	e.gapResolutions(taskID)
-	if err := e.emitDurable(event.New(e.SessionID, taskID, planEventSource(source), event.PlanProposed,
+	if err := e.emitDurableIn(ctx, event.New(e.SessionID, taskID, planEventSource(source), event.PlanProposed,
 		planSummaryFrom(d, source, e.planDigest(taskID)),
 		proposedPlan{architectureDecision: d, PlanSource: source, PlanDigest: e.planDigest(taskID),
 			Architect: e.architectAnswered(taskID), PlanAttemptID: id})); err != nil {
@@ -3913,7 +4797,7 @@ func (e *Engine) retainReturnedResponses(ctx context.Context, taskID string, cyc
 
 // reportIncompleteAttempt emits the machine-readable record of one counted
 // incomplete attempt.
-func (e *Engine) reportIncompleteAttempt(taskID string, c *cycleCompletion, extra map[string]any) {
+func (e *Engine) reportIncompleteAttempt(ctx context.Context, taskID string, c *cycleCompletion, extra map[string]any) {
 	payload := map[string]any{
 		"review_cycle": c.Cycle, "review_attempt": c.ReviewAttempt,
 		"plan_attempt_id": c.PlanAttemptID, "attempts": c.Attempts,
@@ -3923,7 +4807,7 @@ func (e *Engine) reportIncompleteAttempt(taskID string, c *cycleCompletion, extr
 	for k, v := range extra {
 		payload[k] = v
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 		fmt.Sprintf("review cycle %d is incomplete after implementer attempt %d of %d; still owed: %s",
 			c.Cycle, c.Attempts, maxIncompleteImplementerAttempts, orNone(strings.Join(c.Owed(), ", "), "none")),
 		map[string]any{"implementer_incomplete": payload}))
@@ -3962,7 +4846,7 @@ var checkpointIO = func(op string, do func() error) error { return do() }
 // every attempt failing returns the typed persistence failure, stating what is
 // known of the last committed checkpoint -- which nothing here retires,
 // overwrites or deletes.
-func (e *Engine) commitCheckpoint(c *cycleCompletion, status session.CheckpointStatus, reason session.RetirementReason, cand candidateInput) (string, error) {
+func (e *Engine) commitCheckpoint(ctx context.Context, c *cycleCompletion, status session.CheckpointStatus, reason session.RetirementReason, cand candidateInput) (string, error) {
 	failed := &ObligationPersistenceFailed{State: IncompleteObligationPersistenceFailedState, TaskID: c.TaskID,
 		PlanAttemptID: c.PlanAttemptID, Cycle: c.Cycle, Status: status, Prior: PriorCheckpointUnknown}
 	store := e.Store
@@ -3976,15 +4860,21 @@ func (e *Engine) commitCheckpoint(c *cycleCompletion, status session.CheckpointS
 		return "", failed
 	}
 	for attempt := 1; attempt <= maxCheckpointAttempts; attempt++ {
-		id, err := e.checkpointAttempt(store, c, status, reason, inputs, failed)
+		id, err := e.checkpointAttempt(ctx, store, c, status, reason, inputs, failed)
 		if err == nil {
 			return id, nil
 		}
 		failed.Cause = err.Error()
+		// A record the session record did not take halted the task: no
+		// further attempt may record anything of it.
 		if errors.Is(err, errCheckpointUnconstructible) {
 			return "", failed
 		}
 		failed.Attempts = attempt
+		var refused *RecordAppendFailure
+		if errors.As(err, &refused) {
+			return "", failed
+		}
 	}
 	return "", failed
 }
@@ -3995,7 +4885,7 @@ func (e *Engine) commitCheckpoint(c *cycleCompletion, status session.CheckpointS
 // KNOWN only for a prior checkpoint whose payload was read back and verified
 // in full -- its digest, its strict decoding, and its replay to its committed
 // ReplayDigest. A prior that cannot be verified is not chained to.
-func (e *Engine) checkpointAttempt(store *session.Store, c *cycleCompletion, status session.CheckpointStatus,
+func (e *Engine) checkpointAttempt(ctx context.Context, store *session.Store, c *cycleCompletion, status session.CheckpointStatus,
 	reason session.RetirementReason, inputs json.RawMessage, failed *ObligationPersistenceFailed) (string, error) {
 	failed.Prior, failed.PriorCheckpointID = PriorCheckpointUnknown, ""
 	var prior session.CheckpointBinding
@@ -4043,13 +4933,13 @@ func (e *Engine) checkpointAttempt(store *session.Store, c *cycleCompletion, sta
 		PayloadDigest: hex.EncodeToString(sum[:]), ReplayDigest: first.Digest}
 	record := func(op string, kind event.Kind, summary string) error {
 		ev := event.New(e.SessionID, c.TaskID, event.SourceSystem, kind, summary, binding)
-		// Synced before anything is published or returned: a record a
-		// crash can lose publishes nothing.
-		if err := checkpointIO(op, func() error { return store.AppendDurable(ev) }); err != nil {
+		// Synced before anything is published or returned, through the one
+		// emission path (record): a record a crash can lose publishes
+		// nothing, and one the session record did not take halts the
+		// invocation exactly as emitDurable's does. Only a failure of the
+		// operation that never reached record is retried.
+		if err := checkpointIO(op, func() error { return e.record(invocationOf(ctx), store, ev, true) }); err != nil {
 			return fmt.Errorf("the %s record could not be written durably: %w", kind, err)
-		}
-		if e.Bus != nil {
-			e.Bus.Publish(ev)
 		}
 		return nil
 	}
@@ -4244,7 +5134,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		for _, g := range gaps {
 			names = append(names, string(g))
 		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			"declared but not mechanically enforced: "+strings.Join(names, ", "), nil))
 	}
 
@@ -4266,7 +5156,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 	for cycle := firstCycle; cycle <= e.Config.Workflow.ReviewCycles; cycle = nextReviewCycle(cycle, &sameCycle) {
 		guidance := e.takeNotes(taskID)
 		if len(guidance) != 0 {
-			e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.GuidanceDelivered,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceUser, event.GuidanceDelivered,
 				strings.Join(guidance, "\n"), nil))
 		}
 		report := ""
@@ -4286,7 +5176,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// the very bytes the missing review is owed about.
 		if cycle == 1 && tc.AwaitingReview {
 			tc.AwaitingReview = false
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				"resuming at the review boundary: the candidate stands and owes an independent review, "+
 					"so it is reviewed before any worker is called", nil))
 		} else {
@@ -4312,7 +5202,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// The worker's own text is the artifact of a read-only plan.
 			// Discarding it left an inspection with nothing to show but a
 			// transcript nobody had judged.
-			result, err := impl.Runner.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt, Graph: e.graphFor(taskID)}, e.emit)
+			result, err := impl.Runner.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt, Graph: e.graphFor(taskID)}, e.emitterFor(ctx))
 			// Settled BEFORE any route reads the invocation, so neither an
 			// error nor a role unavailability can discard what it returned.
 			settled = settleInvocation(impl.Name, cycle, result, err)
@@ -4374,12 +5264,12 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// Every refusal at the boundary is REPRESENTED, with the path, size
 		// and reason, before anything downstream sees the candidate (#89).
 		for _, a := range capture.Excluded {
-			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateArtifactExcluded,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceGit, event.CandidateArtifactExcluded,
 				fmt.Sprintf("excluded from the candidate: %s (%s, %d bytes) — %s", a.Path, a.Class, a.Size, a.Reason),
 				map[string]string{"path": a.Path, "class": a.Class, "size": fmt.Sprint(a.Size), "reason": a.Reason}))
 		}
 		if len(capture.Binaries) != 0 {
-			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceGit, event.Status,
 				"binary members kept as metadata, not transported: "+gitx.Describe(capture.Binaries), nil))
 		}
 		if strings.TrimSpace(diff) == "" {
@@ -4394,7 +5284,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					return candidateNotConverged, plan, lastReview, lastAudit, errors.New(
 						"the read-only plan produced no findings: the worker changed nothing and reported nothing")
 				}
-				e.emit(event.New(e.SessionID, taskID, sourceFor(worker.Name), event.InspectionReported, report, nil))
+				e.emitIn(ctx, event.New(e.SessionID, taskID, sourceFor(worker.Name), event.InspectionReported, report, nil))
 
 				revision := reportRevision(report)
 				if revision == previousReportRevision {
@@ -4452,14 +5342,14 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					// an independent look is reported as having had one.
 					if policy := e.policyFor(taskID); !result.Unlocks(policy) {
 						e.obligationLeftOpen(taskID, review, policy)
-						e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+						e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 							"the findings were accepted by a reviewer whose independence could not be established; "+
 								"this task requires an independent review and has not had one", map[string]any{
 								"review_kind": "advisory", "independent_review": false,
 							}))
 						return candidateAwaitingIndependentReview, plan, lastReview, lastAudit, nil
 					}
-					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 						"read-only plan completed: the findings were reviewed independently and accepted", nil))
 					return candidateAccepted, plan, lastReview, lastAudit, nil
 				case roles.Escalate:
@@ -4474,7 +5364,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					if strings.TrimSpace(revised.Plan) == "" {
 						return candidateNotConverged, plan, lastReview, lastAudit, errors.New("architect did not return a revised bounded plan")
 					}
-					e.recordReconciliation(taskID, binding, roles.Reconciliation{
+					e.recordReconciliation(ctx, taskID, binding, roles.Reconciliation{
 						Disputed: "the reviewer raised an architectural boundary about the findings: " + review.Summary,
 						Inputs: []roles.Claim{
 							{Agent: review.Provenance.Provider, Role: roles.Reviewer, Position: review.Summary},
@@ -4488,7 +5378,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					// THE SAME OPERATIVE TRANSITION an initial plan takes: one durable
 					// PlanProposed bound to the revision's plan attempt, which supersedes the
 					// previous attempt and its grant state, and the whole scope moves with it.
-					if _, err := e.adoptPlanAttempt(taskID, task, revised); err != nil {
+					if _, err := e.adoptPlanAttempt(ctx, taskID, task, revised); err != nil {
 						return candidateNotConverged, plan, lastReview, lastAudit, err
 					}
 					applyPlanScope(tc, revised)
@@ -4513,7 +5403,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				"the plan was read-only and the candidate changed %d file(s): %s",
 				len(changedPaths(diff)), strings.Join(changedPaths(diff), ", "))
 		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateChanged, fmt.Sprintf("candidate diff %d bytes · cycle %d", len(diff), cycle), map[string]int{"cycle": cycle, "review_attempt": e.reviewAttempt(taskID) + 1}))
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceGit, event.CandidateChanged, fmt.Sprintf("candidate diff %d bytes · cycle %d", len(diff), cycle), map[string]int{"cycle": cycle, "review_attempt": e.reviewAttempt(taskID) + 1}))
 
 		// The missing edge: worker → change → validation → typed evidence →
 		// reviewer. Without it the reviewer correctly refuses to accept on
@@ -4528,7 +5418,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		if err != nil {
 			return candidateNotConverged, plan, lastReview, lastAudit, err
 		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ValidationRun, evidence.Render(), evidence))
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.ValidationRun, evidence.Render(), evidence))
 
 		// The content identity is re-measured HERE, after validation, because
 		// validation can rewrite the candidate: a formatter changes the bytes,
@@ -4682,12 +5572,12 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// without the request there is nothing left to tell a refused
 			// candidate from a malformed question. This emitted nil.
 			reason := auditCallFailure(err)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason,
 				auditEvidence(nil)))
 			return candidateNotConverged, plan, lastReview, lastAudit, structuralFailure(reason)
 		}
 		lastAudit = firstText(audit)
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateAudited, lastAudit,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateAudited, lastAudit,
 			auditEvidence(audit.Structured)))
 
 		// The audit is decoded before the reviewer is consulted. The reviewer
@@ -4696,7 +5586,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		verdict, err := sensei.DecodeDiffAudit(audit)
 		if err != nil {
 			reason := auditCallFailure(err)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason,
 				auditEvidence(audit.Structured)))
 			return candidateNotConverged, plan, lastReview, lastAudit, structuralFailure(reason)
 		}
@@ -4710,7 +5600,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// the change.
 		if err := verifyPinnedGeneration(start.GraphDigest(), verdict.GraphGeneration,
 			awarenessAddress(e.Config.Sensei.Args)); err != nil {
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, err.Error(),
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, err.Error(),
 				auditEvidence(audit.Structured)))
 			return candidateNotConverged, plan, lastReview, lastAudit, structuralFailure(err.Error())
 		}
@@ -4720,19 +5610,19 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// runs were spent guessing at a cause that was sitting unread in that
 		// field.
 		if !verdict.ReviewerMayAccept() {
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 				"Sensei audit did not clear this candidate: "+verdict.Diagnostic(), auditEvidence(audit.Structured)))
 		}
 		// A structural refusal is about the payload, not the change. No
 		// reviewer can judge it and no further implementor can fix it without
 		// a new candidate, so it is named here and the run ends here (#89).
 		if reason := structuralAuditFailure(verdict); reason != "" {
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason,
 				auditEvidence(audit.Structured)))
 			return candidateNotConverged, plan, lastReview, lastAudit, structuralFailure(reason)
 		}
 		if note := sensei.Discrepancy("diff audit", lastAudit, string(verdict.Decision), sensei.AuditDecisionTokens()); note != "" {
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, note, auditEvidence(audit.Structured)))
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status, note, auditEvidence(audit.Structured)))
 		}
 		// CONVERGENCE IS PER-FINDING ACCOUNTING. Every finding the last review
 		// left open is owed a response of the class the reviewer recorded on it,
@@ -4800,7 +5690,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 						return false, err
 					}
 					e.saveCycleCompletion(obligation)
-					e.reportIncompleteAttempt(taskID, obligation, map[string]any{
+					e.reportIncompleteAttempt(ctx, taskID, obligation, map[string]any{
 						"route": string(obligation.Route), "restated_findings": restated, "conflicted_findings": conflicted,
 						"lapsed_findings": lapsed, "provider": settled.Provider,
 					})
@@ -4839,7 +5729,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					// the disputed finding stays owed under the reviewer's
 					// class; the architect's answer revises the plan, never the
 					// finding.
-					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 						"the worker disputes the class of a review finding; the dispute is escalated to the architect and the reviewer's class stands",
 						map[string]any{"classification_disputes": account.Disputes, "open_findings": account.Open}))
 					revised, err := e.resolveArchitectureForRevision(ctx, sc, start, taskID, task,
@@ -4854,7 +5744,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					for _, d := range account.Disputes {
 						disputed = append(disputed, fmt.Sprintf("[%s] as %s: %s", d.ID, d.DisputesClass, d.Reason))
 					}
-					e.recordReconciliation(taskID, roles.Binding{
+					e.recordReconciliation(ctx, taskID, roles.Binding{
 						TaskID: taskID, BaseSHA: tc.Identity.BaseSHA,
 						CandidateDigest: candidateRevision(diff), CandidateTree: capture.Tree,
 					}, roles.Reconciliation{
@@ -4871,7 +5761,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					// THE SAME OPERATIVE TRANSITION an initial plan takes: one durable
 					// PlanProposed bound to the revision's plan attempt, which supersedes the
 					// previous attempt and its grant state, and the whole scope moves with it.
-					if _, err := e.adoptPlanAttempt(taskID, task, revised); err != nil {
+					if _, err := e.adoptPlanAttempt(ctx, taskID, task, revised); err != nil {
 						return candidateNotConverged, plan, lastReview, lastAudit, err
 					}
 					applyPlanScope(tc, revised)
@@ -5008,8 +5898,9 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		requiredRuns, requiredCorrelated := e.requiredTestEvidence(ctx, taskID, envelope, candidate, diff, audit)
 		reviewedValidation := reviewValidationEvidence(evidence.Render(), requiredRuns, requiredCorrelated, taskID, validation.Digest(diff))
 		if len(requiredCorrelated) != 0 {
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
-				renderRequiredTestEvidence(requiredCorrelated, taskID, validation.Digest(diff)), requiredRuns))
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				renderRequiredTestEvidence(requiredCorrelated, taskID, validation.Digest(diff)),
+				map[string]any{"required_test_runs": requiredRuns}))
 		}
 
 		// Snapshot the position so a handover states what the candidate holds
@@ -5045,7 +5936,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// about. The review below is bound to the binding captured now either way.
 		if w := tc.WaitingReview; w != nil {
 			tc.WaitingReview = nil
-			e.reconcileWaitingReview(taskID, w, binding)
+			e.reconcileWaitingReview(ctx, taskID, w, binding)
 		}
 		policy := e.policyFor(taskID)
 
@@ -5067,7 +5958,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// and if not which condition stopped it -- can only be settled from
 		// real runs. Deciding it from intuition is how a fast path acquires
 		// conditions that were never true.
-		e.classifyForDarkRun(sc, start, taskID, tc, diff)
+		e.classifyForDarkRun(ctx, sc, start, taskID, tc, diff)
 
 		standing, err := e.resolveReview(ctx, taskID, assignment,
 			reviewPacket(*tc, binding, start, plan, diff, lastAudit, reviewedValidation), worker.Name)
@@ -5113,7 +6004,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// is neither acceptance nor failure -- see candidateOutcome.
 			if !standing.Unlocks(policy) {
 				e.obligationLeftOpen(taskID, review, policy)
-				e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.Status,
+				e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceReviewer, event.Status,
 					"the candidate was accepted by a reviewer whose independence could not be established; "+
 						"this task requires an independent review and has not had one", map[string]any{
 						"review_kind": "advisory", "independent_review": false,
@@ -5128,7 +6019,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// B3 N2b, where a handoff swapped worker and reviewer and the
 			// second review accepted what the first had refused, unchanged.
 			if open, ok := e.openReview(taskID); ok && open.contradicts(review, evidence.DiffDigest, evidenceID) {
-				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ReviewContradiction, open.describe(review), open))
+				e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.ReviewContradiction, open.describe(review), open))
 				revised, err := e.resolveArchitectureForRevision(ctx, sc, start, taskID, task, contradictionPrompt(task, plan, lastAudit, open, review), "two reviews of the unchanged candidate disagree: "+oneLine(open.Summary))
 				if err != nil {
 					return candidateNotConverged, plan, lastReview, lastAudit, err
@@ -5136,7 +6027,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				if strings.TrimSpace(revised.Plan) == "" {
 					return candidateNotConverged, plan, lastReview, lastAudit, errors.New("architect did not return a revised bounded plan for the review contradiction")
 				}
-				e.recordReconciliation(taskID, binding, roles.Reconciliation{
+				e.recordReconciliation(ctx, taskID, binding, roles.Reconciliation{
 					Disputed: "two independent reviews of the same candidate on the same evidence disagree: " + oneLine(open.Summary),
 					Inputs: []roles.Claim{
 						{Agent: open.Reviewer, Role: roles.Reviewer, Position: open.Summary},
@@ -5149,13 +6040,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					Remaining: revised.Consequences,
 				})
 				e.clearOpenReview(taskID)
-				e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+				e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
 				stands, err := adjudicationStands(revised)
 				if err != nil {
 					return candidateNotConverged, plan, lastReview, lastAudit, err
 				}
 				if !stands {
-					if _, err := e.adoptPlanAttempt(taskID, task, revised); err != nil {
+					if _, err := e.adoptPlanAttempt(ctx, taskID, task, revised); err != nil {
 						return candidateNotConverged, plan, lastReview, lastAudit, err
 					}
 					applyPlanScope(tc, revised)
@@ -5178,7 +6069,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// refusal does not conclude the candidate; the refusal becomes the
 			// next revision instruction instead.
 			if judged := judgeCandidate(string(review.Decision), verdict); !judged.Accepted {
-				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+				e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"reviewer accepted but Sensei refused; the refusal governs: "+judged.Refusal, auditEvidence(audit.Structured)))
 				// A refusal the worker cannot act on must stop the loop rather
 				// than drive it. An audit that could not run objects to the
@@ -5214,7 +6105,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		case roles.Revise:
 			e.setOpenReview(taskID, openReviewFrom(review, e.reviewAttempt(taskID), evidence.DiffDigest, evidenceID))
 			feedback = review.Instruction()
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "review requested bounded revision; continuing autonomously", map[string]int{"cycle": cycle}))
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "review requested bounded revision; continuing autonomously", map[string]int{"cycle": cycle}))
 		case roles.Escalate:
 			// The architect's resolution is the adjudication; nothing stays open.
 			e.clearOpenReview(taskID)
@@ -5229,7 +6120,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			if strings.TrimSpace(revised.Plan) == "" {
 				return candidateNotConverged, plan, lastReview, lastAudit, errors.New("architect did not return a revised bounded plan")
 			}
-			e.recordReconciliation(taskID, binding, roles.Reconciliation{
+			e.recordReconciliation(ctx, taskID, binding, roles.Reconciliation{
 				Disputed: "the reviewer raised an architectural boundary: " + review.Summary,
 				Inputs: []roles.Claim{
 					{Agent: review.Provenance.Provider, Role: roles.Reviewer, Position: review.Summary},
@@ -5243,7 +6134,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// THE SAME OPERATIVE TRANSITION an initial plan takes: one durable
 			// PlanProposed bound to the revision's plan attempt, which supersedes the
 			// previous attempt and its grant state, and the whole scope moves with it.
-			if _, err := e.adoptPlanAttempt(taskID, task, revised); err != nil {
+			if _, err := e.adoptPlanAttempt(ctx, taskID, task, revised); err != nil {
 				return candidateNotConverged, plan, lastReview, lastAudit, err
 			}
 			applyPlanScope(tc, revised)
@@ -5774,9 +6665,9 @@ func (e *Engine) guardProposal(taskID string, d architectureDecision) error {
 func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, supplied SuppliedPlan) (_ architectureDecision, err error) {
 	// A refusal of its attempt is recorded once against it, by the one
 	// recorder; every other way this admission ends is returned as it is.
-	defer func() { err = e.closePlanAdmission(taskID, err) }()
+	defer func() { err = e.closePlanAdmission(ctx, taskID, err) }()
 	d := supplied.decision
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 		"the plan was supplied with the task (sha256 "+supplied.Digest+"); the architect is not consulted for it, and it is routed as any plan is", nil))
 	// The bound is named before routing can terminate this run, by routePlan's
 	// first act (beginPlanAttempt).
@@ -5814,14 +6705,14 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 			if !authorized {
 				return architectureDecision{}, refusePlanAdmission(refusalAuthorityDeclined, nil, fmt.Errorf("the human declined this architectural change and the plan still requires it: %s", routing.Condition))
 			}
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				"proceeding on the human's earlier authorization for: "+routing.Condition, nil))
 			if err := unexaminedAfterAnswer(); err != nil {
 				return architectureDecision{}, err
 			}
 			return d, nil
 		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
 		if _, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition, routing.Gap); err != nil {
 			return architectureDecision{}, err
 		}
@@ -5880,7 +6771,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			// look like unavailable either.
 			return architectureDecision{}, err
 		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.RoleAssigned,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.RoleAssigned,
 			fmt.Sprintf("%s takes the architect role", architect.Label),
 			map[string]any{
 				"role": roles.Architect, "provider": architect.Name,
@@ -5903,7 +6794,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			// and a plan attempt it routed and REFUSED is refused on the record,
 			// against that attempt. Only a refusal is recorded as
 			// one; every other outcome is returned as the failure it is.
-			err = e.closePlanAdmission(taskID, err)
+			err = e.closePlanAdmission(ctx, taskID, err)
 			return architectureDecision{}, err
 		}
 		// A resolution round may have rewritten the question before this entry
@@ -5912,7 +6803,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 		prompt = notObtained.prompt
 		attempted = append(attempted, roles.ArchitectAttemptFailure{Provider: architect.Name, Cause: notObtained.cause})
 		if position+1 < len(roster) {
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				architect.Label+" could not be obtained for the architect turn; trying the next architect on the roster",
 				map[string]string{"error": notObtained.cause.Error()}))
 		}
@@ -6114,7 +7005,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 		if position > 0 {
 			p += architectRosterIdentity(architect.Label)
 		}
-		result, err := architect.Runner.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: workspace, Prompt: p, Graph: e.graphFor(taskID)}, e.emit)
+		result, err := architect.Runner.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: workspace, Prompt: p, Graph: e.graphFor(taskID)}, e.emitterFor(ctx))
 		if err != nil {
 			// A CALLER STOP IS NOT PERMISSION TO ASK SOMEBODY ELSE.
 			//
@@ -6199,7 +7090,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			if err != nil {
 				// A typed refusal of THIS plan returns to the architect once,
 				// as bounded evidence; nothing else continues from here.
-				refusal, err := e.continueAfterAdmissionRefusal(taskID, err)
+				refusal, err := e.continueAfterAdmissionRefusal(ctx, taskID, err)
 				if err != nil {
 					return architectureDecision{}, err
 				}
@@ -6242,7 +7133,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 				// holds. If the gap did not close, the budget is spent and the
 				// next pass falls through to the human branch below with the
 				// condition intact.
-				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+				e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"bounded knowledge gap; closing it before governance runs again: "+routing.Condition, map[string]any{"gap": receipt.ID, "gap_identity": routing.Gap}))
 				if err := newRound("a bounded knowledge gap"); err != nil {
 					return architectureDecision{}, err
@@ -6257,12 +7148,13 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 				// explicit answer already settled is not re-escalated: its
 				// settlement is consumed below.
 				if !resolution.Settled {
-					e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 						"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
-					e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds.count())
+					e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds.count(), ctx)
 				}
 				var limited error
 				if routing, limited = e.disposeUnclosedGap(taskID, start.Domain(), routing, action); limited != nil {
+					e.reportKnowledgeLimit(ctx, taskID, routing, limited)
 					return architectureDecision{}, limited
 				}
 				fallthrough
@@ -6282,7 +7174,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 						return architectureDecision{}, refusePlanAdmission(refusalAuthorityDeclined, nil, fmt.Errorf(
 							"the human declined this architectural change and the plan still requires it: %s", routing.Condition))
 					}
-					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 						"proceeding on the human's earlier authorization for: "+routing.Condition, nil))
 					// The answer was about the consequence. Files the graph
 					// never examined are asked about now, and an open gap
@@ -6305,14 +7197,15 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 							// every exhausted gap reaches: whether to proceed with
 							// it open is the human's, asked once and honoured.
 							if !gapResolution.Settled {
-								e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+								e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 									"the knowledge gap did not close; escalating with it open: "+gap.Condition, nil))
-								e.recordClosureQuestion(taskID, gap.Condition, d, start, architect.Label, rounds.count())
+								e.recordClosureQuestion(taskID, gap.Condition, d, start, architect.Label, rounds.count(), ctx)
 							}
 							// The one typed disposal of an exhausted gap, as on the
 							// proceed and escalate routes: never a manual conversion.
 							stillOpen, limited := e.disposeExhaustedGap(taskID, start.Domain(), gap, probed)
 							if limited != nil {
+								e.reportKnowledgeLimit(ctx, taskID, stillOpen, limited)
 								return architectureDecision{}, limited
 							}
 							authorized, asked := e.gapSettlement(taskID, stillOpen)
@@ -6324,11 +7217,11 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 									return architectureDecision{}, refusePlanAdmission(refusalAuthorityDeclined, nil, fmt.Errorf(
 										"the human declined to proceed with the gap open and the plan still requires it: %s", stillOpen.Condition))
 								}
-								e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+								e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 									"proceeding on the human's earlier authorization for: "+stillOpen.Condition, nil))
 								return d, nil
 							}
-							e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(stillOpen), nil))
+							e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(stillOpen), nil))
 							choice, err := e.awaitHuman(ctx, sc, start, taskID, d, stillOpen.Condition, stillOpen.Gap)
 							if err != nil {
 								return architectureDecision{}, err
@@ -6340,7 +7233,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 							attempt = 0
 							continue
 						}
-						e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+						e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 							"authorised, and a bounded knowledge gap the answer did not cover remains; closing it before governance runs again: "+gap.Condition, map[string]any{"gap": receipt.ID, "gap_identity": gap.Gap}))
 						if err := newRound("a bounded knowledge gap"); err != nil {
 							return architectureDecision{}, err
@@ -6351,7 +7244,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 					}
 					return d, nil
 				}
-				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
+				e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
 				choice, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition, routing.Gap)
 				if err != nil {
 					return architectureDecision{}, err
@@ -6381,7 +7274,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			if err != nil {
 				// A typed refusal of THIS plan returns to the architect once,
 				// as bounded evidence; nothing else continues from here.
-				refusal, err := e.continueAfterAdmissionRefusal(taskID, err)
+				refusal, err := e.continueAfterAdmissionRefusal(ctx, taskID, err)
 				if err != nil {
 					return architectureDecision{}, err
 				}
@@ -6410,13 +7303,13 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 				// While an identity is open for this task and world, the gap's
 				// own question stands; with none open the shortcut is unchanged.
 				if open, ok := e.openGap(taskID, strings.TrimSpace(e.governedBase(taskID))); ok {
-					e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 						"architect asked to escalate while a bounded knowledge gap is open for this task; certifying a "+
 							"differently shaped plan does not settle it, so the gap's own question stands: "+open.Routing.Condition,
 						map[string]any{"gap_identity": open.Gap}))
 					routing, resolution = open.Routing, open
 				} else {
-					e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 						"architect asked to escalate; Sensei certifies this region, so it is resolved architecturally", nil))
 					if err := newRound("an escalation into a region Sensei certifies"); err != nil {
 						return architectureDecision{}, err
@@ -6432,7 +7325,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			if routing.ClosesGap() {
 				receipt := e.premiseReceiptFor(taskID, routing, routing.ClaimGap)
 				if !resolution.Settled && e.spendClosure(taskID, receipt.ID) {
-					e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 						"the architect asked to escalate a bounded knowledge gap; closing it instead: "+routing.Condition, map[string]any{"gap": receipt.ID, "gap_identity": routing.Gap}))
 					if err := newRound("a bounded knowledge gap"); err != nil {
 						return architectureDecision{}, err
@@ -6442,12 +7335,13 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 					continue
 				}
 				if !resolution.Settled {
-					e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 						"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
-					e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds.count())
+					e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds.count(), ctx)
 				}
 				var limited error
 				if routing, limited = e.disposeUnclosedGap(taskID, start.Domain(), routing, action); limited != nil {
+					e.reportKnowledgeLimit(ctx, taskID, routing, limited)
 					return architectureDecision{}, limited
 				}
 			}
@@ -6467,7 +7361,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 				attempt = 0
 				continue
 			}
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
 			choice, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition, routing.Gap)
 			if err != nil {
 				return architectureDecision{}, err
@@ -6531,21 +7425,21 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 			continue
 		}
 		e.noteReviewerAssigned(taskID, cfg.Name)
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.RoleAssigned,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.RoleAssigned,
 			fmt.Sprintf("%s takes the reviewer role in a session that inherits nothing", config.DisplayName(cfg.Name)),
 			map[string]any{
 				"role": roles.Reviewer, "provider": cfg.Name, "session": roles.Fresh,
 				"excluded": implementer, "candidate": packet.Provenance.CandidateDigest, "review_attempt": attempt,
 			}))
-		e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.ReviewStarted,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceReviewer, event.ReviewStarted,
 			"independent review of candidate "+shortDigest(packet.Provenance.CandidateDigest),
 			map[string]any{"candidate": packet.Provenance.CandidateDigest, "review_attempt": attempt}))
 
 		result, err := e.askReviewer(ctx, taskID, cfg, packet, binding, implementer)
 		if err == nil {
-			e.reportReview(taskID, result.Verdict())
+			e.reportReview(ctx, taskID, result.Verdict())
 			if result.Advisory() {
-				e.reportAdvisory(taskID, result.Verdict())
+				e.reportAdvisory(ctx, taskID, result.Verdict())
 			}
 			return result, nil
 		}
@@ -6600,7 +7494,7 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 			return ReviewResult{}, fmt.Errorf("the review was stopped by its caller: %w", cerr)
 		}
 
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			config.DisplayName(cfg.Name)+" could not produce a bounded review; trying the next independent reviewer",
 			map[string]string{"error": err.Error()}))
 	}
@@ -6666,7 +7560,7 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 		result, err := reviewer.Runner.Run(ctx, agent.Request{
 			Role: roles.Reviewer, TaskID: taskID, Workspace: e.Repo.Root, Prompt: p,
 			Session: roles.Fresh, Graph: e.graphFor(taskID), Binding: binding,
-		}, e.emit)
+		}, e.emitterFor(ctx))
 		if err != nil {
 			return ReviewResult{}, err
 		}
@@ -6710,7 +7604,7 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 				return ReviewResult{}, fmt.Errorf("%w: %v", errReviewRefused, refused)
 			}
 			// Advisory unless a recorded human override covers this exact review.
-			standing := e.attestedOrAdvisory(taskID, advisory, result.ReviewDigest)
+			standing := e.attestedOrAdvisory(ctx, taskID, advisory, result.ReviewDigest)
 			if refused := standing.Refused(); refused != nil {
 				return ReviewResult{}, fmt.Errorf("%w: %v", errReviewRefused, refused)
 			}
@@ -6776,10 +7670,10 @@ func (e *Engine) AdvisoryObligations(taskID string) []string {
 // thing that must not happen is an advisory ACCEPT being counted later as an
 // independent one. The obligation it does not discharge is named in the same
 // breath as the verdict that did not discharge it.
-func (e *Engine) reportAdvisory(taskID string, v roles.ReviewVerdict) {
+func (e *Engine) reportAdvisory(ctx context.Context, taskID string, v roles.ReviewVerdict) {
 	advisory := roles.NewAdvisory(v)
 	policy := e.policyFor(taskID)
-	e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.Status,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceReviewer, event.Status,
 		advisory.Describe(), map[string]any{
 			"review_kind":                  "advisory",
 			"independent_review":           false,
@@ -6822,13 +7716,13 @@ func reviewIsInadmissible(v roles.ReviewVerdict, b roles.Binding, implementer st
 // reportReview writes the review into the record as findings rather than as one
 // line. A review compressed to a sentence loses the only part a worker can act
 // on, and the compression is invisible afterwards.
-func (e *Engine) reportReview(taskID string, v roles.ReviewVerdict) {
+func (e *Engine) reportReview(ctx context.Context, taskID string, v roles.ReviewVerdict) {
 	e.noteReviewDelivered(taskID, v.Provenance.Provider, string(v.Decision),
 		v.Provenance.CandidateDigest, v.Provenance.CandidateTree)
 	for _, f := range v.Findings {
-		e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.ReviewFinding, f.Line(), f))
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceReviewer, event.ReviewFinding, f.Line(), f))
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.ReviewCompleted,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceReviewer, event.ReviewCompleted,
 		strings.ToUpper(string(v.Decision))+": "+v.Summary+"  ("+v.Provenance.Describe()+")", v))
 }
 
@@ -7483,7 +8377,7 @@ func shortDigest(d string) string {
 func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, d architectureDecision) (Routing, sensei.PreflightDecision, Action, error) {
 	// The plan attempt is recorded before anything is derived for it, so every
 	// grant and refusal below binds to its identity.
-	if _, err := e.beginPlanAttempt(taskID, task, d); err != nil {
+	if _, err := e.beginPlanAttempt(ctx, taskID, task, d); err != nil {
 		return Routing{}, sensei.PreflightDecision{}, Action{}, err
 	}
 	args := map[string]any{"task": task, "files": d.Files, "mode": "compact"}
@@ -7510,7 +8404,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// that records the answer without the question cannot support the review it
 	// exists to trigger. Emitted BEFORE decoding, so a decode failure still
 	// leaves the question on the record.
-	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult,
 		firstText(result), e.preflightRecord(args, result.Structured, subjectRevision, sensei.PreflightGraphDigest(result))))
 	scoped, err := sensei.DecodePreflight(result)
 	if err != nil {
@@ -7638,7 +8532,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 			// The attempt's COMPLETE grant state, derived and authored together:
 			// the newest record for an attempt is the whole of it. Installed
 			// only once that record is written.
-			if err := e.recordTestEditGrants(taskID,
+			if err := e.recordTestEditGrants(ctx, taskID,
 				"existing-test edit authority recorded from AUTHORED production governance: "+
 					strings.Join(operationalFiles(extra), ", "),
 				testEditRecord{PlanAttemptID: e.pendingPlanAttempt(taskID).ID, World: extra[0].World, Grants: merged}); err != nil {
@@ -7680,7 +8574,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		for _, c := range contradicted {
 			statements = append(statements, strings.TrimSpace(c.Statement))
 		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			"architect-plan inconsistency: the plan claims grant authority is unestablished that this run recorded for plan attempt "+
 				short12(e.pendingPlanAttempt(taskID).ID)+"; the recorded grants govern routing: "+strings.Join(statements, "; "),
 			map[string]any{"plan_attempt_id": e.pendingPlanAttempt(taskID).ID, "contradicted_premises": contradicted}))
@@ -7721,7 +8615,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		if un := action.unexaminedArchitecturalFiles(); len(un) != 0 {
 			summary += fmt.Sprintf("\n  unexamined by the graph: %d file(s): %s", len(un), strings.Join(un, ", "))
 		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, summary,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status, summary,
 			map[string]any{
 				"derived_coverage_anchors": len(action.DerivedCoverage),
 				"planned_files":            len(d.Files),
@@ -7748,7 +8642,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	if _, err := e.recordedObjective(taskID); err != nil {
 		return Routing{}, sensei.PreflightDecision{}, Action{}, err
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 		StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing, d).Render(), nil))
 
 	return routing, scoped, action, nil
@@ -8192,12 +9086,12 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 	if len(names) == 0 {
 		summary = "no existing-test edit authority for this plan attempt (an explicit empty grant set)"
 	}
-	if err := e.recordTestEditGrants(taskID, summary, testEditRecord{PlanAttemptID: attempt, World: c.world, Grants: c.edits}); err != nil {
+	if err := e.recordTestEditGrants(ctx, taskID, summary, testEditRecord{PlanAttemptID: attempt, World: c.world, Grants: c.edits}); err != nil {
 		return nil
 	}
 	e.setTestEditGrants(taskID, c.edits)
 	for _, r := range c.reasons {
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "no test-edit authority: "+r, nil))
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "no test-edit authority: "+r, nil))
 	}
 	surfaces := make([]string, 0, len(c.prospective))
 	for _, g := range c.prospective {
@@ -8210,7 +9104,7 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 	// The authorization is recorded verbatim, bound to the world it was read
 	// at, so a task resumed after a restart inspects its created files against
 	// these facts and not against a fresh read.
-	if err := e.recordProspectiveGrants(taskID, summary, prospectiveRecord{PlanAttemptID: attempt, World: c.world, Grants: c.prospective}); err != nil {
+	if err := e.recordProspectiveGrants(ctx, taskID, summary, prospectiveRecord{PlanAttemptID: attempt, World: c.world, Grants: c.prospective}); err != nil {
 		return nil
 	}
 	e.setProspectiveGrants(taskID, c.prospective)
@@ -8479,7 +9373,7 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 		delete(e.pending, taskID)
 		e.mu.Unlock()
 	}()
-	e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.AuthorityRequired, decision.Subject, decision))
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceArchitect, event.AuthorityRequired, decision.Subject, decision))
 
 	select {
 	case <-ctx.Done():
@@ -8512,7 +9406,7 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 				// nothing. It is preserved exactly as it stands and the run ends
 				// awaiting authority, which is what a refused answer means.
 				if refusal := e.refuseUnprovenAuthority(taskID, option); refusal != nil {
-					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, refusal.Error(), nil))
+					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status, refusal.Error(), nil))
 					e.preserveQuestion(ctx, taskID, condition, domain, baseSHA, decision,
 						"the answer was refused and the question stands: its authority scope cannot be proven", scope)
 					return "", refusal
@@ -8526,7 +9420,7 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 				// pull request -- and filing those as proposed contracts would
 				// fill Sensei's review queue with restatements of the UI.
 				if strings.TrimSpace(condition) == "" {
-					e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.AuthorityResolved, option.Label, map[string]string{"option": option.ID}))
+					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceUser, event.AuthorityResolved, option.Label, map[string]string{"option": option.ID}))
 				} else {
 					resolution := authority.Resolution{
 						TaskID: taskID, SessionID: e.SessionID, Domain: domain, BaseSHA: baseSHA,
@@ -8553,8 +9447,8 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 						resolved.Gap = &gap
 						e.settleGapFor(taskID, gap, resolution.Outcome, resolved.PlanAttemptID)
 					}
-					e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.AuthorityResolved, option.Label, resolved))
-					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, resolution.Summary(), resolution))
+					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceUser, event.AuthorityResolved, option.Label, resolved))
+					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status, resolution.Summary(), resolution))
 				}
 
 				if option.Outcome == authority.Stop {
@@ -9287,9 +10181,12 @@ func renderScope(files []string) string {
 //
 // Every outcome is emitted, including refusal and duplication. A round that
 // writes nothing must be as visible as one that writes something, or the
-// experiment measuring this loop would only ever see its successes.
+// experiment measuring this loop would only ever see its successes. Each is
+// recorded on behalf of the invocation ctx belongs to; ctx comes last only so
+// every call site keeps the shape TestAnExhaustedPostAuthorizationGapEscalates
+// counts, the task first.
 func (e *Engine) recordClosureQuestion(taskID, condition string, d architectureDecision,
-	start certifiedStart, model string, round int) {
+	start certifiedStart, model string, round int, ctx context.Context) {
 
 	graph := map[string]string{}
 	if a := start.workspace.GraphAuthority; a != nil {
@@ -9313,14 +10210,14 @@ func (e *Engine) recordClosureQuestion(taskID, condition string, d architectureD
 	}
 	defer func() {
 		if err := derived.AppendReceipt(filepath.Join(e.Repo.Root, ownedReceiptsPath), receipt); err != nil {
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 				"could not record the inference receipt: "+err.Error(), nil))
 		}
 	}()
 
 	if d.ProposedRecipe == nil {
 		receipt.Outcome = derived.OutcomeNoProposal
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 			"the closure round proposed no checkable question for this region", nil))
 		return
 	}
@@ -9354,15 +10251,15 @@ func (e *Engine) recordClosureQuestion(taskID, condition string, d architectureD
 	switch {
 	case err != nil:
 		receipt.Outcome, receipt.Detail = derived.OutcomeRefused, err.Error()
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 			"the proposed question was refused: "+err.Error(), nil))
 	case !added:
 		receipt.Outcome = derived.OutcomeDuplicate
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 			"this question is already recorded; not duplicating it: "+r.String(), nil))
 	default:
 		receipt.Outcome = derived.OutcomeRecorded
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 			"recorded a question for the next encounter with this region: "+r.String(), nil))
 	}
 }
@@ -9605,7 +10502,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 		fail(fmt.Errorf("create the candidate worktree: %w", createErr))
 		return
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, identity.Summary(), identity))
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceGit, event.Status, identity.Summary(), identity))
 
 	// The semantic position of the task, kept so a change of worker does not
 	// restart the thinking. It is rebuilt from what is known now rather than
@@ -9645,7 +10542,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 		// work it could not review. Independence is not recoverable afterwards, so
 		// the exclusion is applied at selection.
 		if reason, excluded := e.implementerExcluded(taskID, worker.Name, continuing); excluded {
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				config.DisplayName(worker.Name)+" is not eligible to implement this candidate: "+reason, nil))
 			ineligible = append(ineligible, worker.Name+": "+reason)
 			continue
@@ -9654,7 +10551,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 		state.Phase = taskstate.Implementing
 		_ = state.Save(e.Repo.Root)
 		if carried != "" {
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				config.DisplayName(worker.Name)+" is continuing the existing candidate, not starting over", nil))
 		}
 		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, start, taskID, tc, plan, worker, workspace, carried)
@@ -9734,8 +10631,8 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			state.Evidence = tc.EvidenceSnapshot
 			state.OpenFindings(openFindingsWith(review, audit, nil, []string{obligation}))
 			_ = state.Save(e.Repo.Root)
-			e.reportUndeliveredNotes(taskID)
-			e.emitRunTerminal(taskID, event.WorkflowAwaitingReview, event.SourceReviewer,
+			e.reportUndeliveredNotes(ctx, taskID)
+			e.emitRunTerminal(ctx, taskID, event.WorkflowAwaitingReview, event.SourceReviewer,
 				runreceipt.OutcomeUnreviewed, e.candidateStateFor(taskID),
 				"the candidate stands, validated and audited; its review request got no answer before its deadline, "+
 					"so it is preserved awaiting review",
@@ -9774,8 +10671,8 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			state.Evidence = tc.EvidenceSnapshot
 			state.OpenFindings(openFindingsWith(review, audit, nil, []string{obligation}))
 			_ = state.Save(e.Repo.Root)
-			e.reportUndeliveredNotes(taskID)
-			e.emitRunTerminal(taskID, event.WorkflowAwaitingReview, event.SourceReviewer,
+			e.reportUndeliveredNotes(ctx, taskID)
+			e.emitRunTerminal(ctx, taskID, event.WorkflowAwaitingReview, event.SourceReviewer,
 				runreceipt.OutcomeUnreviewed, e.candidateStateFor(taskID),
 				"the candidate stands, validated and audited; no authorized reviewer could be reached, "+
 					"so it is preserved awaiting a fresh review request",
@@ -9794,7 +10691,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 		if ctx.Err() != nil {
 			state.OpenFindings(openFindings(review, audit, err))
 			_ = state.Save(e.Repo.Root)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				"the run was stopped by its caller, so the candidate is preserved and no other participant is asked",
 				map[string]any{"handoff": false, "stopped_by_caller": true}))
 			fail(fmt.Errorf("the run was stopped by its caller: %w", ctx.Err()))
@@ -9858,8 +10755,8 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			state.Evidence = tc.EvidenceSnapshot
 			state.OpenFindings(openFindingsWith(review, audit, nil, []string{obligation}))
 			_ = state.Save(e.Repo.Root)
-			e.reportUndeliveredNotes(taskID)
-			e.emitRunTerminal(taskID, event.WorkflowAwaitingReview, event.SourceReviewer,
+			e.reportUndeliveredNotes(ctx, taskID)
+			e.emitRunTerminal(ctx, taskID, event.WorkflowAwaitingReview, event.SourceReviewer,
 				runreceipt.OutcomeUnreviewed, e.candidateStateFor(taskID), summary, payload)
 			return
 		}
@@ -9876,7 +10773,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			// unobjected code is the category error #180 fixed one layer down.
 			state.OpenFindings(openFindings(review, audit, err))
 			_ = state.Save(e.Repo.Root)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				"the review lifecycle for this candidate could not proceed, so the candidate is preserved and "+
 					"no other participant is asked: "+err.Error(),
 				map[string]any{
@@ -9903,7 +10800,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			// as having failed and no handoff is written: it produced nothing
 			// to hand on and nothing about the candidate is in question.
 			unavailable = append(unavailable, blocked)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				config.DisplayName(worker.Name)+" could not serve the implementer turn ("+blocked.Cause.Reason+
 					"); the candidate is kept as it stands and the next configured implementor is tried",
 				map[string]any{"handoff": false, "provider_unavailable": true}))
@@ -9979,7 +10876,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				return
 			}
 			carried = handoff.Render()
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.HandoffCreated,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.HandoffCreated,
 				config.DisplayName(worker.Name)+" did not converge; the candidate and its unanswered findings pass to the next bounded worker",
 				handoff))
 			continue
@@ -10000,8 +10897,8 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			state.Evidence = tc.EvidenceSnapshot
 			state.OpenFindings(openFindingsWith(review, audit, nil, e.AdvisoryObligations(taskID)))
 			_ = state.Save(e.Repo.Root)
-			e.reportUndeliveredNotes(taskID)
-			e.emitRunTerminal(taskID, event.WorkflowAwaitingReview, event.SourceReviewer,
+			e.reportUndeliveredNotes(ctx, taskID)
+			e.emitRunTerminal(ctx, taskID, event.WorkflowAwaitingReview, event.SourceReviewer,
 				runreceipt.OutcomeReviewObligationUnmet, e.candidateStateFor(taskID),
 				"the candidate stands and this task's required independent review has not happened; "+
 					"it is preserved awaiting one",
@@ -10032,7 +10929,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			// "accepted" is the receipt this project exists to refuse.
 			state.OpenFindings(openFindingsWith("", "", nil, e.AdvisoryObligations(taskID)))
 			_ = state.Save(e.Repo.Root)
-			e.reportUndeliveredNotes(taskID)
+			e.reportUndeliveredNotes(ctx, taskID)
 
 			// A read-only plan produced findings and no candidate. There is
 			// nothing to publish and nothing to retain: offering a pull request
@@ -10044,7 +10941,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				e.reportOutcome(ctx, "success", task, "read-only plan completed; findings are in the transcript")
 				e.disposeIfEmpty(ctx, taskID, identity, tc, workspace,
 					"read-only plan: the candidate was never meant to hold work")
-				e.emitRunTerminal(taskID, event.WorkflowCompleted, event.SourceSystem,
+				e.emitRunTerminal(ctx, taskID, event.WorkflowCompleted, event.SourceSystem,
 					e.reviewedOutcome(taskID), runreceipt.CandidateNone,
 					"read-only plan completed with no change to the repository", map[string]any{
 						"implementor": worker.Name,
@@ -10062,12 +10959,12 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			// so the deferred question was filtered out of /resume immediately
 			// after the interface promised to ask it again.
 			if !published.Settled() {
-				e.resolveCandidate(taskID, identity, tc, candidate.Resolution{
+				e.resolveCandidate(ctx, taskID, identity, tc, candidate.Resolution{
 					Disposition: candidate.Resumable,
 					Reason:      "accepted by review; the publication decision is still open",
 				})
 				if published.State == stopped {
-					e.emitRunTerminal(taskID, event.WorkflowStopped, event.SourceUser,
+					e.emitRunTerminal(ctx, taskID, event.WorkflowStopped, event.SourceUser,
 						runreceipt.OutcomeStopped, e.candidateStateFor(taskID),
 						"stopped while the publication decision was open; the candidate is left as it stands", nil)
 				}
@@ -10095,7 +10992,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				outcome, summary = "failure", "publication did not complete: "+published.Err.Error()
 			}
 			e.reportOutcome(ctx, outcome, task, summary)
-			e.resolveCandidate(taskID, identity, tc, disposition)
+			e.resolveCandidate(ctx, taskID, identity, tc, disposition)
 			// Exactly one terminal event. A failed publication used to emit
 			// WorkflowFailed and then WorkflowCompleted for the same run.
 			terminalPayload := map[string]any{
@@ -10107,10 +11004,10 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				"publication": string(published.State),
 			}
 			if published.State == failed {
-				e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
+				e.emitRunTerminal(ctx, taskID, event.WorkflowFailed, event.SourceSystem,
 					runreceipt.OutcomeFailed, e.candidateStateFor(taskID), summary, terminalPayload)
 			} else {
-				e.emitRunTerminal(taskID, event.WorkflowCompleted, event.SourceSystem,
+				e.emitRunTerminal(ctx, taskID, event.WorkflowCompleted, event.SourceSystem,
 					e.reviewedOutcome(taskID), e.candidateStateFor(taskID), summary, terminalPayload)
 			}
 			return
@@ -10122,7 +11019,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	// waits -- and the candidate is NOT disposed of, however empty, because the
 	// resumed task continues from it.
 	if len(unavailable) > 0 && len(failures) == 0 {
-		e.reportUndeliveredNotes(taskID)
+		e.reportUndeliveredNotes(ctx, taskID)
 		fail(unavailable[len(unavailable)-1])
 		return
 	}
@@ -10137,7 +11034,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	// because deleting it would destroy something recoverable, and one holding
 	// nothing is removed because keeping it would leave a directory of things
 	// that mean nothing in particular. Neither branch is a default.
-	e.reportUndeliveredNotes(taskID)
+	e.reportUndeliveredNotes(ctx, taskID)
 	e.disposeIfEmpty(ctx, taskID, identity, tc, workspace,
 		"no bounded implementor converged and the candidate holds no work")
 	// Every failure was a spent review budget, and nothing else went wrong: the
@@ -10146,7 +11043,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	if len(failures) > 0 && len(exhausted) == len(failures) && len(unavailable) == 0 {
 		state.Phase = taskstate.Revising
 		_ = state.Save(e.Repo.Root)
-		e.endNotConverged(taskID, NotConverged{
+		e.endNotConverged(ctx, taskID, NotConverged{
 			TaskID: taskID, Implementers: exhausted,
 			ReviewCycles: e.Config.Workflow.ReviewCycles, Owed: OwedArchitectReplan,
 		})
@@ -10222,7 +11119,7 @@ func (e *Engine) returnProductionScopeRefusal(ctx context.Context, sc *sensei.Cl
 	if rec, ok := e.admissionRefusalOf(taskID, cause); ok {
 		e.armRefusedMaterial(taskID, refusedScopeMaterial{refusalID: rec.RefusalID, identity: identity, evidence: tc.EvidenceSnapshot})
 	}
-	refusal, err := e.continueAfterAdmissionRefusal(taskID, cause)
+	refusal, err := e.continueAfterAdmissionRefusal(ctx, taskID, cause)
 	if err != nil {
 		fail(err)
 		return "", scopeRefusalFailed
@@ -10236,7 +11133,7 @@ func (e *Engine) returnProductionScopeRefusal(ctx context.Context, sc *sensei.Cl
 		e.planAttemptsOf(taskID).proposalGuard = nil
 		e.mu.Unlock()
 	}()
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 		"the candidate's production scope was refused; the candidate is preserved as non-authoritative material and the "+
 			"typed scope refusal returns to the architect: "+refusal.Reason,
 		refusal))
@@ -10253,12 +11150,12 @@ func (e *Engine) returnProductionScopeRefusal(ctx context.Context, sc *sensei.Cl
 		// and the recorded refusal stays a refusal of the plan's scope. Its
 		// disposition is settled before the architect's answer is emitted, so
 		// an unrecordable one fails the run instead of completing it.
-		if err := e.settleRefusedMaterial(taskID, event.WorkflowCompleted, event.SourceSystem, runreceipt.OutcomeUnreviewed); err != nil {
+		if err := e.settleRefusedMaterial(ctx, taskID, event.WorkflowCompleted, event.SourceSystem, runreceipt.OutcomeUnreviewed); err != nil {
 			fail(err)
 			return "", scopeRefusalFailed
 		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke, revised.Message, revised))
-		e.emitRunTerminal(taskID, event.WorkflowCompleted, event.SourceSystem,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke, revised.Message, revised))
+		e.emitRunTerminal(ctx, taskID, event.WorkflowCompleted, event.SourceSystem,
 			runreceipt.OutcomeUnreviewed, e.candidateStateFor(taskID),
 			"the architect stopped the objective in answer to production-scope refusal "+short12(refusal.RefusalID)+
 				"; the refused candidate is preserved as non-authoritative material and the refusal stands as a refusal of the plan's scope",
@@ -10270,7 +11167,7 @@ func (e *Engine) returnProductionScopeRefusal(ctx context.Context, sc *sensei.Cl
 			"the refusal refused the plan's scope, not the objective: %s", short12(refusal.RefusalID), oneLine(revised.Message)))
 		return "", scopeRefusalFailed
 	}
-	if _, err := e.adoptPlanAttempt(taskID, tc.Task, revised); err != nil {
+	if _, err := e.adoptPlanAttempt(ctx, taskID, tc.Task, revised); err != nil {
 		fail(err)
 		return "", scopeRefusalFailed
 	}
@@ -10281,7 +11178,7 @@ func (e *Engine) returnProductionScopeRefusal(ctx context.Context, sc *sensei.Cl
 	// No validation standing of the refused candidate survives into the
 	// replacement's account; the task's required tests are not its standing.
 	tc.EvidenceSnapshot = taskstate.Evidence{RequiredTests: tc.EvidenceSnapshot.RequiredTests}
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 		"the replacement plan is operative; the next candidate is validated and reviewed anew under it: "+scopeSummary(*tc), nil))
 	return revised.Plan, scopeRefusalReplanned
 }
@@ -10324,26 +11221,37 @@ func refusedMaterialDisposition(source event.Source, outcome runreceipt.Outcome)
 }
 
 // settleRefusedMaterial disposes of the task's pending refused material, if
-// any, through resolveCandidate, exactly once: the record is consumed whether
-// or not the write succeeds, and a write that fails is returned, naming the
-// refusal, for the caller to end the run failed with.
-func (e *Engine) settleRefusedMaterial(taskID string, kind event.Kind, source event.Source, outcome runreceipt.Outcome) error {
-	e.mu.Lock()
-	t := e.planAttemptsOf(taskID)
-	m := t.refusedMaterial
-	t.refusedMaterial = nil
-	e.mu.Unlock()
-	if m == nil {
+// any, on behalf of exactly the invocation ctx belongs to, as the terminal it
+// precedes is (emitRunTerminal). The invocation is validated, and the task's
+// operation guard entered (withOperationGuard), before the material is read:
+// a nil, stale or superseded producer is refused, typed, and leaves the
+// material, the candidate, the record and the bus as they were (RULING-198).
+// The material is let go only once its disposition and the durable
+// CandidateResolved evidence of it are committed; a disposition that cannot
+// be recorded is returned, naming the refusal, for the caller to end the run
+// failed with, and the material stays pending.
+func (e *Engine) settleRefusedMaterial(ctx context.Context, taskID string, kind event.Kind, source event.Source, outcome runreceipt.Outcome) error {
+	return e.withOperationGuard(ctx, taskID, func(emit func(ev event.Event, durable bool) error) error {
+		e.mu.Lock()
+		m := e.planAttemptsOf(taskID).refusedMaterial
+		e.mu.Unlock()
+		if m == nil {
+			return nil
+		}
+		if _, ok := e.resolveHeld(emit, taskID, m.identity, &taskContext{EvidenceSnapshot: m.evidence}, candidate.Resolution{
+			Disposition: refusedMaterialDisposition(source, outcome),
+			Reason: "refused for production scope (refusal " + m.refusalID + ") and the invocation ended " + string(kind) +
+				"; kept as non-authoritative material with no validation, review or receipt standing",
+		}); !ok {
+			return fmt.Errorf("the material refused for production scope (refusal %s) has no recorded disposition", m.refusalID)
+		}
+		e.mu.Lock()
+		if t := e.planAttemptsOf(taskID); t.refusedMaterial == m {
+			t.refusedMaterial = nil
+		}
+		e.mu.Unlock()
 		return nil
-	}
-	if _, ok := e.resolveCandidate(taskID, m.identity, &taskContext{EvidenceSnapshot: m.evidence}, candidate.Resolution{
-		Disposition: refusedMaterialDisposition(source, outcome),
-		Reason: "refused for production scope (refusal " + m.refusalID + ") and the invocation ended " + string(kind) +
-			"; kept as non-authoritative material with no validation, review or receipt standing",
-	}); !ok {
-		return fmt.Errorf("the material refused for production scope (refusal %s) has no recorded disposition", m.refusalID)
-	}
-	return nil
+	})
 }
 
 // refusedMaterialEvidence is the only evidence a candidate refused for
@@ -10506,16 +11414,69 @@ func observeCandidate(ctx context.Context, workspace, baseSHA string) observatio
 // A disposition that fails to record is reported rather than swallowed: the
 // whole point is that a candidate can say why it is still here, and a silent
 // failure returns it to meaning nothing.
-func (e *Engine) resolveCandidate(taskID string, identity candidate.Identity, tc *taskContext, r candidate.Resolution) (candidate.Identity, bool) {
+//
+// It is made on behalf of exactly the invocation ctx belongs to, under that
+// invocation's operation guard (withOperationGuard): a nil, stale, superseded
+// or halted producer is refused before the disposition is written, so it
+// can neither change the candidate nor record anything of it (RULING-198).
+func (e *Engine) resolveCandidate(ctx context.Context, taskID string, identity candidate.Identity, tc *taskContext, r candidate.Resolution) (candidate.Identity, bool) {
+	resolved, ok := identity, false
+	_ = e.withOperationGuard(ctx, taskID, func(emit func(ev event.Event, durable bool) error) error {
+		resolved, ok = e.resolveHeld(emit, taskID, identity, tc, r)
+		return nil
+	})
+	return resolved, ok
+}
+
+// resolveHeld is resolveCandidate inside an operation guard: the disposition
+// is written, and it is resolved only once its CandidateResolved evidence is
+// durably recorded through emit.
+func (e *Engine) resolveHeld(emit func(ev event.Event, durable bool) error, taskID string, identity candidate.Identity, tc *taskContext, r candidate.Resolution) (candidate.Identity, bool) {
 	r.Evidence = candidateEvidence(identity, tc)
 	resolved, err := identity.Resolve(e.Repo.Root, r)
 	if err != nil {
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
-			"candidate disposition not recorded: "+err.Error(), nil))
+		_ = emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			"candidate disposition not recorded: "+err.Error(), nil), false)
 		return identity, false
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateResolved, resolved.Resolution.Summary(), resolved.Resolution))
+	if err := emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateResolved, resolved.Resolution.Summary(), resolved.Resolution), true); err != nil {
+		return resolved, false
+	}
 	return resolved, true
+}
+
+// withOperationGuard runs op on behalf of exactly the invocation ctx belongs
+// to, holding taskID's record gate from that invocation's validation through
+// op's last commit, so nothing op reads or writes of the task can be
+// interleaved with another emission or with the invocation's ending. A
+// producer that may not record a candidate disposition of the task -- nil,
+// of another task, ended, superseded, halted, or withdrawn -- is refused,
+// typed, before op runs: op is never reached, and nothing of the task is
+// read, changed, recorded or published. op records only through emit, which
+// appends under the held gate (recordHeld).
+func (e *Engine) withOperationGuard(ctx context.Context, taskID string, op func(emit func(ev event.Event, durable bool) error) error) error {
+	producer := invocationOf(ctx)
+	probe := event.New(e.SessionID, taskID, event.SourceGit, event.CandidateResolved, "", nil)
+	inv, err := e.emissionOwner(producer, probe)
+	if err != nil {
+		return refusedEmission(probe, err)
+	}
+	actx, cancel := appendContext(inv)
+	defer cancel()
+	release, err := e.enterRecordGate(actx, taskID)
+	if err != nil {
+		return e.fence(inv, newRecordAppendFailure(probe, err))
+	}
+	defer release()
+	if _, err := e.emissionOwner(producer, probe); err != nil {
+		return refusedEmission(probe, err)
+	}
+	return op(func(ev event.Event, durable bool) error {
+		if ev.TaskID != taskID {
+			return newRecordAppendFailure(ev, fmt.Errorf("%w: an operation of task %s cannot record task %s", errInvocationForeign, taskID, ev.TaskID))
+		}
+		return e.recordHeld(actx, producer, e.Store, durable, ev)
+	})
 }
 
 // disposeIfEmpty removes a candidate that produced nothing, and keeps one that
@@ -10537,9 +11498,9 @@ func (e *Engine) disposeIfEmpty(ctx context.Context, taskID string, identity can
 		kept := "the run did not converge and the candidate holds work that resumable state references"
 		if seen.Err != nil {
 			kept = "the candidate could not be read, so it is kept rather than removed on an unestablished claim: " + seen.Err.Error()
-			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, kept, nil))
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceGit, event.Status, kept, nil))
 		} else {
-			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceGit, event.Status,
 				fmt.Sprintf("candidate kept so the work is not lost (%d bytes across %d file(s)): %s",
 					seen.DiffBytes, len(seen.ChangedPaths), workspace), nil))
 			// The snapshot is what gets recorded, so it must agree with what
@@ -10550,14 +11511,14 @@ func (e *Engine) disposeIfEmpty(ctx context.Context, taskID string, identity can
 				tc.EvidenceSnapshot.ChangedPaths = seen.ChangedPaths
 			}
 		}
-		e.resolveCandidate(taskID, identity, tc, candidate.Resolution{
+		e.resolveCandidate(ctx, taskID, identity, tc, candidate.Resolution{
 			Disposition: candidate.Resumable,
 			Reason:      kept,
 		})
 		return
 	}
 
-	resolved, ok := e.resolveCandidate(taskID, identity, tc, candidate.Resolution{
+	resolved, ok := e.resolveCandidate(ctx, taskID, identity, tc, candidate.Resolution{
 		Disposition: candidate.Disposed,
 		Reason:      reason,
 	})
@@ -10568,21 +11529,21 @@ func (e *Engine) disposeIfEmpty(ctx context.Context, taskID string, identity can
 	}
 	r := *resolved.Resolution
 	if err := e.Repo.RemoveWorktree(ctx, workspace); err != nil {
-		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceGit, event.Status,
 			"candidate worktree not removed: "+err.Error(), nil))
 	} else {
 		r.WorktreeRemoved = true
 	}
 	if branch := strings.TrimSpace(identity.Branch); branch != "" && r.WorktreeRemoved {
 		if err := e.Repo.DeleteBranch(ctx, branch); err != nil {
-			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceGit, event.Status,
 				"candidate branch not deleted: "+err.Error(), nil))
 		} else {
 			r.BranchRemoved = true
 		}
 	}
 	if _, err := resolved.Resolve(e.Repo.Root, r); err != nil {
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			"candidate disposition not updated after removal: "+err.Error(), nil))
 	}
 }
@@ -10601,13 +11562,13 @@ func (e *Engine) disposeIfEmpty(ctx context.Context, taskID string, identity can
 func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) {
 	var deferred DeferredAuthority
 	if err := json.Unmarshal(task.AwaitingAuthority, &deferred); err != nil {
-		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+		e.emitRunTerminal(ctx, task.TaskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 			"the deferred authority question could not be read back, so it cannot be asked again: "+err.Error(), nil)
 		return
 	}
 	if len(deferred.Decision.Options) == 0 {
-		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+		e.emitRunTerminal(ctx, task.TaskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 			"the deferred authority question carried no options, so there is nothing to answer", nil)
 		return
@@ -10620,7 +11581,7 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	// names none predates the field, and absence is not disagreement -- reading
 	// it as one would make every legacy question unresumable.
 	if deferred.TaskID != "" && deferred.TaskID != task.TaskID {
-		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+		e.emitRunTerminal(ctx, task.TaskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 			"the preserved question is bound to task "+deferred.TaskID+", not to this one; it cannot be answered here", nil)
 		return
@@ -10629,7 +11590,7 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	// durably started by this task: the answer will be owned by it, and an
 	// identity no record establishes owns nothing. No attempt is minted for it.
 	if id := strings.TrimSpace(deferred.PlanAttemptID); id != "" && !task.StartedPlanAttempts[id] {
-		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+		e.emitRunTerminal(ctx, task.TaskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 			"the preserved question names plan attempt "+short12(id)+", which this task never recorded as started; it cannot be answered here", nil)
 		return
@@ -10674,7 +11635,7 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 		// see was asked about, so the only admissible answer is one that
 		// authorizes nothing.
 		e.noteUnprovenAuthorityScope(task.TaskID)
-		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 			"this question was deferred before its authority scope was preserved; only the stop option is admissible "+
 				"for it, and any answer that would authorize work will be refused with the question left standing", nil))
 	}
@@ -10683,7 +11644,7 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	// consulted about the question.
 	sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)
 	if err != nil {
-		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+		e.emitRunTerminal(ctx, task.TaskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 			fmt.Errorf("start Sensei: %w", err).Error(), nil)
 		return
@@ -10708,7 +11669,7 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 		e.terminateAuthorityOutcome(ctx, task.TaskID, task.Task, err)
 		return
 	}
-	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+	e.emitIn(ctx, event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 		"authority decision answered on resume; continuing the task: "+choice, nil))
 	// The objective is the recorded one: every architect turn reads it through
 	// recordedObjective, which recovers it from TaskCreated in a restarted
@@ -10748,7 +11709,7 @@ func (e *Engine) resumeUnplannedArchitecture(ctx context.Context, task session.I
 			err = fmt.Errorf("the external block record is bound to task %s, not to this one", block.TaskID)
 		}
 		if err != nil {
-			e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+			e.emitRunTerminal(ctx, task.TaskID, event.WorkflowFailed, event.SourceSystem,
 				runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 				"the task cannot be resumed at its blocked turn: "+err.Error(), nil)
 			return
@@ -10760,7 +11721,7 @@ func (e *Engine) resumeUnplannedArchitecture(ctx context.Context, task session.I
 	// provenance exactly; a restarted process recovers the bytes from
 	// TaskCreated under the resumption's own provenance, which establishes no
 	// human (the safe direction, as in TestAResumedTaskDoesNotInventHumanAuthority).
-	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+	e.emitIn(ctx, event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 		"resuming the same task at the turn it is owed ("+owed+"); the objective, task identity and "+
 			"candidate base are the recorded ones", record))
 	e.execute(ctx, task.TaskID, task.Task)
@@ -10769,11 +11730,67 @@ func (e *Engine) resumeUnplannedArchitecture(ctx context.Context, task session.I
 // Resume continues a task that was interrupted after its plan was approved. The
 // candidate worktree still holds the work, so this re-enters the implementation
 // stage with the reviewer's last findings rather than re-deciding the plan.
+//
+// It is ResumeTask for a caller that only asks WHICH task was resumed, and it
+// cannot return before the invocation's pre-binding outcome is settled: it
+// returns the task's ID once this engine's session is bound to the task's
+// lineage and the run proceeds, and "" when the attempt was refused before
+// binding -- no task was resumed, and nothing of it was recorded or
+// published. A caller that acts on the refusal itself takes ResumeTask, whose
+// ResumeAttempt carries it typed; the CLI and TUI do.
 func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
+	attempt := e.ResumeTask(ctx, task)
+	if attempt.Binding().Refusal != nil {
+		return ""
+	}
+	return attempt.TaskID
+}
+
+// ResumeTask is the canonical Resume, returning the invocation's own
+// ResumeAttempt, which is created -- and the invocation admitted as its
+// task's one live invocation -- before the invocation starts. The attempt's
+// Binding is settled exactly once: with the verified binding of this
+// engine's session to the task's lineage, before the run records anything,
+// or with the typed pre-binding refusal, after which the invocation returns
+// having recorded and published nothing. An attempt made while another
+// invocation of the task is live is refused with ErrTaskInvocationLive, as
+// its own outcome only: the live invocation is untouched.
+func (e *Engine) ResumeTask(ctx context.Context, task session.Interrupted) *ResumeAttempt {
+	inv, err := e.admitInvocation(ctx, task.TaskID)
+	if err != nil {
+		return refusedResumeAttempt(e, task.TaskID, newRecordAppendFailure(
+			event.New(e.SessionID, task.TaskID, event.SourceSystem, session.SessionLineageBound, "", nil), err))
+	}
+	attempt := &ResumeAttempt{TaskID: task.TaskID, e: e, inv: inv, bound: make(chan struct{})}
 	go func() {
+		defer e.endInvocation(inv)
+		// No path leaves the caller waiting for the binding: an invocation
+		// that returns before settling it settles it as refused.
+		defer func() {
+			attempt.settle(ResumeBinding{TaskID: task.TaskID, Refusal: newRecordAppendFailure(
+				event.New(e.SessionID, task.TaskID, event.SourceSystem, session.SessionLineageBound, "", nil),
+				errors.New("the resume invocation ended before its session lineage was bound"))})
+		}()
+		ctx := inv.ctx
+		// No other invocation of the task, in any Engine or process, may be
+		// operative while this one binds and runs: the holder Store's
+		// invocation lease is taken first, and refused typed before any
+		// lineage transition is written.
+		if refused := e.leaseInvocation(ctx, inv, e.Store, session.SessionLineageBound); refused != nil {
+			attempt.settle(ResumeBinding{TaskID: task.TaskID, Refusal: refused})
+			return
+		}
+		// This session may record nothing of the task until the task's
+		// session lineage names it current (70B2a1).
+		lineage, refused := e.bindLineage(inv, task.TaskID)
+		if refused != nil {
+			attempt.settle(ResumeBinding{TaskID: task.TaskID, Refusal: refused})
+			return
+		}
+		attempt.settle(ResumeBinding{TaskID: task.TaskID, CurrentSessionID: lineage.Tip()})
 		// A resumed task keeps the mode it was running in. Resumption is not a
 		// new entry point a person chose, so its provenance says so.
-		e.announceMode(task.TaskID, governedMode(ResumedGoverned))
+		e.announceMode(ctx, task.TaskID, governedMode(ResumedGoverned))
 		// A PLANNED resume -- the one continued below rather than re-entering
 		// execute -- owns its receipt, and opens it here, before anything can
 		// end the invocation. A resumed invocation is a run, and it owes its
@@ -10846,7 +11863,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			fail(fmt.Errorf("Sensei workspace status: %w", err))
 			return
 		}
-		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.SenseiResult, firstText(workspaceStatus), workspaceStatus.Structured))
+		e.emitIn(ctx, event.New(e.SessionID, task.TaskID, event.SourceSensei, event.SenseiResult, firstText(workspaceStatus), workspaceStatus.Structured))
 
 		// Resume re-runs the full start gate, not just the workspace read. A
 		// task interrupted an hour ago was certified against the graph as it
@@ -10871,7 +11888,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			fail(fmt.Errorf("Sensei preflight: %w", err))
 			return
 		}
-		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.SenseiResult, firstText(preflight),
+		e.emitIn(ctx, event.New(e.SessionID, task.TaskID, event.SourceSensei, event.SenseiResult, firstText(preflight),
 			e.preflightRecord(preflightArgs, preflight.Structured,
 				subjectRevision, sensei.PreflightGraphDigest(preflight))))
 
@@ -10879,7 +11896,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		start, err := certifyStart(workspaceStatus, preflight, head,
 			domainFromRemote(e.Repo.OriginURL(ctx)), awarenessAddress(e.Config.Sensei.Args))
 		if err != nil {
-			e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
+			e.emitIn(ctx, event.New(e.SessionID, task.TaskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
 			e.reportOutcome(ctx, "blocked", task.Task, err.Error())
 			fail(err)
 			return
@@ -10888,7 +11905,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// THIS start certified, not the one the previous run recorded: the graph
 		// may have been rebuilt while the task was not running, and resurrecting
 		// the old commit would attribute the new rules to the old generation.
-		e.bindGraph(task.TaskID, start)
+		e.bindGraph(ctx, task.TaskID, start)
 		e.noteWorld(task.TaskID, head, start.GraphDigest())
 
 		// A resumed task already has a base recorded. Establish loads it rather
@@ -11001,7 +12018,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 					short12(r.RefusalID)+") and no admitted plan has replaced it: "+r.Reason, true
 			}
 			if owed {
-				e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+				e.emitIn(ctx, event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 					"resuming the same task at the architect re-plan it is owed: "+why, nil))
 				revised, err := e.resolveArchitectureForRevision(ctx, sc, start, task.TaskID, task.Task,
 					replanPrompt(task.Task, plan, why, task.Review), why)
@@ -11018,7 +12035,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 				// interruption: re-plan again from the plan that did not converge, or
 				// continue the candidate under that plan. This plan discharges the
 				// obligation (FindInterrupted) and binds every later resume.
-				if _, err := e.adoptPlanAttempt(task.TaskID, task.Task, revised); err != nil {
+				if _, err := e.adoptPlanAttempt(ctx, task.TaskID, task.Task, revised); err != nil {
 					fail(err)
 					return
 				}
@@ -11028,7 +12045,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 				// captured and inspected under the old plan's files (canonical review
 				// of #194 at b23a8ae).
 				applyPlanScope(&tc, revised)
-				e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+				e.emitIn(ctx, event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 					"the resumed candidate continues under the re-planned scope: "+scopeSummary(tc), nil))
 				carried = "The architect re-planned this task because the candidate did not converge under the previous plan. " +
 					"Reconcile the existing candidate with the revised plan.\n\nThe last review said:\n" + strings.TrimSpace(task.Review)
@@ -11050,11 +12067,11 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		} else {
 			e.notePlanUnidentified(task.TaskID)
 		}
-		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+		e.emitIn(ctx, event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 			"resuming the interrupted candidate rather than starting over", nil))
 		e.implement(ctx, sc, start, task.TaskID, &tc, plan, carried, fail)
 	}()
-	return task.TaskID
+	return attempt
 }
 
 // applyPlanScope is the one mapping from a plan to the scope a candidate is
@@ -11715,7 +12732,7 @@ func (e *Engine) observe(ctx context.Context, sc *sensei.Client, start certified
 	domain := sensei.RepositoryDomain(workspaceStatus)
 	conversation := e.conversationSoFar(task, 40)
 	retrieved, repository, standing, history, consulted := e.architecturalContext(ctx, sc, domain, task)
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ContextConsulted, consulted.Render(), consulted))
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.ContextConsulted, consulted.Render(), consulted))
 
 	decision, err := e.resolveArchitectureIn(ctx, sc, start, taskID, task, observationPrompt(architecturePrompt(
 		workspace, domain, config.DisplayName(e.Config.Architect.Name), task, conversation,
@@ -11760,9 +12777,9 @@ func (e *Engine) observe(ctx context.Context, sc *sensei.Client, start certified
 	// exactly like an eligible one -- it simply cannot become work.
 	e.recordFindings(taskID, task, head, decision)
 
-	e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke,
 		observationFindings(decision, start.Degraded(), wrote), decision))
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowObserved,
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowObserved,
 		"observed and reported; nothing was admitted, the governed repository is unchanged, "+
 			"and the observation workspace was discarded", nil))
 	return nil

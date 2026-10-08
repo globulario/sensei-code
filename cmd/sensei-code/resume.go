@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/globulario/sensei-code/internal/authority"
 	"github.com/globulario/sensei-code/internal/config"
@@ -115,6 +116,43 @@ func selectAuthorityResume(tasks []session.Interrupted, taskID, answer string) (
 	}
 	return authorityResume{}, fmt.Errorf("%w: %q; the question offered %s",
 		errNotAnOption, answer, optionIDs(q.Decision.Options))
+}
+
+// resumingSession is the fresh SessionID a fresh process continuing an
+// existing session record acts under, whichever entrypoint started it -- the
+// resume command and the interactive startup alike. It is minted by the one
+// production identity generator (session.FreshID), never the clock alone, so
+// two processes resuming in the same instant cannot share an identity.
+func resumingSession(now time.Time) (string, error) {
+	id, err := session.FreshID(now)
+	if err != nil {
+		return "", fmt.Errorf("no fresh session identity can be minted for the resumed process: %w", err)
+	}
+	return id, nil
+}
+
+// openResumeIdentity is the identity ONE resume invocation acts under,
+// whichever lane it takes: the holder's existing record -- one physical
+// ledger, opened under the session that holds it -- and a fresh SessionID
+// minted for this process (resumingSession), never the holder's. It is called
+// once, before the lane is chosen, so every lane -- interrupted work, a
+// blocked turn, an owed review, an answered question -- is handed the same
+// fresh session, which Engine.ResumeTask then binds through the task's
+// lineage before the lane's first ordinary event.
+func openResumeIdentity(root, holderSessionID string, now time.Time) (*session.Store, string, error) {
+	store, err := session.New(root, holderSessionID)
+	if err != nil {
+		return nil, "", err
+	}
+	fresh, err := resumingSession(now)
+	if err != nil {
+		return nil, "", err
+	}
+	if fresh == holderSessionID {
+		return nil, "", fmt.Errorf("the session minted for this resume is the holder's own (%s); a resumed process acts "+
+			"under a fresh session", holderSessionID)
+	}
+	return store, fresh, nil
 }
 
 func optionIDs(options []authority.Option) string {
@@ -323,8 +361,14 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 		fmt.Fprintf(os.Stderr, "sensei-code resume: %v: %s\n", errObjectiveUnusable, holder.Task.TaskID)
 		return exitUsage
 	}
-	sessionID := holder.SessionID
-	store, err := session.New(repo.Root, sessionID)
+	// One physical ledger, a fresh actor (70B2a1). The identity every lane
+	// below acts under is established HERE, once, before any lane is chosen:
+	// the holder's record, and a FRESH session minted for this process
+	// (openResumeIdentity). No lane is handed the holder's SessionID; each
+	// binds the fresh one to the task's session lineage before it records
+	// anything of the task, and the record's historical events keep the
+	// sessions they were written under.
+	store, sessionID, err := openResumeIdentity(repo.Root, holder.SessionID, time.Now())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
 		return exitFailed
@@ -427,8 +471,32 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 	// Resume re-asks the recorded question and, once answered, continues THIS
 	// task. It is not a fresh submission: no preflight, no start gate, no
 	// router, and the task, plan and candidate are the ones already bound.
-	resumedID := engine.Resume(ctx, target.Task)
-	return streamUntilSettled(ctx, answered, events, resumedID, *asJSON, *quiet, *timeout)
+	attempt := engine.ResumeTask(ctx, target.Task)
+	return settleResumed(ctx, answered, events, attempt, *asJSON, *quiet, *timeout)
+}
+
+// settleResumed is how EVERY lane of this command waits for the task it
+// resumed, through that invocation's own control handle (70B2a1, RULING-189).
+// First its pre-binding outcome, which the engine settles exactly once: a
+// typed refusal is the outcome of this invocation -- reported once, with no
+// workflow ending waited for, because none can lawfully be recorded -- and
+// only the verified binding of the fresh session lets the run be streamed,
+// exactly as a submitted run is (settleInvocation): until it settles, or
+// until the engine halts it because the session record did not take one of
+// its governed events, whose typed failure is then the outcome. Nothing on
+// the bus stands in for either.
+func settleResumed(ctx context.Context, control runControl, events <-chan event.Event,
+	attempt *workflow.ResumeAttempt, asJSON, quiet bool, timeout time.Duration) int {
+	binding := attempt.Binding()
+	if binding.Refusal != nil {
+		fmt.Fprintln(os.Stderr, "sensei-code resume:", binding.Refusal)
+		return exitFailed
+	}
+	if !quiet {
+		fmt.Fprintf(os.Stderr, "sensei-code resume: task %s continues as session %s, bound to its session lineage\n",
+			binding.TaskID, binding.CurrentSessionID)
+	}
+	return settleInvocation(ctx, control, events, attempt.TaskID, attempt, asJSON, quiet, timeout, "sensei-code resume")
 }
 
 // reviewState is what the durable review store says about one task, read before

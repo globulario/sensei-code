@@ -220,3 +220,150 @@ func TestTheHumansOwnWordsAreNotTheLastResponse(t *testing.T) {
 		t.Fatalf("last response is %q, want the architect's answer", got.lastResponse)
 	}
 }
+
+// one returns s with one zero element appended, and zeroOf a fresh zero value
+// behind a pointer of p's type: the halt message carries the engine's and the
+// session record's types, which this file names only through the Model's own
+// fields.
+func one[T any](s []T) []T {
+	var z T
+	return append(s, z)
+}
+
+func zeroOf[T any](*T) *T { return new(T) }
+
+func constant[T any](v T) func() T { return func() T { return v } }
+
+// haltedRun is a model mid-/run of task taskID: busy, with the composer
+// waiting on that invocation, and no event stream -- nothing on the bus can
+// release it.
+func haltedRun(taskID string) Model {
+	m := newTestModel("", "")
+	m.busy = true
+	m.currentTask = taskID
+	return m
+}
+
+func transcriptOf(m Model) string { return plainTranscript(m.lines) }
+
+// fakeHalt is an invocation's control handle that has halted with failure and
+// not yet ended. It is generic only so this file can stand in for a
+// workflow.RunAttempt or ResumeAttempt without naming the workflow package.
+type fakeHalt[F any] struct {
+	halted, ended chan struct{}
+	failure       F
+}
+
+func (h fakeHalt[F]) Halted() <-chan struct{} { return h.halted }
+func (h fakeHalt[F]) Ended() <-chan struct{}  { return h.ended }
+func (h fakeHalt[F]) Failure() F              { return h.failure }
+
+func haltedHandle[F any](failure F) fakeHalt[F] {
+	h := fakeHalt[F]{halted: make(chan struct{}), ended: make(chan struct{}), failure: failure}
+	close(h.halted)
+	return h
+}
+
+// TestB2a1RunAppendHaltEndsTheRunInModelUpdate is the behavioral witness that
+// a /run whose governed event the session record refused ends, in the TUI,
+// on the invocation's typed halt and nothing else (RULING-195/205/206). The
+// model has no event stream: no WorkflowFailed or other bus terminal arrives,
+// as none may when the record did not take it. The halt alone must release the
+// composer and report the typed failure, exactly once, and a /run is never
+// offered back as a resumable task.
+func TestB2a1RunAppendHaltEndsTheRunInModelUpdate(t *testing.T) {
+	m := haltedRun("task-run")
+	failure := zeroOf(appendHaltedMsg{}.failure)
+	failure.TaskID, failure.SessionID = "task-run", "session-a"
+	failure.Kind, failure.Detail = event.WorkflowCompleted, "the record lock was not acquired"
+
+	// The halt reaches Model.Update only through the TUI's wait on the
+	// run's own control handle; nothing else may stand in for it.
+	msg := runHalted(transcript(1).ctx, haltedHandle(failure), "task-run")
+	if msg == nil {
+		t.Fatal("the halted /run's control handle produced no message, so the TUI waits for a terminal that cannot arrive")
+	}
+	next, cmd := m.Update(msg)
+	got := next.(Model)
+	if got.busy || got.currentTask != "" || got.pending != nil || got.pendingTask != "" {
+		t.Fatalf("the halted /run still holds the composer: busy=%v current=%q pending=%v pendingTask=%q",
+			got.busy, got.currentTask, got.pending, got.pendingTask)
+	}
+	text := transcriptOf(got)
+	if strings.Count(text, "✗ RUN") != 1 || !strings.Contains(text, failure.Error()) {
+		t.Fatalf("the /run's typed failure was not reported exactly once:\n%s", text)
+	}
+	if strings.Contains(text, "✗ RESUME") || len(got.resumable) != 0 {
+		t.Fatalf("a halted /run was reported or offered as a resume: resumable=%d\n%s", len(got.resumable), text)
+	}
+	if cmd == nil {
+		t.Fatal("the halt produced no command, so the screen is never redrawn")
+	}
+}
+
+// TestB2a1ResumeAppendHaltEndsTheResumeInModelUpdate is the same witness for a
+// /resume: a pre-binding refusal or a later refused governed event ends the
+// /resume on its typed halt with no bus terminal, and -- the record having
+// been left as it was -- the task is offered to /resume again.
+func TestB2a1ResumeAppendHaltEndsTheResumeInModelUpdate(t *testing.T) {
+	m := haltedRun("task-resume")
+	tasks := one(m.resumable)
+	tasks[0].TaskID, tasks[0].Task = "task-resume", "the interrupted work"
+	failure := zeroOf(appendHaltedMsg{}.failure)
+	failure.TaskID, failure.SessionID = "task-resume", "session-b"
+	failure.Kind, failure.Detail = event.SessionLineageBound, "the task's session record holds no TaskCreated root"
+
+	msg := waitResumeHalted(transcript(1).ctx, haltedHandle(failure), tasks[0])()
+	if msg == nil {
+		t.Fatal("the halted /resume's control handle produced no message, so the TUI waits for a terminal that cannot arrive")
+	}
+	next, _ := m.Update(msg)
+	got := next.(Model)
+	if got.busy || got.currentTask != "" {
+		t.Fatalf("the halted /resume still holds the composer: busy=%v current=%q", got.busy, got.currentTask)
+	}
+	text := transcriptOf(got)
+	if strings.Count(text, "✗ RESUME") != 1 || !strings.Contains(text, failure.Error()) {
+		t.Fatalf("the /resume's typed refusal was not reported exactly once:\n%s", text)
+	}
+	if len(got.resumable) != 1 || got.resumable[0].TaskID != "task-resume" {
+		t.Fatalf("the refused task is not offered to /resume again: %+v", got.resumable)
+	}
+}
+
+// TestB2a1AStaleHaltDoesNotEndTheCurrentInvocation: a halt is bound to the
+// invocation that produced it. A late halt of an earlier task reports that
+// task's failure but must not release the composer of the task now running.
+func TestB2a1AStaleHaltDoesNotEndTheCurrentInvocation(t *testing.T) {
+	m := haltedRun("task-b")
+	failure := zeroOf(appendHaltedMsg{}.failure)
+	failure.TaskID, failure.Kind, failure.Detail = "task-a", event.WorkflowFailed, "stale"
+
+	next, _ := m.Update(appendHaltedMsg{taskID: "task-a", failure: failure})
+	got := next.(Model)
+	if !got.busy || got.currentTask != "task-b" {
+		t.Fatalf("task-a's halt ended task-b's invocation: busy=%v current=%q", got.busy, got.currentTask)
+	}
+}
+
+// TestB2a1HaltIsReportedTheMomentItHappens: the TUI's wait on an invocation
+// returns its typed failure as soon as the record refuses an event, without
+// waiting for the invocation to finish unwinding, and returns nothing for an
+// invocation that ended unhalted. Channels are driven directly; nothing sleeps.
+func TestB2a1HaltIsReportedTheMomentItHappens(t *testing.T) {
+	failure := zeroOf(appendHaltedMsg{}.failure)
+	failure.TaskID, failure.Kind, failure.Detail = "task-run", event.WorkflowFailed, "refused"
+	ctx := transcript(1).ctx // a live, never-cancelled context from New
+
+	halted, ended := make(chan struct{}), make(chan struct{})
+	close(halted)
+	if got := haltOf(ctx, halted, ended, constant(failure)); got != failure {
+		t.Fatalf("a halted invocation that has not ended reported %v, want its typed failure", got)
+	}
+
+	halted, ended = make(chan struct{}), make(chan struct{})
+	close(ended)
+	if got := haltOf(ctx, halted, ended, constant(appendHaltedMsg{}.failure)); got != nil {
+		t.Fatalf("an unhalted ending reported a halt: %v", got)
+	}
+}

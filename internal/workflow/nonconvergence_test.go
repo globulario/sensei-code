@@ -28,7 +28,7 @@ func reviseForever(t *testing.T) *gateHarness {
 
 func runImplement(h *gateHarness) (error, []event.Event) {
 	var failed error
-	h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+	h.engine.implement(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 	return failed, drainEvents(h.events)
 }
@@ -114,10 +114,10 @@ func TestANotConvergedTaskIsResumableAfterRestart(t *testing.T) {
 	root := t.TempDir()
 	e, _, _ := blockedEngine(t, root, "session-n")
 	const task = "task-5"
-	e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TaskCreated, "the objective", nil))
-	e.emit(event.New(e.SessionID, task, event.SourceArchitect, event.PlanProposed, "the plan", nil))
+	e.emitIn(fixtureCtx(e, task), event.New(e.SessionID, task, event.SourceSystem, event.TaskCreated, "the objective", nil))
+	e.emitIn(fixtureCtx(e, task), event.New(e.SessionID, task, event.SourceArchitect, event.PlanProposed, "the plan", proposedPlan{architectureDecision: architectureDecision{Decision: "proceed"}, PlanSource: PlanByArchitect}))
 	e.beginReceipt(task)
-	e.endNotConverged(task, NotConverged{TaskID: task, Implementers: []string{"claude", "codex"}, ReviewCycles: 3, Owed: OwedArchitectReplan})
+	e.endNotConverged(fixtureCtx(e, task), task, NotConverged{TaskID: task, Implementers: []string{"claude", "codex"}, ReviewCycles: 3, Owed: OwedArchitectReplan})
 
 	found := reopen(t, root, "session-n")
 	if len(found) != 1 || found[0].TaskID != task || !found[0].Planned || len(found[0].NotConverged) == 0 {
@@ -247,7 +247,7 @@ func TestARestartedEngineStillRefusesToRePlanASuppliedPlan(t *testing.T) {
 	if _, err := restarted.restorePlanBound(task); err != nil {
 		t.Fatalf("the supplied bound was not restored from the record: %v", err)
 	}
-	_, err = restarted.resolveArchitectureForRevision(context.Background(), nil, certifiedStart{}, "task-s", "x", "PROMPT", "the candidate did not converge")
+	_, err = restarted.resolveArchitectureForRevision(fixtureCtx(restarted, "task-s"), nil, certifiedStart{}, "task-s", "x", "PROMPT", "the candidate did not converge")
 	if err == nil || !strings.Contains(err.Error(), "A supplied plan is not revised by the architect") {
 		t.Fatalf("a restarted engine let the architect revise a supplied plan: %v", err)
 	}
@@ -347,7 +347,7 @@ func reviewCalls(t *testing.T, path string) string {
 }
 
 func (h *gateHarness) runTwoCycles() (candidateOutcome, error) {
-	outcome, _, _, _, err := h.engine.runCandidate(context.Background(), h.sc, certifiedStart{},
+	outcome, _, _, _, err := h.engine.runCandidate(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{},
 		"task-1", h.tc, "Rewrite main.go so it prints a number.", h.worker, h.work, "")
 	return outcome, err
 }
@@ -611,7 +611,7 @@ func TestW7AClasslessFindingIsValidWireDataAndRefusedOnlyAtTheBoundary(t *testin
 	// And the engine ingress routes it as a review refusal, never as a verdict.
 	for _, mode := range []roles.Session{roles.Fresh, roles.Unverified} {
 		e, _ := reviewEngine(t, answeringRunner{text: wire, mode: mode}, "codex")
-		res, err := e.resolveReview(context.Background(), "task-1",
+		res, err := e.resolveReview(fixtureCtx(e, "task-1"), "task-1",
 			roles.Assignment{Role: roles.Reviewer, Provider: "codex"}, packetFor(reviewBinding()), "claude")
 		if err == nil || !strings.Contains(err.Error(), "review refused") || !strings.Contains(err.Error(), errUnclassifiedFinding.Error()) {
 			t.Fatalf("%s: a classless verdict crossed the engine ingress: %v", mode, err)
@@ -970,7 +970,7 @@ func candidateRefIdentity(t *testing.T, h *gateHarness) (commit, tree, parent, d
 func terminateWith(t *testing.T, h *gateHarness, err error) runreceipt.Receipt {
 	t.Helper()
 	drainEvents(h.events)
-	h.engine.terminateRun(context.Background(), "task-1", "Rewrite main.go so it prints a number.", err)
+	h.engine.terminateRun(fixtureCtx(h.engine, "task-1"), "task-1", "Rewrite main.go so it prints a number.", err)
 	return receiptFrom(t, drainEvents(h.events))
 }
 
@@ -1038,7 +1038,7 @@ func prospectiveFailure(t *testing.T) (*gateHarness, error) {
 }
 
 func (h *gateHarness) run1() (candidateOutcome, error) {
-	outcome, _, _, _, err := h.engine.runCandidate(context.Background(), h.sc, certifiedStart{},
+	outcome, _, _, _, err := h.engine.runCandidate(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{},
 		"task-1", h.tc, "Rewrite main.go so it prints a number.", h.worker, h.work, "")
 	return outcome, err
 }

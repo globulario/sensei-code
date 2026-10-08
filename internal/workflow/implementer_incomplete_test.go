@@ -138,7 +138,7 @@ func newCompletionRig(t *testing.T, findings []string, turns ...incompleteTurn) 
 }
 
 func (r *completionRig) run() (candidateOutcome, error) {
-	outcome, _, _, _, err := r.h.engine.runCandidate(context.Background(), r.h.sc, certifiedStart{},
+	outcome, _, _, _, err := r.h.engine.runCandidate(fixtureCtx(r.h.engine, "task-1"), r.h.sc, certifiedStart{},
 		"task-1", r.h.tc, "Rewrite main.go so it prints a number.", r.h.worker, r.h.work, "")
 	return outcome, err
 }
@@ -545,7 +545,7 @@ func TestDF41A3W7TheFinalInvocationReboundKeepsTheObligation(t *testing.T) {
 	// unavailable provider: no handoff, nothing carried.
 	next := r.h.worker
 	next.Name = "gemini"
-	_, _, _, _, err = r.h.engine.runCandidate(context.Background(), r.h.sc, certifiedStart{},
+	_, _, _, _, err = r.h.engine.runCandidate(fixtureCtx(r.h.engine, "task-1"), r.h.sc, certifiedStart{},
 		"task-1", r.h.tc, "Rewrite main.go so it prints a number.", next, r.h.work, "")
 	if !errors.Is(err, errReviewCyclesExhausted) {
 		t.Fatalf("the rebound run did not end on the original two-cycle budget: %v", err)
@@ -913,7 +913,7 @@ func TestDF41A3W16NoProviderAfterAnIncompleteReturnKeepsTheExistingBlock(t *test
 	}
 	next := r.h.worker
 	next.Name = "gemini"
-	outcome, _, _, _, err := r.h.engine.runCandidate(context.Background(), r.h.sc, certifiedStart{},
+	outcome, _, _, _, err := r.h.engine.runCandidate(fixtureCtx(r.h.engine, "task-1"), r.h.sc, certifiedStart{},
 		"task-1", r.h.tc, "Rewrite main.go so it prints a number.", next, r.h.work, "")
 	if err != nil || !outcome.Accepted() {
 		t.Fatalf("the rebound runner did not complete cycle 2: outcome %q err %v", outcome, err)

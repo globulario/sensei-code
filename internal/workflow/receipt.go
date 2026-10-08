@@ -555,7 +555,11 @@ func (e *Engine) noteReviewDelivered(taskID, provider, decision, candidateDigest
 	})
 }
 
-// emitReceipt is the terminal boundary: one receipt, at the end of one run.
+// emitTerminalIn is the terminal boundary: one receipt, at the end of one run,
+// and the terminal it accounts for, recorded on behalf of the invocation ctx
+// belongs to as ONE unit (recordUnit): both are durable before either is
+// published, and a failure of either records and publishes neither, so no
+// receipt ever claims an ending the record does not hold.
 //
 // Outcome and CandidateState are parameters rather than derived state, so a new
 // terminal path must decide both. Deriving them here would be the convenience
@@ -564,7 +568,28 @@ func (e *Engine) noteReviewDelivered(taskID, provider, decision, candidateDigest
 // every candidate field is projected from the current candidate observation
 // alone, and a call site that claims another state is reported beside the
 // receipt as a disagreement, not written into it (see terminalCandidate).
+func (e *Engine) emitTerminalIn(ctx context.Context, taskID string, terminal event.Kind, source event.Source,
+	outcome runreceipt.Outcome, candState runreceipt.CandidateState, summary string, payload any) runreceipt.Receipt {
+	r, state, receipt := e.receiptOf(taskID, terminal, outcome, candState)
+	_ = e.recordUnit(invocationOf(ctx), e.Store, true,
+		event.New(e.SessionID, taskID, event.SourceSystem, event.RunReceipt,
+			"governed run receipt: "+string(state)+" / "+string(outcome), receipt),
+		event.New(e.SessionID, taskID, source, terminal, summary, payload))
+	return r
+}
+
+// emitReceipt is the receipt a terminal of taskID carries, built exactly as
+// emitTerminalIn builds it and recorded nowhere: the record is
+// emitTerminalIn's alone, on behalf of the invocation ending. No production
+// path calls it.
 func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runreceipt.Outcome, candState runreceipt.CandidateState) runreceipt.Receipt {
+	r, _, _ := e.receiptOf(taskID, terminal, outcome, candState)
+	return r
+}
+
+// receiptOf builds the receipt of taskID's terminal and the payload of its
+// record, with the receipt's completeness.
+func (e *Engine) receiptOf(taskID string, terminal event.Kind, outcome runreceipt.Outcome, candState runreceipt.CandidateState) (runreceipt.Receipt, runreceipt.Completeness, map[string]any) {
 	e.mu.Lock()
 	f := e.receipts[taskID]
 	unrecorded := f == nil
@@ -630,9 +655,7 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 	if disagreement != "" {
 		payload["candidate_state_disagreement"] = disagreement
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.RunReceipt,
-		"governed run receipt: "+string(state)+" / "+string(outcome), payload))
-	return r
+	return r, state, payload
 }
 
 // noteCandidateWork records whether the candidate holds WORK, measured.
@@ -866,8 +889,9 @@ func (e *Engine) noteServingProducer(taskID string, pid int, launched bool) {
 
 // emitRunTerminal is the ONE way a governed run ends.
 //
-// Receipt and terminal event are emitted together, in that order, so they
-// cannot come apart. An earlier draft paired them by convention and guarded the
+// Receipt and terminal event are recorded together, in that order, as one
+// all-or-nothing unit (emitTerminalIn), so they cannot come apart: in the
+// record or on the bus. An earlier draft paired them by convention and guarded the
 // pairing with a test that asked only whether a function contained BOTH calls
 // somewhere -- which a function with three terminal exits and one receipt would
 // have passed. Convention guarded by an approximate test is how the pairing
@@ -880,17 +904,24 @@ func (e *Engine) noteServingProducer(taskID string, pid int, launched bool) {
 // Material a live production_scope refusal left pending (DF-48) is disposed of
 // here, before anything of the terminal is emitted, so no exit can leave it
 // retained by accident. A disposition that cannot be recorded suppresses the
-// requested terminal and ends the run failed, naming that failure.
-func (e *Engine) emitRunTerminal(taskID string, kind event.Kind, source event.Source,
+// requested terminal and ends the run failed, naming that failure. The
+// disposition is settled only under the invocation's operation guard, so a
+// stale or unbound ending can neither read nor dispose of the material.
+//
+// Disposition, receipt and terminal are all recorded on behalf of exactly the
+// invocation ctx belongs to (emitIn), so a stale invocation can neither end
+// nor fence a later one, and a ctx of no invocation ends nothing.
+func (e *Engine) emitRunTerminal(ctx context.Context, taskID string, kind event.Kind, source event.Source,
 	outcome runreceipt.Outcome, cand runreceipt.CandidateState, summary string, payload any) {
-	if err := e.settleRefusedMaterial(taskID, kind, source, outcome); err != nil {
-		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
+	if err := e.settleRefusedMaterial(ctx, taskID, kind, source, outcome); err != nil {
+		// The failed ending is recorded directly: the material stays pending,
+		// so settling it again here would only repeat the failure.
+		e.emitTerminalIn(ctx, taskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(taskID),
 			"the "+string(kind)+" terminal was suppressed: "+err.Error(), nil)
 		return
 	}
-	e.emitReceipt(taskID, kind, outcome, cand)
-	e.emit(event.New(e.SessionID, taskID, source, kind, summary, payload))
+	e.emitTerminalIn(ctx, taskID, kind, source, outcome, cand, summary, payload)
 }
 
 // noteFormatterMutation records whether validation's formatter changed
@@ -1016,13 +1047,13 @@ func (e *Engine) notePlanAdmissionRefused(taskID string, r planAttemptRefusal) {
 // authority written, no record repaired. It is terminal for the INVOCATION and
 // not for the TASK, which is the entire point -- the previous terminal for this
 // condition removed the task from resume tooling for ever.
-func (e *Engine) refuseRestoration(taskID string, err error) bool {
+func (e *Engine) refuseRestoration(ctx context.Context, taskID string, err error) bool {
 	var r *RestorationRefusal
 	if !errors.As(err, &r) || r == nil {
 		return false
 	}
 	e.noteRestorationRefusal(taskID, *r)
-	e.emitRunTerminal(taskID, event.WorkflowRestorationRefused, event.SourceSystem,
+	e.emitRunTerminal(ctx, taskID, event.WorkflowRestorationRefused, event.SourceSystem,
 		runreceipt.OutcomeRestorationRefused, e.candidateStateFor(taskID),
 		"the authority this task recorded could not be re-established: "+r.Describe()+
 			". Nothing was executed and no authority was written; the task is preserved and still resumable", *r)
@@ -1263,9 +1294,9 @@ func (e *Engine) terminalCandidate(taskID string, f receiptFacts, claimed runrec
 	if base == "" && f.base.State == runreceipt.Known {
 		base = f.base.Text
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	read, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	ref := readCandidateRef(ctx, e.Repo, e.Repo.WorktreeBranch(taskID), base)
+	ref := readCandidateRef(read, e.Repo, e.Repo.WorktreeBranch(taskID), base)
 	o.candCommit, o.candTree, o.candParent, o.candDiff = identityFromRef(ref, base, o.candDiff, o.capturedTree)
 
 	if o.candRendering.State != runreceipt.Known {

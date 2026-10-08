@@ -108,10 +108,10 @@ func TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock(t *testing.T) 
 	// And a provider proof that NO role site claimed is not classified either:
 	// attribution happens where the turn is asked, never downstream.
 	e := New(gitx.Repo{Root: t.TempDir()}, config.Default(), event.NewBus(), nil, "sess-1")
-	if e.blockExternally("task-1", fmt.Errorf("somewhere else: %w", quota())) {
+	if e.blockExternally(fixtureCtx(e, "task-1"), "task-1", fmt.Errorf("somewhere else: %w", quota())) {
 		t.Fatal("an unattributed provider refusal was turned into a role block")
 	}
-	if e.blockExternally("task-1", errors.New("a programming error")) {
+	if e.blockExternally(fixtureCtx(e, "task-1"), "task-1", errors.New("a programming error")) {
 		t.Fatal("an ordinary error was turned into a role block")
 	}
 }
@@ -174,12 +174,12 @@ func TestABlockedTurnIsATerminalThatSurvivesRestartAsTheSameTask(t *testing.T) {
 			root := t.TempDir()
 			e, events, _ := blockedEngine(t, root, "session-a")
 			const task = "task-42"
-			e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TaskCreated, "the objective", nil))
+			e.emitIn(fixtureCtx(e, task), event.New(e.SessionID, task, event.SourceSystem, event.TaskCreated, "the objective", nil))
 			e.beginReceipt(task)
 
 			cause := quota()
 			cause.RetryAt = retryAt
-			if !e.blockExternally(task, &RoleUnavailable{Role: roles.Architect, Provider: "chatgpt", Cause: cause}) {
+			if !e.blockExternally(fixtureCtx(e, task), task, &RoleUnavailable{Role: roles.Architect, Provider: "chatgpt", Cause: cause}) {
 				t.Fatal("a role unavailability was not treated as an external block")
 			}
 			seen := drainEvents(events)
@@ -239,8 +239,8 @@ func TestABlockedTurnIsATerminalThatSurvivesRestartAsTheSameTask(t *testing.T) {
 func TestAHistoricalFailedTaskIsNotReopened(t *testing.T) {
 	root := t.TempDir()
 	e, _, _ := blockedEngine(t, root, "session-old")
-	e.emit(event.New(e.SessionID, "task-1789770525156538509", event.SourceSystem, event.TaskCreated, "deployment identity", nil))
-	e.emit(event.New(e.SessionID, "task-1789770525156538509", event.SourceSystem, event.WorkflowFailed,
+	e.emitIn(fixtureCtx(e, "task-1789770525156538509"), event.New(e.SessionID, "task-1789770525156538509", event.SourceSystem, event.TaskCreated, "deployment identity", nil))
+	e.emitIn(fixtureCtx(e, "task-1789770525156538509"), event.New(e.SessionID, "task-1789770525156538509", event.SourceSystem, event.WorkflowFailed,
 		"architect could not produce a bounded decision: You've hit your usage limit.", nil))
 	if found := reopen(t, root, "session-old"); len(found) != 0 {
 		t.Fatalf("a historical FAILED task was reopened: %+v", found)
@@ -280,11 +280,13 @@ func TestAnExternalBlockRecordThatCannotJustifyItselfIsRefused(t *testing.T) {
 // restart honours it instead of escalating the same condition again.
 func TestAnAnsweredConditionSurvivesARestartedEngine(t *testing.T) {
 	root := t.TempDir()
-	first, _, _ := blockedEngine(t, root, "session-b")
+	first, _, store := blockedEngine(t, root, "session-b")
+	// FIXTURE MIGRATION (70B2a1): the answer is recorded on the task's root.
+	rootFixtureTask(t, store, first.SessionID, "task-7", "the objective")
 	res := authority.Resolution{TaskID: "task-7", SessionID: "session-b", Question: "q",
 		Condition: "graph coverage is absent for the planned files", OptionID: "1", OptionLabel: "authorize",
-		Scope: []string{"internal/x.go"}, Outcome: authority.Authorize, DecidedAt: time.Now().UTC()}
-	first.emit(event.New(first.SessionID, "task-7", event.SourceUser, event.AuthorityResolved, "answered", res))
+		Scope: []string{"internal/x.go"}, Outcome: authority.Authorize, State: authority.Unsupported, DecidedAt: time.Now().UTC()}
+	first.emitIn(fixtureCtx(first, "task-7"), event.New(first.SessionID, "task-7", event.SourceUser, event.AuthorityResolved, "answered", res))
 
 	restarted, _, _ := blockedEngine(t, root, "session-b")
 	authorized, asked := restarted.applyAnsweredCondition("task-7", res.Condition, "internal/x.go")
@@ -304,10 +306,13 @@ func TestResumingAnUnplannedBlockedTaskReentersTheSameTask(t *testing.T) {
 	root := t.TempDir()
 	e, _, _ := blockedEngine(t, root, "session-c")
 	const task = "task-9"
-	e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TaskCreated, "the objective", nil))
+	e.emitIn(fixtureCtx(e, task), event.New(e.SessionID, task, event.SourceSystem, event.TaskCreated, "the objective", nil))
 	e.beginReceipt(task)
-	e.blockExternally(task, &RoleUnavailable{Role: roles.Architect, Provider: "chatgpt", Cause: quota()})
+	e.blockExternally(fixtureCtx(e, task), task, &RoleUnavailable{Role: roles.Architect, Provider: "chatgpt", Cause: quota()})
 
+	// The blocked invocation ends, and gives back the task's lease, before
+	// the restarted process resumes it.
+	endFixtureInvocation(e, task)
 	found := reopen(t, root, "session-c")
 	if len(found) != 1 {
 		t.Fatalf("blocked task not found after restart: %+v", found)
@@ -390,7 +395,7 @@ func TestAnUnavailableImplementerBlocksTheTaskAndKeepsTheCandidate(t *testing.T)
 		reviewer: answeringRunner{text: `{"decision":"accept","summary":"ok"}`, mode: roles.Unverified}, session: "session-1"}
 
 	var failed error
-	h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+	h.engine.implement(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 	seen := drainEvents(h.events)
 
@@ -426,7 +431,7 @@ func TestAnAuthorizedAlternateImplementorIsStillTried(t *testing.T) {
 		reviewer: answeringRunner{text: `{"decision":"accept","summary":"ok"}`, mode: roles.Unverified}, session: "session-1"}
 
 	var failed error
-	h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+	h.engine.implement(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 	seen := drainEvents(h.events)
 
@@ -467,11 +472,13 @@ func receiptFrom(t *testing.T, events []event.Event) runreceipt.Receipt {
 // A plan already recorded stands when a later architect turn is blocked -- an
 // architect re-planning inside a cycle does not un-plan the run.
 func TestABlockAfterPlanningKeepsThePlan(t *testing.T) {
-	e, events, _ := blockedEngine(t, t.TempDir(), "session-d")
+	e, events, store := blockedEngine(t, t.TempDir(), "session-d")
 	const task = "task-11"
+	// FIXTURE MIGRATION (70B2a1): the task's records stand on its root.
+	rootFixtureTask(t, store, e.SessionID, task, "the objective")
 	e.beginReceipt(task)
 	e.notePlan(task, "", fixturePlanAttemptID(t, task, "the bounded plan"))
-	e.blockExternally(task, &RoleUnavailable{Role: roles.Architect, Provider: "chatgpt", Cause: quota()})
+	e.blockExternally(fixtureCtx(e, task), task, &RoleUnavailable{Role: roles.Architect, Provider: "chatgpt", Cause: quota()})
 	if rec := receiptFrom(t, drainEvents(events)); rec.PlanState != runreceipt.PlanPresent {
 		t.Fatalf("a recorded plan was erased by a later block: plan_state %q", rec.PlanState)
 	}
@@ -495,7 +502,7 @@ func TestAnArchitectBlockedMidCycleIsNotHandedToAnotherImplementor(t *testing.T)
 		session:  "session-1"}
 
 	var failed error
-	h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+	h.engine.implement(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 	seen := drainEvents(h.events)
 
@@ -590,7 +597,7 @@ func architectRoster(t *testing.T, entries ...architectEntry) (*Engine, *rosterR
 	t.Cleanup(cancel)
 	e := New(gitx.Repo{Root: root}, cfg, bus, store, "sess-roster")
 	e.Runners = res
-	e.emit(event.New(e.SessionID, "task-1", event.SourceSystem, event.TaskCreated, "the objective", nil))
+	e.emitIn(fixtureCtx(e, "task-1"), event.New(e.SessionID, "task-1", event.SourceSystem, event.TaskCreated, "the objective", nil))
 	e.beginReceipt("task-1")
 	return e, res, events, root
 }
@@ -598,7 +605,7 @@ func architectRoster(t *testing.T, entries ...architectEntry) (*Engine, *rosterR
 // askRoster takes the architect turn over the whole roster.
 func askRoster(t *testing.T, e *Engine) (architectureDecision, error) {
 	t.Helper()
-	return e.resolveArchitectureIn(context.Background(), nil, certifiedStart{}, "task-1", "task", "PROMPT", t.TempDir())
+	return e.resolveArchitectureIn(fixtureCtx(e, "task-1"), nil, certifiedStart{}, "task-1", "task", "PROMPT", t.TempDir())
 }
 
 // asked is how many turns one entry's transport actually took.
@@ -758,7 +765,7 @@ func TestABoundedRefusalDoesNotAdvanceTheRoster(t *testing.T) {
 				cancel()
 				ctx = stopped
 			}
-			d, err := e.resolveArchitectureIn(ctx, nil, certifiedStart{}, "task-1", "task", "PROMPT", t.TempDir())
+			d, err := e.resolveArchitectureIn(invocationUnder(t, e, ctx, "task-1"), nil, certifiedStart{}, "task-1", "task", "PROMPT", t.TempDir())
 
 			if tc.wants == "" {
 				if err != nil {
@@ -859,7 +866,7 @@ func TestAnExhaustedArchitectRosterIsExternalAndNotFailed(t *testing.T) {
 		t.Fatal("the adapters' proof was lost on the way up")
 	}
 
-	if !e.blockExternally("task-1", err) {
+	if !e.blockExternally(fixtureCtx(e, "task-1"), "task-1", err) {
 		t.Fatalf("an exhausted architect roster did not reach the external terminal: %v", err)
 	}
 	seen := drainEvents(events)
@@ -932,7 +939,7 @@ func TestAnExhaustedRosterOfUnparseableAnswersIsStillExternalAndNotFailed(t *tes
 		t.Fatalf("unparseable output was laundered into provider unavailability: %v", err)
 	}
 
-	if !e.blockExternally("task-1", err) {
+	if !e.blockExternally(fixtureCtx(e, "task-1"), "task-1", err) {
 		t.Fatalf("an exhausted roster of unparseable answers did not reach the external terminal: %v", err)
 	}
 	seen := drainEvents(events)
@@ -984,7 +991,7 @@ func TestABoundedDecisionTheRunRefusesIsNeitherAFallbackNorExternal(t *testing.T
 		architectEntry{provider: "chatgpt", turns: []architectTurn{{text: escalation}}},
 		architectEntry{provider: "claude", turns: []architectTurn{{text: replyDecision}}})
 
-	d, err := e.resolveArchitectureIn(context.Background(), h.sc, certifiedStart{}, "task-1", "task", "PROMPT", t.TempDir())
+	d, err := e.resolveArchitectureIn(fixtureCtx(e, "task-1"), h.sc, certifiedStart{}, "task-1", "task", "PROMPT", t.TempDir())
 	if err == nil {
 		t.Fatalf("the escalation's routing refusal was not returned: %+v", d)
 	}
@@ -1008,7 +1015,7 @@ func TestABoundedDecisionTheRunRefusesIsNeitherAFallbackNorExternal(t *testing.T
 	if len(res.resolved) != 1 || res.resolved[0] != "chatgpt" {
 		t.Fatalf("adapters were resolved for %v; only the entry that answered may be consulted", res.resolved)
 	}
-	if e.blockExternally("task-1", err) {
+	if e.blockExternally(fixtureCtx(e, "task-1"), "task-1", err) {
 		t.Fatalf("a governance refusal was parked as external state: %v", err)
 	}
 	seen := drainEvents(events)
@@ -1086,7 +1093,7 @@ func TestAnUnboundArchitectIsRefusedAndTheRosterDoesNotAdvance(t *testing.T) {
 	if errors.As(err, &chain) {
 		t.Fatalf("a binding refusal was reported as no architect being obtainable: %v", err)
 	}
-	if e.blockExternally("task-1", err) {
+	if e.blockExternally(fixtureCtx(e, "task-1"), "task-1", err) {
 		t.Fatal("a binding refusal was parked as external state")
 	}
 }
@@ -1166,7 +1173,7 @@ func settlingHarness(t *testing.T, r observingResolver) (*gateHarness, *atomic.I
 }
 
 func (h *gateHarness) candidate() (candidateOutcome, error) {
-	outcome, _, _, _, err := h.engine.runCandidate(context.Background(), h.sc, certifiedStart{},
+	outcome, _, _, _, err := h.engine.runCandidate(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{},
 		"task-1", h.tc, "Rewrite main.go so it prints a number.", h.worker, h.work, "")
 	return outcome, err
 }

@@ -88,11 +88,11 @@ func deferScoped(t *testing.T, taskID string, scope []string) DeferredAuthority 
 	bus := event.NewBus()
 	take, done := collect(t, bus)
 	defer done()
-	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
+	e := withFixtureStore(t, &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}, taskID)
 
 	errc := make(chan error, 1)
 	go func() {
-		_, err := e.awaitChoice(context.Background(), nil, taskID, scopedCondition, "github.com/globulario/sensei-code",
+		_, err := e.awaitChoice(fixtureCtx(e, taskID), nil, taskID, scopedCondition, "github.com/globulario/sensei-code",
 			"e7d3fede98ff88b89904b096a40b363adc9c5667",
 			authority.Decision{Level: authority.Human, Subject: "Architectural authority reached a human-owned boundary.", Options: realOptions()},
 			realOptions(), scope...)
@@ -117,7 +117,7 @@ func answerRestored(t *testing.T, q DeferredAuthority, taskID, optionID string) 
 	bus := event.NewBus()
 	take, done := collect(t, bus)
 	defer done()
-	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
+	e := withFixtureStore(t, &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}, taskID)
 
 	type res struct {
 		choice string
@@ -125,7 +125,7 @@ func answerRestored(t *testing.T, q DeferredAuthority, taskID, optionID string) 
 	}
 	out := make(chan res, 1)
 	go func() {
-		choice, err := e.awaitChoice(context.Background(), nil, taskID, q.Condition, q.Domain, q.BaseSHA,
+		choice, err := e.awaitChoice(fixtureCtx(e, taskID), nil, taskID, q.Condition, q.Domain, q.BaseSHA,
 			q.Decision, q.Decision.Options, q.Scope...)
 		out <- res{choice, err}
 	}()
@@ -287,11 +287,11 @@ func TestAHumanStopIsDistinguishableFromAFailure(t *testing.T) {
 	bus := event.NewBus()
 	take, done := collect(t, bus)
 	defer done()
-	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
+	e := withFixtureStore(t, &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}, "task-1")
 
 	errc := make(chan error, 1)
 	go func() {
-		_, err := e.awaitChoice(context.Background(), nil, "task-1", q.Condition, q.Domain, q.BaseSHA,
+		_, err := e.awaitChoice(fixtureCtx(e, "task-1"), nil, "task-1", q.Condition, q.Domain, q.BaseSHA,
 			q.Decision, q.Decision.Options, q.Scope...)
 		errc <- err
 	}()
@@ -349,8 +349,8 @@ func TestTheAuthorityClassifierDistinguishesTheThreeEndings(t *testing.T) {
 			bus := event.NewBus()
 			take, done := collect(t, bus)
 			defer done()
-			e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
-			e.terminateAuthorityOutcome(context.Background(), "task-1", "the objective", tc.err)
+			e := withFixtureStore(t, &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}, "task-1")
+			e.terminateAuthorityOutcome(fixtureCtx(e, "task-1"), "task-1", "the objective", tc.err)
 			kinds := kindsOf(take())
 			if tc.wantSilent {
 				for _, k := range kinds {
@@ -397,12 +397,13 @@ func TestTheBehaviouralRecordLearnsStoppedNotFailureFromAHumanStop(t *testing.T)
 	defer srv.Close()
 
 	newEngine := func() *Engine {
-		e := &Engine{Bus: event.NewBus(), SessionID: "s1", pending: map[string]chan string{}}
+		e := withFixtureStore(t, &Engine{Bus: event.NewBus(), SessionID: "s1", pending: map[string]chan string{}}, "task-1")
 		e.Config.Behavioral = behavioral.Config{Enabled: true, URL: srv.URL, Project: "sensei-code", Domain: "d"}
 		return e
 	}
 
-	newEngine().terminateAuthorityOutcome(context.Background(), "task-1", "the objective", errStoppedByHumanAuthority)
+	stopped := newEngine()
+	stopped.terminateAuthorityOutcome(fixtureCtx(stopped, "task-1"), "task-1", "the objective", errStoppedByHumanAuthority)
 	select {
 	case got := <-statuses:
 		if got != "stopped" {
@@ -414,7 +415,8 @@ func TestTheBehaviouralRecordLearnsStoppedNotFailureFromAHumanStop(t *testing.T)
 
 	// And a genuine error still reports a failure, so the distinction is real in
 	// both directions rather than everything becoming "stopped".
-	newEngine().terminateAuthorityOutcome(context.Background(), "task-1", "the objective", errors.New("the worker died"))
+	failed := newEngine()
+	failed.terminateAuthorityOutcome(fixtureCtx(failed, "task-1"), "task-1", "the objective", errors.New("the worker died"))
 	select {
 	case got := <-statuses:
 		if got != "failure" {
@@ -433,12 +435,12 @@ func TestNeitherAuthorityPathKeepsItsOwnTerminalDecision(t *testing.T) {
 	// the authority classifier. Resume used to keep a closure of its own that
 	// reported every ending as FAILED, which turned a deferred question raised
 	// during a resumed re-plan into a final failure (#194 review at b23a8ae).
-	for _, fn := range []string{"execute", "Resume"} {
+	for _, fn := range []string{"execute", "ResumeTask"} {
 		if !strings.Contains(funcBody(t, "internal/workflow/engine.go", fn), "terminateRun") {
 			t.Errorf("%s does not end through the shared run classifier", fn)
 		}
 	}
-	if strings.Contains(funcBody(t, "internal/workflow/engine.go", "Resume"), "event.WorkflowFailed") {
+	if strings.Contains(funcBody(t, "internal/workflow/engine.go", "ResumeTask"), "event.WorkflowFailed") {
 		t.Error("Resume decides a failure terminal itself instead of through the shared classifier")
 	}
 	for _, fn := range []string{"terminateRun", "resumeAuthority"} {
@@ -467,10 +469,13 @@ func TestAQuestionBoundToAnotherTaskIsRefusedBeforeAnythingStarts(t *testing.T) 
 	bus := event.NewBus()
 	take, done := collect(t, bus)
 	defer done()
-	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
+	// FIXTURE MIGRATION (70B2a1): the resumed task's record, rooted by its
+	// holder session; this fresh session is bound before anything is recorded.
+	e := &Engine{Bus: bus, SessionID: "s1", Store: heldTaskStore(t, "task-someone-else"), pending: map[string]chan string{}}
+	bindFixtureSession(t, e.Store, "task-someone-else", e.SessionID)
 	// No Repo, no Config.Sensei: if the guard ran late this would fail on
 	// starting Sensei instead, with a message naming the wrong thing.
-	e.resumeAuthority(context.Background(), session.Interrupted{
+	e.resumeAuthority(fixtureCtx(e, "task-someone-else"), session.Interrupted{
 		TaskID: "task-someone-else", Task: "an objective", AwaitingAuthority: raw,
 	})
 	var named bool
@@ -546,8 +551,9 @@ func TestARecordNamingNoTaskIsNotTreatedAsAMismatch(t *testing.T) {
 	bus := event.NewBus()
 	take, done := collect(t, bus)
 	defer done()
-	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
-	e.resumeAuthority(context.Background(), session.Interrupted{
+	e := &Engine{Bus: bus, SessionID: "s1", Store: heldTaskStore(t, "task-1788804009410633746"), pending: map[string]chan string{}}
+	bindFixtureSession(t, e.Store, "task-1788804009410633746", e.SessionID)
+	e.resumeAuthority(fixtureCtx(e, "task-1788804009410633746"), session.Interrupted{
 		TaskID: "task-1788804009410633746", Task: "an objective", AwaitingAuthority: legacy,
 	})
 
@@ -592,12 +598,12 @@ func legacyAsk(t *testing.T, taskID, optionID string) ([]event.Event, error) {
 	bus := event.NewBus()
 	take, done := collect(t, bus)
 	defer done()
-	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
+	e := withFixtureStore(t, &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}, taskID)
 	e.noteUnprovenAuthorityScope(taskID)
 
 	errc := make(chan error, 1)
 	go func() {
-		_, err := e.awaitChoice(context.Background(), nil, taskID, scopedCondition,
+		_, err := e.awaitChoice(fixtureCtx(e, taskID), nil, taskID, scopedCondition,
 			"github.com/globulario/sensei-code", "e7d3fede98ff88b89904b096a40b363adc9c5667",
 			authority.Decision{Level: authority.Human, Subject: "Architectural authority reached a human-owned boundary.", Options: realOptions()},
 			realOptions())
@@ -679,8 +685,8 @@ func TestAnUnprovenScopeStillAdmitsAHumanStop(t *testing.T) {
 	bus := event.NewBus()
 	take, done := collect(t, bus)
 	defer done()
-	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
-	e.terminateAuthorityOutcome(context.Background(), "task-legacy", "the objective", err)
+	e := withFixtureStore(t, &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}, "task-legacy")
+	e.terminateAuthorityOutcome(fixtureCtx(e, "task-legacy"), "task-legacy", "the objective", err)
 	kinds := kindsOf(take())
 	if !hasKind(kinds, event.WorkflowStopped) || hasKind(kinds, event.WorkflowFailed) {
 		t.Fatalf("a legacy stop terminated as %v, want workflow.stopped", kinds)
@@ -763,12 +769,17 @@ func TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity(t *testing.T) {
 	// The durable record the task was reconstructed from: the only place a
 	// restarted process can read its objective.
 	store := sessionStore(t)
-	if err := store.Append(event.New("s1", task.TaskID, event.SourceUser, event.TaskCreated, task.Task, nil)); err != nil {
+	if err := seedAppend(t, store, event.New("s1", task.TaskID, event.SourceUser, event.TaskCreated, task.Task, nil)); err != nil {
 		t.Fatal(err)
 	}
-	e := &Engine{Bus: bus, SessionID: "s1", Store: store, pending: map[string]chan string{}}
+	// A restarted process acts under a fresh session, which the production
+	// lineage binding makes the task's current session before it records
+	// anything (70B2a1, RULING-189): the same TASK re-enters, not the same
+	// session.
+	e := &Engine{Bus: bus, SessionID: "s2", Store: store, pending: map[string]chan string{}}
+	bindFixtureSession(t, store, task.TaskID, e.SessionID)
 
-	e.resumeUnplannedArchitecture(context.Background(), task)
+	e.resumeUnplannedArchitecture(fixtureCtx(e, task.TaskID), task)
 
 	evs := take()
 	if len(evs) == 0 {
@@ -811,10 +822,23 @@ func TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity(t *testing.T) {
 	// a block. Asserted by driving Resume rather than by reading it: the earlier
 	// version called this very function, and only its GUARD -- a block record it
 	// also required -- left this shape unreachable.
+	//
+	// It is driven as a restart drives it (70B2a1): a FRESH process over the
+	// holder's record, under a fresh SessionID. The same TASK resumes; the same
+	// session does not. The fresh session becomes the task's current session
+	// only through the production lineage binding Resume performs, and the
+	// root stays owned by the holder s1.
+	fresh, err := session.FreshID(time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
 	resumed := event.NewBus()
 	ch, stop := resumed.Subscribe(64)
 	defer stop()
-	r := &Engine{Bus: resumed, SessionID: "s1", pending: map[string]chan string{}}
+	// The earlier invocation of the task ends, and gives back its lease,
+	// before the fresh process resumes it.
+	endFixtureInvocation(e, task.TaskID)
+	r := &Engine{Bus: resumed, SessionID: fresh, Store: store, pending: map[string]chan string{}}
 	if got := r.Resume(context.Background(), task); got != task.TaskID {
 		t.Fatalf("Resume continued %q instead of the task it was given", got)
 	}
@@ -822,7 +846,15 @@ func TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity(t *testing.T) {
 	for {
 		select {
 		case ev := <-ch:
+			if ev.TaskID != task.TaskID || ev.SessionID != fresh {
+				t.Fatalf("the resumed process published %s as task %q session %q; want task %q session %q",
+					ev.Kind, ev.TaskID, ev.SessionID, task.TaskID, fresh)
+			}
 			if ev.Kind == event.Status && strings.Contains(ev.Summary, "the turn it is owed") {
+				lineage, err := store.TaskSessionLineage(task.TaskID)
+				if err != nil || lineage.HolderSessionID != "s1" || lineage.Tip() != fresh {
+					t.Fatalf("the resumed session was not bound through the task's lineage: %+v %v", lineage, err)
+				}
 				return
 			}
 			if ev.Kind == event.WorkflowFailed || ev.Kind == event.WorkflowCompleted {
@@ -846,12 +878,13 @@ func TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	rootFixtureTask(t, store, "s1", "task-1", "task")
 	recorded := authority.Resolution{
 		TaskID: "task-1", SessionID: "s1", Question: "Architectural authority reached a human-owned boundary.",
 		Condition: scopedCondition, OptionID: "1", OptionLabel: "Authorize the architectural change described above",
-		Scope: planScope(), Outcome: authority.Authorize, DecidedAt: time.Now().UTC(),
+		Scope: planScope(), Outcome: authority.Authorize, State: authority.Unsupported, DecidedAt: time.Now().UTC(),
 	}
-	if err := store.Append(event.New("s1", "task-1", event.SourceUser, event.AuthorityResolved,
+	if err := seedAppend(t, store, event.New("s1", "task-1", event.SourceUser, event.AuthorityResolved,
 		recorded.OptionLabel, recorded)); err != nil {
 		t.Fatal(err)
 	}
@@ -957,7 +990,7 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 	q := deferScoped(t, taskID, planScope())
 	history := []event.Event{
 		event.New("s1", taskID, event.SourceUser, event.TaskCreated, objective, nil),
-		event.New("s1", taskID, event.SourceSystem, event.WorkflowAwaitingAuthority, q.Condition, q),
+		event.New("s1", taskID, event.SourceUser, event.WorkflowAwaitingAuthority, q.Condition, q),
 	}
 	standing := session.FindInterrupted(history)
 	if len(standing) != 1 || standing[0].TaskID != taskID {
@@ -973,7 +1006,7 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 
 	store := sessionStore(t)
 	for _, ev := range history {
-		if err := store.Append(ev); err != nil {
+		if err := seedAppend(t, store, ev); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1158,12 +1191,28 @@ func driveGapLoop(t *testing.T, e *Engine, architect *scriptedArchitect, world, 
 	defer cancel()
 	ctx, stop := context.WithCancel(context.Background())
 	defer stop()
+	// A run the session record halted (70B2a1) has no terminal that can be
+	// recorded; its outcome is its invocation's failure, so the halt ends
+	// the drive as a terminal would.
+	halted := taskHalted(ctx, e, taskID)
 	go start(ctx)
 	run := gapLoopRun{engine: e, world: world}
 	asked := 0
 	timeout := time.After(90 * time.Second)
 	for {
 		select {
+		case <-halted:
+			halted = nil
+			settle := time.After(300 * time.Millisecond)
+			for {
+				select {
+				case ev := <-ch:
+					run.events = append(run.events, ev)
+				case <-settle:
+					run.prompts = append(run.prompts, architect.prompts...)
+					return run
+				}
+			}
 		case ev := <-ch:
 			run.events = append(run.events, ev)
 			switch ev.Kind {
@@ -1196,12 +1245,40 @@ func driveGapLoop(t *testing.T, e *Engine, architect *scriptedArchitect, world, 
 }
 
 // runGapLoop drives one fresh governed run through the real resolution loop.
+// A record the fixture already rooted the task in, with history after the
+// root, is continued under that root (runRootedTask).
 func runGapLoop(t *testing.T, store *session.Store, taskID string, turns ...string) gapLoopRun {
 	t.Helper()
 	e, architect, world := newGapLoopEngine(t, nil, store, turns...)
+	_, rooted := store.TaskSessionLineage(taskID)
 	return driveGapLoop(t, e, architect, world, taskID, "", func(ctx context.Context) {
+		if rooted == nil {
+			runRootedTask(ctx, e, taskID, "change main.go", RequestedByHuman)
+			return
+		}
 		e.run(ctx, taskID, "change main.go", RequestedByHuman)
 	})
+}
+
+// runRootedTask is e.run for a task whose TaskCreated root the fixture
+// already wrote, so that history the run must see -- an earlier answer --
+// stands after the root, as it does in production (70B2a1). e.run writes the
+// root itself and a second root is refused, so this is e.run after its root,
+// under an invocation admitted as e.run's is: a record names its invocation
+// or is refused (RULING-198) -- and under the task's lease, which the Store
+// makes operative for the root's holder (70B2a1 cycle-3 review f1).
+func runRootedTask(ctx context.Context, e *Engine, taskID, task string, how Provenance) {
+	inv, err := e.admitInvocation(ctx, taskID)
+	if err != nil {
+		return
+	}
+	// Leased as e.run's invocation is, and operative for the root's holder.
+	leaseFixtureInvocation(e, inv)
+	defer e.endInvocation(inv)
+	ctx = inv.ctx
+	e.recordObjective(taskID, Objective{Text: task, Provenance: how})
+	e.announceMode(ctx, taskID, governedMode(how))
+	e.execute(ctx, taskID, task)
 }
 
 func gapLoopTrace(evs []event.Event) string {
@@ -1227,9 +1304,103 @@ func certifiedPrompts(prompts []string) int {
 func storeWithTaskCreated(t *testing.T, taskID, objective string) *session.Store {
 	t.Helper()
 	store := sessionStore(t)
-	if err := store.Append(event.New("s1", taskID, event.SourceUser, event.TaskCreated, objective, nil)); err != nil {
+	if err := seedAppend(t, store, event.New("s1", taskID, event.SourceUser, event.TaskCreated, objective, nil)); err != nil {
 		t.Fatal(err)
 	}
+	return store
+}
+
+// rootFixtureTask writes the canonical durable root production Submit writes
+// first -- the task's TaskCreated, under the session that holds it -- so the
+// task has a session lineage its later records are authorized against
+// (70B2a1, RULING-190: rootless fixtures are migrated, never exempted).
+func rootFixtureTask(t *testing.T, store *session.Store, sessionID, taskID, objective string) {
+	t.Helper()
+	if err := seedAppend(t, store, event.New(sessionID, taskID, event.SourceSystem, event.TaskCreated, objective, nil)); err != nil {
+		t.Fatalf("the fixture could not root task %s: %v", taskID, err)
+	}
+}
+
+// withFixtureStore gives e a test-owned durable Store under e's session,
+// with each of taskIDs rooted in it, and returns e. FIXTURE MIGRATION
+// (70B2a1, RULING-193 A and W4): a task-bound event is published only once
+// it is recorded, and an engine with no Store records none and publishes
+// none, so a fixture that observes a task's events stands on a durable record
+// that roots the task, exactly as a submitted task's does.
+func withFixtureStore(t *testing.T, e *Engine, taskIDs ...string) *Engine {
+	t.Helper()
+	store, err := session.New(t.TempDir(), e.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Store = store
+	for _, taskID := range taskIDs {
+		rootFixtureTask(t, store, e.SessionID, taskID, "the fixture's objective")
+	}
+	return e
+}
+
+// rootFixtureTaskOnce roots taskID under the engine's session when e's
+// record holds no root of it yet: a plan attempt, grant or answer exists in
+// production only after the task's TaskCreated root, so a fixture that
+// records one stands on that root first. A record that already roots the
+// task is left exactly as it is.
+func rootFixtureTaskOnce(t *testing.T, e *Engine, taskID, objective string) {
+	t.Helper()
+	if e.Store == nil {
+		return
+	}
+	if _, err := e.Store.TaskSessionLineage(taskID); !errors.Is(err, session.ErrNoTaskRoot) {
+		return
+	}
+	// A live invocation of the task in e holds the task's lease: it creates
+	// the root under that lease, exactly as a Run does, and so becomes its
+	// operative writer.
+	e.mu.Lock()
+	var lease *session.TaskLease
+	if live := e.admitted[taskID]; live != nil && !live.ended {
+		lease = live.lease
+	}
+	e.mu.Unlock()
+	if lease != nil {
+		if err := e.Store.CreateTaskRoot(t.Context(), lease, event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, objective, nil)); err != nil {
+			t.Fatalf("the fixture could not root task %s: %v", taskID, err)
+		}
+		return
+	}
+	rootFixtureTask(t, e.Store, e.SessionID, taskID, objective)
+}
+
+// bindFixtureSession makes fresh the current session of taskID through the
+// production session-lineage binding, exactly as a resumed process is bound
+// before it records anything of the task.
+func bindFixtureSession(t *testing.T, store *session.Store, taskID, fresh string) {
+	t.Helper()
+	lineage, err := store.TaskSessionLineage(taskID)
+	if err != nil {
+		t.Fatalf("task %s has no session lineage to bind %s to: %v", taskID, fresh, err)
+	}
+	b, err := lineage.BindingFor(fresh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := store.AcquireTaskInvocation(context.Background(), taskID)
+	if err != nil {
+		t.Fatalf("leasing task %s to bind %s: %v", taskID, fresh, err)
+	}
+	defer lease.Release()
+	if _, err := store.BindSessionLineage(context.Background(), lease, b); err != nil {
+		t.Fatalf("binding %s to task %s: %v", fresh, taskID, err)
+	}
+}
+
+// heldTaskStore is the durable record of taskID as the process that began it
+// left it: rooted under its holder session, which is never the fresh session
+// a resuming engine runs under.
+func heldTaskStore(t *testing.T, taskID string) *session.Store {
+	t.Helper()
+	store := sessionStore(t)
+	rootFixtureTask(t, store, "s0-holder", taskID, "an objective")
 	return store
 }
 
@@ -1424,15 +1595,16 @@ const gapEscalateWithPremise = `{"decision":"escalate","summary":"unsure about m
 func TestAnAnswerAboutAnotherGapDoesNotAuthorizeAnEscalationsGapByText(t *testing.T) {
 	const taskID = "task-w4"
 	store := sessionStore(t)
+	rootFixtureTask(t, store, "s1", taskID, "change main.go")
 	condition := "a bounded knowledge gap was not closed by investigation: " +
 		"the plan rests on an unverified premise about main.go: main has no callers"
 	other := GapIdentity{Kind: "coverage-absent", Scope: []string{"main.go"}}
 	prior := resolvedAuthority{Resolution: authority.Resolution{
 		TaskID: taskID, SessionID: "s1", Question: "May main.go change?", Condition: condition,
 		OptionID: "1", OptionLabel: "Authorize the architectural change described above",
-		Scope: []string{"main.go"}, Outcome: authority.Authorize, DecidedAt: time.Now().UTC(),
+		Scope: []string{"main.go"}, Outcome: authority.Authorize, State: authority.Unsupported, DecidedAt: time.Now().UTC(),
 	}, Gap: &other}
-	if err := store.Append(event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, prior.OptionLabel, prior)); err != nil {
+	if err := seedAppend(t, store, event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, prior.OptionLabel, prior)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1470,13 +1642,14 @@ func TestAGapThatDisappearsIsNotSettledAndReopensOnTheSameIdentity(t *testing.T)
 		cond   = "the plan rests on an unverified premise about main.go: main has no callers"
 	)
 	store := sessionStore(t)
+	rootFixtureTask(t, store, "s1", taskID, "change main.go")
 	gap := GapIdentity{Kind: "unverified-premise", Subject: "main.go", Scope: []string{"main.go"}, World: world}
 	// Text history: the gap's own human question, answered -- about another identity.
 	asked := "a bounded knowledge gap was not closed by investigation: " + cond
 	other := GapIdentity{Kind: "unverified-premise", Subject: "main.go", Scope: []string{"main.go"}, World: "another-world"}
-	if err := store.Append(event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, "Authorize",
-		resolvedAuthority{Resolution: authority.Resolution{TaskID: taskID, SessionID: "s1", Condition: asked,
-			Scope: []string{"main.go"}, Outcome: authority.Authorize, DecidedAt: time.Now().UTC()}, Gap: &other})); err != nil {
+	if err := seedAppend(t, store, event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, "Authorize",
+		resolvedAuthority{Resolution: authority.Resolution{TaskID: taskID, SessionID: "s1", Question: "May main.go change?", OptionID: "1", Condition: asked,
+			Scope: []string{"main.go"}, Outcome: authority.Authorize, State: authority.Unsupported, DecidedAt: time.Now().UTC()}, Gap: &other})); err != nil {
 		t.Fatal(err)
 	}
 	e := &Engine{Bus: event.NewBus(), Store: store, SessionID: "s1", pending: map[string]chan string{}}
@@ -1536,19 +1709,20 @@ func TestAGapThatDisappearsIsNotSettledAndReopensOnTheSameIdentity(t *testing.T)
 func TestAnEscalationConsumesTheSettlementOfItsOwnGapBeforeTheClosureBudget(t *testing.T) {
 	const taskID = "task-w4-settled"
 	store := sessionStore(t)
+	rootFixtureTask(t, store, "s1", taskID, "change main.go")
 	e, architect, world := newGapLoopEngine(t, nil, store, gapEscalateWithPremise, gapReply)
 	own := GapIdentity{Kind: "unverified-premise", Subject: "main.go", Scope: []string{"main.go"}, World: world}
 	settled := resolvedAuthority{Resolution: authority.Resolution{
 		TaskID: taskID, SessionID: "s1", Question: "May main.go change?",
 		Condition: "a bounded knowledge gap was not closed by investigation: the plan rests on an unverified premise about main.go: main has no callers",
 		OptionID:  "1", OptionLabel: "Authorize the architectural change described above",
-		Scope: []string{"main.go"}, Outcome: authority.Authorize, DecidedAt: time.Now().UTC(),
+		Scope: []string{"main.go"}, Outcome: authority.Authorize, State: authority.Unsupported, DecidedAt: time.Now().UTC(),
 	}, Gap: &own}
-	if err := store.Append(event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, settled.OptionLabel, settled)); err != nil {
+	if err := seedAppend(t, store, event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, settled.OptionLabel, settled)); err != nil {
 		t.Fatal(err)
 	}
 	run := driveGapLoop(t, e, architect, world, taskID, "", func(ctx context.Context) {
-		e.run(ctx, taskID, "change main.go", RequestedByHuman)
+		runRootedTask(ctx, e, taskID, "change main.go", RequestedByHuman)
 	})
 	for _, ev := range run.events {
 		if ev.Kind == event.Status && strings.Contains(ev.Summary, "closing it instead") {
@@ -1594,11 +1768,13 @@ func resumeAtRefusedPrecondition(t *testing.T, moveBase bool) (e *Engine, seen [
 
 	const taskID = "task-r"
 	q := deferScoped(t, taskID, planScope())
+	// The question as this task's holder deferred it: asked in its session.
+	q.SessionID = e.SessionID
 	for _, ev := range []event.Event{
 		event.New(e.SessionID, taskID, event.SourceUser, event.TaskCreated, "the objective", nil),
-		event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowAwaitingAuthority, q.Condition, q),
+		event.New(e.SessionID, taskID, event.SourceUser, event.WorkflowAwaitingAuthority, q.Condition, q),
 	} {
-		if err := e.Store.Append(ev); err != nil {
+		if err := seedAppend(t, e.Store, ev); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1755,6 +1931,7 @@ func df30Engine(t *testing.T, taskID string) *Engine {
 func df30EngineOn(t *testing.T, store *session.Store, taskID string) *Engine {
 	t.Helper()
 	e := &Engine{Bus: event.NewBus(), Store: store, SessionID: "s1", pending: map[string]chan string{}}
+	rootFixtureTaskOnce(t, e, taskID, "the objective")
 	attempt := df30Attempt()
 	attempt.TaskID = taskID
 	e.notePlanAttemptStarted(taskID, attempt.ID)
@@ -1768,7 +1945,7 @@ func df30EngineOn(t *testing.T, store *session.Store, taskID string) *Engine {
 // production recorder.
 func df30Record(t *testing.T, e *Engine, taskID string, grants []prospectiveGrant) {
 	t.Helper()
-	if err := e.recordProspectiveGrants(taskID, "prospective authority recorded during the closure round", df30Recorded(grants)); err != nil {
+	if err := e.recordProspectiveGrants(fixtureCtx(e, taskID), taskID, "prospective authority recorded during the closure round", df30Recorded(grants)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -1788,7 +1965,7 @@ func df30NextAttempt(t *testing.T, e *Engine, taskID, id string) {
 func df30RecordPending(t *testing.T, e *Engine, taskID string, grants []prospectiveGrant) {
 	t.Helper()
 	rec := prospectiveRecord{PlanAttemptID: e.pendingPlanAttempt(taskID).ID, World: prospectiveWorld, Grants: grants}
-	if err := e.recordProspectiveGrants(taskID, "prospective authority recorded during the closure round", rec); err != nil {
+	if err := e.recordProspectiveGrants(fixtureCtx(e, taskID), taskID, "prospective authority recorded during the closure round", rec); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -2019,7 +2196,7 @@ func assertNarrowedAnswersReturnToTheEpisode(t *testing.T, e *Engine, taskID str
 	d := architectureDecision{Decision: "escalate", Mode: ModeModify, Files: narrowed.Scope, HumanQuestion: "May the run proceed?"}
 	errc := make(chan error, 1)
 	go func() {
-		_, err := e.awaitHuman(context.Background(), nil, certifiedStart{}, taskID, d, routed.Condition, narrowed)
+		_, err := e.awaitHuman(fixtureCtx(e, taskID), nil, certifiedStart{}, taskID, d, routed.Condition, narrowed)
 		errc <- err
 	}()
 	waitForPending(t, e, taskID)
@@ -2075,8 +2252,9 @@ func assertNarrowedAnswersReturnToTheEpisode(t *testing.T, e *Engine, taskID str
 	// The question as a deferral would have recorded it, so a restarted
 	// process reads it back.
 	q := DeferredAuthority{Condition: routed.Condition, TaskID: taskID, SessionID: "s1", Scope: narrowed.Scope,
-		ScopeRecorded: true, Gap: &narrowed, PlanAttemptID: current}
-	if err := e.Store.Append(event.New("s1", taskID, event.SourceSystem, event.WorkflowAwaitingAuthority, q.Condition, q)); err != nil {
+		ScopeRecorded: true, Gap: &narrowed, PlanAttemptID: current,
+		Decision: authority.Decision{Level: authority.Human, Subject: "May this change proceed?", Options: realOptions()}}
+	if err := seedAppend(t, e.Store, event.New("s1", taskID, event.SourceUser, event.WorkflowAwaitingAuthority, q.Condition, q)); err != nil {
 		t.Fatal(err)
 	}
 	assertRecordedCoverageQuestionFailsClosed(t, e, taskID, current, narrowed, routed)
@@ -2491,7 +2669,7 @@ func TestDF30W14TheProductionLifecycleDecidesOneEpisode(t *testing.T) {
 					w := newDF30Production(t, taskID, files)
 					sc := df30Sensei(t, w.state)
 					e := w.e
-					if err := e.Store.Append(event.New("s1", taskID, event.SourceSystem, event.TaskCreated, task, nil)); err != nil {
+					if err := seedAppend(t, e.Store, event.New("s1", taskID, event.SourceSystem, event.TaskCreated, task, nil)); err != nil {
 						t.Fatal(err)
 					}
 					w.region(t, k.body)
@@ -2501,7 +2679,7 @@ func TestDF30W14TheProductionLifecycleDecidesOneEpisode(t *testing.T) {
 					// OBSERVE: the first routing, by the first plan attempt, opens
 					// the gap over both members.
 					d0 := architectureDecision{Decision: "proceed", Mode: ModeModify, Plan: "the plan as first routed", Files: planned}
-					_, err := e.resolveSuppliedPlan(t.Context(), sc, certifiedStart{}, taskID, task, SuppliedPlan{decision: d0, Digest: "d0"})
+					_, err := e.resolveSuppliedPlan(fixtureCtx(e, taskID), sc, certifiedStart{}, taskID, task, SuppliedPlan{decision: d0, Digest: "d0"})
 					opened := openCoverageGaps(e, taskID, w.world)
 					if err == nil || len(opened) != 1 || opened[0].Gap.Kind != k.kind || !sameFiles(opened[0].Gap.Scope, []string{examinedFile, create}) {
 						t.Fatalf("premise: the first routing refuses over one open %s gap holding both members: err=%v open=%+v", k.kind, err, opened)
@@ -2529,9 +2707,9 @@ func TestDF30W14TheProductionLifecycleDecidesOneEpisode(t *testing.T) {
 					switch entry {
 					case "ordinary":
 						df30Architect(t, e, d1)
-						admitted, err = e.resolveArchitectureIn(t.Context(), sc, certifiedStart{}, taskID, task, "plan the change", e.Repo.Root)
+						admitted, err = e.resolveArchitectureIn(fixtureCtx(e, taskID), sc, certifiedStart{}, taskID, task, "plan the change", e.Repo.Root)
 					case "supplied":
-						admitted, err = e.resolveSuppliedPlan(t.Context(), sc, certifiedStart{}, taskID, task, SuppliedPlan{decision: d1, Digest: "d1"})
+						admitted, err = e.resolveSuppliedPlan(fixtureCtx(e, taskID), sc, certifiedStart{}, taskID, task, SuppliedPlan{decision: d1, Digest: "d1"})
 					default:
 						// The second routing meets a gate, answered before it,
 						// so it reaches coverage only through the human answer's
@@ -2543,12 +2721,12 @@ func TestDF30W14TheProductionLifecycleDecidesOneEpisode(t *testing.T) {
 						}
 						answer := authority.Resolution{TaskID: taskID, SessionID: "s1", Question: "May this change proceed?",
 							Condition: human.Condition, OptionID: "1", OptionLabel: "Authorize the architectural change described above",
-							Scope: planned, Outcome: authority.Authorize, DecidedAt: time.Now().UTC()}
-						if err := e.Store.Append(event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, answer.OptionLabel, answer)); err != nil {
+							Scope: planned, Outcome: authority.Authorize, State: authority.Unsupported, DecidedAt: time.Now().UTC()}
+						if err := seedAppend(t, e.Store, event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, answer.OptionLabel, answer)); err != nil {
 							t.Fatal(err)
 						}
 						w.region(t, body)
-						admitted, err = e.resolveSuppliedPlan(t.Context(), sc, certifiedStart{}, taskID, task, SuppliedPlan{decision: d1, Digest: "d1"})
+						admitted, err = e.resolveSuppliedPlan(fixtureCtx(e, taskID), sc, certifiedStart{}, taskID, task, SuppliedPlan{decision: d1, Digest: "d1"})
 					}
 					if second := e.pendingPlanAttempt(taskID).ID; second == "" || second == first {
 						t.Fatalf("premise: the second routing is a different plan attempt: first %q second %q", first, second)
@@ -2667,7 +2845,7 @@ func TestDF30W14AGatedFirstObservationDecidesItsRegionGap(t *testing.T) {
 					w := newDF30Production(t, taskID, files)
 					sc := df30Sensei(t, w.state)
 					e := w.e
-					if err := e.Store.Append(event.New("s1", taskID, event.SourceSystem, event.TaskCreated, task, nil)); err != nil {
+					if err := seedAppend(t, e.Store, event.New("s1", taskID, event.SourceSystem, event.TaskCreated, task, nil)); err != nil {
 						t.Fatal(err)
 					}
 					// Every planned file is present and examined.
@@ -2682,14 +2860,14 @@ func TestDF30W14AGatedFirstObservationDecidesItsRegionGap(t *testing.T) {
 						}
 						answer := authority.Resolution{TaskID: taskID, SessionID: "s1", Question: "May this change proceed?",
 							Condition: human.Condition, OptionID: "1", OptionLabel: "Authorize the architectural change described above",
-							Scope: planned, Outcome: authority.Authorize, DecidedAt: time.Now().UTC()}
-						if err := e.Store.Append(event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, answer.OptionLabel, answer)); err != nil {
+							Scope: planned, Outcome: authority.Authorize, State: authority.Unsupported, DecidedAt: time.Now().UTC()}
+						if err := seedAppend(t, e.Store, event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, answer.OptionLabel, answer)); err != nil {
 							t.Fatal(err)
 						}
 					}
 					w.region(t, body)
 					d := architectureDecision{Decision: "proceed", Mode: ModeModify, Plan: "the plan", Files: planned}
-					admitted, err := e.resolveSuppliedPlan(t.Context(), sc, certifiedStart{}, taskID, task, SuppliedPlan{decision: d, Digest: "d"})
+					admitted, err := e.resolveSuppliedPlan(fixtureCtx(e, taskID), sc, certifiedStart{}, taskID, task, SuppliedPlan{decision: d, Digest: "d"})
 					open := openCoverageGaps(e, taskID, w.world)
 					if c.want == nil {
 						if err != nil || admitted.Plan != d.Plan || len(open) != 0 {
@@ -3303,12 +3481,13 @@ func df30LiveDeferral(t *testing.T, store *session.Store, taskID string) (sessio
 	_, _, out := df30Measured(t)
 	scoped := scopedPreflight(t, neighbourCovered)
 	d := architectureDecision{Decision: "proceed", Mode: ModeModify, Files: df30Planned()}
-	e := df30EngineOn(t, store, taskID)
-	if err := store.Append(event.New("s1", taskID, event.SourceUser, event.TaskCreated, "change the planned files", nil)); err != nil {
+	if err := seedAppend(t, store, event.New("s1", taskID, event.SourceUser, event.TaskCreated, "change the planned files", nil)); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Append(event.New("s1", taskID, event.SourceSystem, event.PlanAttemptStarted, "started",
-		map[string]string{"plan_attempt_id": df30Attempt().ID})); err != nil {
+	e := df30EngineOn(t, store, taskID)
+	if err := seedAppend(t, store, event.New("s1", taskID, event.SourceSystem, event.PlanAttemptStarted, "started",
+		map[string]any{"plan_attempt_id": df30Attempt().ID, "task_id": taskID, "world": "", "plan_source": PlanByArchitect,
+			"plan": map[string]string{}})); err != nil {
 		t.Fatal(err)
 	}
 	action := df30Action(out, nil)
@@ -3321,7 +3500,7 @@ func df30LiveDeferral(t *testing.T, store *session.Store, taskID string) (sessio
 	if refusal := e.unauthenticatedCoverageRestore(taskID, routed.Gap); refusal != nil {
 		t.Fatalf("a live episode's question was refused as a restoration: %v", refusal)
 	}
-	ctx := withPlanAttempt(withAuthorityGap(context.Background(), routed.Gap), e.questionOwner(taskID, routed.Gap))
+	ctx := withPlanAttempt(withAuthorityGap(fixtureCtx(e, taskID), routed.Gap), e.questionOwner(taskID, routed.Gap))
 	errc := make(chan error, 1)
 	go func() {
 		_, err := e.awaitChoice(ctx, nil, taskID, routed.Condition, "github.com/globulario/sensei-code", prospectiveWorld,
@@ -3336,6 +3515,8 @@ func df30LiveDeferral(t *testing.T, store *session.Store, taskID string) (sessio
 	if err := <-errc; !errors.Is(err, errAuthorityDeferred) {
 		t.Fatalf("the live deferral produced %v", err)
 	}
+	// The deferring invocation ends, and gives back the task's lease.
+	endFixtureInvocation(e, taskID)
 	history, err := store.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -3360,7 +3541,8 @@ func assertResumeRefusedBeforeAsking(t *testing.T, store *session.Store, task se
 	defer done()
 	// No Repo and no Sensei: the refusal is decided before anything starts.
 	e := &Engine{Bus: bus, Store: store, SessionID: "s2", pending: map[string]chan string{}}
-	e.resumeAuthority(context.Background(), task)
+	bindFixtureSession(t, store, task.TaskID, e.SessionID)
+	e.resumeAuthority(fixtureCtx(e, task.TaskID), task)
 	evs := take()
 	for _, ev := range evs {
 		switch ev.Kind {
@@ -3433,13 +3615,13 @@ func TestDF30RestoreBoundaryALegacyCoverageRecordIsRefusedBeforeAnyoneIsAsked(t 
 				evs := []event.Event{}
 				if answered {
 					evs = append(evs, event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, "Authorize",
-						resolvedAuthority{Resolution: authority.Resolution{TaskID: taskID, SessionID: "s1", Condition: q.Condition,
-							OptionID: "1", OptionLabel: "Authorize", Scope: q.Scope, Outcome: authority.Authorize, DecidedAt: time.Now().UTC()},
+						resolvedAuthority{Resolution: authority.Resolution{TaskID: taskID, SessionID: "s1", Question: q.Decision.Subject, Condition: q.Condition,
+							OptionID: "1", OptionLabel: "Authorize", Scope: q.Scope, Outcome: authority.Authorize, State: authority.Unsupported, DecidedAt: time.Now().UTC()},
 							Gap: &gap}))
 				}
 				evs = append(evs, event.New("s1", taskID, event.SourceUser, event.WorkflowAwaitingAuthority, q.Condition, q))
 				for _, ev := range evs {
-					if err := store.Append(ev); err != nil {
+					if err := seedAppend(t, store, ev); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -3459,7 +3641,8 @@ func TestDF30RestoreBoundaryALegacyCoverageRecordIsRefusedBeforeAnyoneIsAsked(t 
 				take, done := collect(t, bus)
 				defer done()
 				e := &Engine{Bus: bus, Store: store, SessionID: "s2", pending: map[string]chan string{}}
-				e.resumeAuthority(context.Background(), tasks[0])
+				bindFixtureSession(t, store, tasks[0].TaskID, e.SessionID)
+				e.resumeAuthority(fixtureCtx(e, tasks[0].TaskID), tasks[0])
 				for _, ev := range take() {
 					if ev.Kind == event.WorkflowRestorationRefused {
 						t.Fatalf("a non-coverage question was refused as a coverage episode: %q", ev.Summary)
@@ -3504,7 +3687,7 @@ func TestDF30RestoreBoundaryTheRendezvousRefusesARestoredCoverageIdentity(t *tes
 	lent.Semantics = &sem
 	for _, gap := range []GapIdentity{*q.Gap, lent} {
 		// Bounded: a rendezvous that asked would block on an answer.
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(fixtureCtx(e, taskID), 2*time.Second)
 		_, err := e.awaitChoice(withAuthorityGap(ctx, gap), nil, taskID, q.Condition, q.Domain, q.BaseSHA,
 			q.Decision, q.Decision.Options, q.Scope...)
 		cancel()

@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"context"
+
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -81,9 +83,9 @@ func ParseNotConverged(raw json.RawMessage) (NotConverged, error) {
 
 // endNotConverged ends the invocation as NOT_CONVERGED. The task is not
 // finished: the candidate stands and a resume re-plans it.
-func (e *Engine) endNotConverged(taskID string, n NotConverged) {
+func (e *Engine) endNotConverged(ctx context.Context, taskID string, n NotConverged) {
 	e.noteNotConverged(taskID, n)
-	e.emitRunTerminal(taskID, event.WorkflowNotConverged, event.SourceSystem,
+	e.emitRunTerminal(ctx, taskID, event.WorkflowNotConverged, event.SourceSystem,
 		runreceipt.OutcomeNotConverged, e.candidateStateFor(taskID),
 		"the candidate did not converge: "+n.Describe()+
 			". The task and its candidate are preserved; resume it to have the architect re-plan", n)

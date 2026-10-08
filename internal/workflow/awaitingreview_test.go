@@ -1,7 +1,6 @@
 package workflow
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -33,7 +32,7 @@ func TestAnAwaitingReviewRunLeavesAResumableTask(t *testing.T) {
 	h := newGateHarness(t, requiresIndependentReview(), roles.Unverified, "accept")
 
 	var failed error
-	h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+	h.engine.implement(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{}, "task-1", h.tc,
 		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 	if failed != nil {
 		t.Fatalf("the run failed rather than awaiting a review: %v", failed)
@@ -100,7 +99,7 @@ func TestResumingAnAwaitingReviewTaskReviewsBeforeItImplements(t *testing.T) {
 		t.Fatalf("stage the preserved candidate: %v", err)
 	}
 
-	outcome, _, _, _, err := h.engine.runCandidate(context.Background(), h.sc, certifiedStart{},
+	outcome, _, _, _, err := h.engine.runCandidate(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{},
 		"task-1", h.tc, "Rewrite main.go so it prints a number.", h.worker, h.work, "")
 	if err != nil {
 		t.Fatalf("resuming at the review boundary failed: %v", err)
@@ -257,7 +256,7 @@ func TestTheReconstructedInstructionReachesTheResumedWorkersPrompt(t *testing.T)
 	// Resume hands that reconstruction to the worker as carried context. Run
 	// the loop with it and read what the implementor process actually got.
 	h := newGateHarness(t, requiresIndependentReview(), roles.Fresh, "accept")
-	if _, _, _, _, err := h.engine.runCandidate(context.Background(), h.sc, certifiedStart{},
+	if _, _, _, _, err := h.engine.runCandidate(fixtureCtx(h.engine, "task-1"), h.sc, certifiedStart{},
 		"task-1", h.tc, "Rewrite main.go so it prints a number.", h.worker, h.work, task.Review); err != nil {
 		t.Fatalf("the resumed loop failed: %v", err)
 	}
