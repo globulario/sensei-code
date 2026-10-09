@@ -4027,6 +4027,12 @@ type f4bCase struct {
 	region string
 	// authored: verdict.go's per-file probe names an authored invariant.
 	authored bool
+	// gap: verdict.go's per-file probe reports it unexamined, so the probe
+	// that runs after authorization opens a coverage gap.
+	gap bool
+	// architect: the plan is the architect's, not supplied, and its question
+	// is answered Authorize when asked (executed paths only).
+	architect bool
 	// answer, when set, is the human's answer to the question the plan's own
 	// route asked and deferred, bound to that question's plan attempt; the
 	// plan is then routed again under it (route).
@@ -4079,6 +4085,9 @@ func f4bWorldFor(t *testing.T, taskID string, c f4bCase) f4bResult {
 	}
 	w.region(t, c.region)
 	w.probes([]string{f4bEngine, f4bVerdict}, nil)
+	if c.gap {
+		w.probes([]string{f4bEngine}, []string{f4bVerdict})
+	}
 	if c.authored {
 		w.put(t, "examined.json", f4bAuthoredProbe)
 	}
@@ -4350,6 +4359,38 @@ func TestF4bW4AuthoredEvidenceIsRederivedAfterAuthorization(t *testing.T) {
 	}
 }
 
+// W1, AFTER AUTHORIZATION -- THE RE-EVALUATED ROUTE IS NOT MASKED EITHER. The
+// human authorised the specimen's consequence and the answer was consumed; the
+// per-file probe that then runs reports verdict.go unexamined, opening a
+// coverage gap, while roles_test.go -- governed only through verdict.go -- has
+// no grant. The plan stops at the gap the re-evaluated route closes, never at
+// test_edit_admission.
+func TestF4bW1AfterAuthorizationACoverageGapIsNotMaskedByAMissingGrant(t *testing.T) {
+	c := f4bCase{plan: f4bSpecimen(t), region: f4bRegion, answer: authority.Authorize, gap: true}
+	r := f4bRun(t, "task-f4b-w1-gap", c)
+	if r.asked {
+		t.Fatal("an answered question was asked again")
+	}
+	if !f4bStatusContains(r.events, "proceeding on the human's earlier authorization for: ") {
+		t.Fatalf("the recorded authorization was not consumed before admission decided: %v", r.err)
+	}
+	if class := f4bRefusalClass(r.err); class == refusalTestEditAdmission || r.admitted.Plan != "" {
+		t.Fatalf("the post-authorization coverage gap was masked as %s: plan=%q err=%v", class, r.admitted.Plan, r.err)
+	}
+	if f4bRefusalClass(r.err) != refusalSuppliedPlan || !strings.Contains(r.err.Error(), "a bounded knowledge gap must be closed first: ") ||
+		!strings.Contains(r.err.Error(), f4bVerdict) {
+		t.Fatalf("the plan did not stop at the coverage gap over %s the re-evaluated route closes: %v", f4bVerdict, r.err)
+	}
+	if _, rec := f4bRecord(r); f4bHolds(rec, f4bRolesTest, evidenceAuthored) || f4bHolds(rec, f4bRolesTest, evidenceDerived) {
+		t.Fatalf("premise: %s holds no grant, so the gap is what a missing grant would have masked: %+v", f4bRolesTest, rec.Grants)
+	}
+	for _, ev := range r.events {
+		if ev.Kind == event.PlanAttemptRefused && strings.Contains(ev.Summary, "existing-test edit admission") {
+			t.Fatalf("a test-edit refusal was recorded for a plan whose operative route is a gap: %s", ev.Summary)
+		}
+	}
+}
+
 // W5 -- A REFUSED ROUTE KEEPS ITS ORIGINAL TYPED REFUSAL. An uncertifiable
 // graph (cannot-establish) and a recorded decline are refused as themselves,
 // never relabelled as a missing test-edit grant.
@@ -4386,6 +4427,8 @@ func f4bCases(t *testing.T) map[string]f4bCase {
 		"w4-authorized-granted": {plan: f4bSpecimen(t), region: f4bRegion, answer: authority.Authorize, authored: true},
 		"w5-cannot-establish":   {plan: f4bSpecimen(t), region: stale},
 		"w5-declined":           {plan: f4bSpecimen(t), region: f4bRegion, answer: authority.Decline},
+		"w1-authorized-gap":     {plan: f4bSpecimen(t), region: f4bRegion, answer: authority.Authorize, gap: true},
+		"w1-architect-gap":      {plan: f4bSpecimen(t), region: f4bRegion, gap: true, architect: true},
 	}
 }
 
@@ -4461,17 +4504,29 @@ func f4bExecute(t *testing.T, taskID string, c f4bCase) f4bExecuted {
 	e.Config.Sensei.Args = []string{"-c", strings.ReplaceAll(f4bExecuteScript, "F4BSTATE", r.w.state)}
 	e.Config.Architect.Name, e.Config.Architect.Command, e.Config.Architect.Graph = "claude", "true", "none"
 	e.Config.Implementors = append(e.Config.Implementors[:0], e.Config.Architect)
+	turn, how, live := "nothing was changed", SubmittedWithSuppliedPlan, ""
+	if c.architect {
+		// Every turn is the architect's plan; an implementer reached by
+		// mistake is counted all the same.
+		plan, err := json.Marshal(c.plan)
+		if err != nil {
+			t.Fatal(err)
+		}
+		turn, how, live = string(plan), RequestedByHuman, "1"
+	}
 	turns := make([]architectTurn, 64)
 	for i := range turns {
-		turns[i] = architectTurn{text: "nothing was changed"}
+		turns[i] = architectTurn{text: turn}
 	}
 	x := f4bExecuted{r: r, runner: &scriptedArchitect{turns: turns}}
 	x.runners = &fixedResolver{runner: x.runner, name: "claude"}
 	e.Runners = x.runners
-	e.supplyPlan(taskID, SuppliedPlan{decision: c.plan, Digest: "f4b"})
+	if !c.architect {
+		e.supplyPlan(taskID, SuppliedPlan{decision: c.plan, Digest: "f4b"})
+	}
 	run := func() gapLoopRun {
-		return driveGapLoop(t, e, x.runner, r.w.world, taskID, "", func(ctx context.Context) {
-			runRootedTask(ctx, e, taskID, f4bObjective, SubmittedWithSuppliedPlan)
+		return driveGapLoop(t, e, x.runner, r.w.world, taskID, live, func(ctx context.Context) {
+			runRootedTask(ctx, e, taskID, f4bObjective, how)
 		})
 	}
 	first := run()
@@ -4520,6 +4575,10 @@ func TestF4bW6NothingExecutesBeforeCompleteAdmission(t *testing.T) {
 		"w3-authorized-missing": {event.WorkflowFailed, "existing-test edit admission refused before implementation: test edit refuted: the candidate would mutate the existing test " + f4bRolesTest},
 		"w5-cannot-establish":   {event.WorkflowFailed, "cannot establish authority for this plan: "},
 		"w5-declined":           {event.WorkflowFailed, "the human declined this architectural change and the plan still requires it: "},
+		"w1-authorized-gap":     {event.WorkflowFailed, "a bounded knowledge gap must be closed first: "},
+		// The architect's loop disposes of the same post-authorization gap as
+		// the knowledge limit it is, not as a missing grant.
+		"w1-architect-gap": {event.WorkflowFailed, "cannot be governed further without knowledge the graph does not hold: graph coverage is absent for planned file(s) the graph has not examined: " + f4bVerdict},
 	}
 	for name, c := range f4bCases(t) {
 		t.Run(name, func(t *testing.T) {
@@ -4536,7 +4595,9 @@ func TestF4bW6NothingExecutesBeforeCompleteAdmission(t *testing.T) {
 				t.Fatal("a pull request was opened")
 			}
 			if !admits[name] {
-				if n := x.implementerTurns(); n != 0 || len(x.runner.prompts) != 0 {
+				// The architect's own turns are not implementation; a supplied
+				// plan consults no architect, so there every turn is a worker's.
+				if n := x.implementerTurns(); n != 0 || (!c.architect && len(x.runner.prompts) != 0) {
 					t.Fatalf("a run admission did not admit resolved %d implementer(s) and invoked %d provider turn(s):\n%s", n, len(x.runner.prompts), gapLoopTrace(x.events))
 				}
 				for _, k := range []event.Kind{event.AgentStarted, event.AgentFinished, event.CandidateChanged, event.CandidateResolved,

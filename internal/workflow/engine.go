@@ -7556,6 +7556,12 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 								}
 								e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 									"proceeding on the human's earlier authorization for: "+stillOpen.Condition, nil))
+								// afterHumanAuthorization returned this gap before
+								// reconciling: the test edits are admitted here,
+								// before the plan can reach a worker.
+								if err := e.admitTestEdits(taskID, d); err != nil {
+									return architectureDecision{}, err
+								}
 								return d, nil
 							}
 							e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(stillOpen), nil))
@@ -9233,6 +9239,13 @@ func (e *Engine) afterHumanAuthorization(ctx context.Context, sc *sensei.Client,
 		after.Gap.World = world
 	}
 	after, resolution := e.registerAuthorizedRouting(taskID, world, after, action, scoped, d)
+	// A re-evaluated route that does not continue is returned as it is: the gap
+	// it closes is the operative question, and a missing grant must not mask it
+	// as test_edit_admission (F4b). A caller that later proceeds with that gap
+	// open reconciles the test edits itself, before a worker runs.
+	if after.ClosesGap() {
+		return after, action, resolution, nil
+	}
 	// Every declared test edit is reconciled against the attempt's complete
 	// recorded grant state before this continuation can lead to a worker.
 	if err := e.admitTestEdits(taskID, d); err != nil {
