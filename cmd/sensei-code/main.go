@@ -91,6 +91,9 @@ func main() {
 			os.Exit(runAuditRepair(ctx, repo, cfg, os.Args[2:]))
 		case "observe":
 			os.Exit(runObservation(ctx, repo, cfg, os.Args[2:]))
+		case "quarantine":
+			fatalIf(session.QuarantineCommand(ctx, repo.Root, os.Args[2:], os.Stdout))
+			return
 		case "routine-scan":
 			fatalIf(runRoutineScan(ctx, repo, cfg, os.Args[2:]))
 			return

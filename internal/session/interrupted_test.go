@@ -745,3 +745,500 @@ func TestB1W15ACheckpointRecordIsAppendedDurably(t *testing.T) {
 		t.Fatal("an append that could not be written was reported durable")
 	}
 }
+
+// d5Valid writes, through the Store, a valid record of sessionID that
+// creates taskID: an ordinary, readable session.
+func d5Valid(t *testing.T, repo, sessionID, taskID string) *Store {
+	t.Helper()
+	s := otherStore(t, repo, sessionID)
+	if err := createTask(t, s, taskID); err != nil {
+		t.Fatalf("the valid record %s was not written: %v", sessionID, err)
+	}
+	return s
+}
+
+// activeIDs is discovery's active tasks as session/task pairs, in order.
+func activeIDs(d Discovery) []string {
+	var out []string
+	for _, a := range d.Active {
+		out = append(out, a.SessionID+"/"+a.Task.TaskID)
+	}
+	return out
+}
+
+func sameIDs(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// D5-W8: existing valid sessions remain discoverable and authoritative
+// beside a quarantined record: discovery reports exactly the tasks it
+// reported without it, a named valid session is scoped as before, and its
+// task's lineage is leased and continued through its own record.
+func TestD5W8ExistingValidSessionsRemainDiscoverableAndAuthoritative(t *testing.T) {
+	repo := t.TempDir()
+	valid := d5Valid(t, repo, "S-valid", "task-d5-valid")
+	d5Valid(t, repo, "S-zvalid", "task-d5-zvalid")
+	without, err := FindActive(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tornStore(t, repo, d5Torn, d5Claimed)
+	activate(t, repo, d5Torn)
+	with, err := FindActive(repo)
+	if err != nil {
+		t.Fatalf("discovery beside a quarantined record failed: %v", err)
+	}
+	if !sameIDs(activeIDs(with), activeIDs(without)) || len(activeIDs(with)) != 2 {
+		t.Fatalf("discovery beside a quarantined record found %v, and %v without it", activeIDs(with), activeIDs(without))
+	}
+	if len(with.Records) != 3 {
+		t.Fatalf("discovery read %v", with.Records)
+	}
+	scoped, err := with.ScopedTo("S-valid")
+	if err != nil || len(scoped) != 1 || scoped[0].Task.TaskID != "task-d5-valid" {
+		t.Fatalf("the valid session scoped to %+v: %v", scoped, err)
+	}
+	lease, err := tipLease(t, valid, "task-d5-valid")
+	if err != nil {
+		t.Fatalf("the valid task was not leased: %v", err)
+	}
+	defer lease.Release()
+	if err := valid.Append(t.Context(), lease, event.New("S-valid", "task-d5-valid", event.SourceSystem, event.Status, "continued", nil)); err != nil {
+		t.Fatalf("the valid task was not continued: %v", err)
+	}
+}
+
+// D5-W12: a quarantined task is diagnostically visible -- in discovery's
+// typed outcome and in the operator's status -- and never resumable: it is
+// not active, its session is not scoped as one that holds tasks, and its
+// invocation is refused through every record.
+func TestD5W12AQuarantinedTaskIsVisibleButNotResumable(t *testing.T) {
+	repo := t.TempDir()
+	torn := tornStore(t, repo, d5Torn, d5Claimed)
+	activate(t, repo, d5Torn)
+	found, err := FindActive(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range found.Active {
+		if a.Task.TaskID == d5Claimed {
+			t.Fatalf("the quarantined task is offered as resumable: %+v", a)
+		}
+	}
+	q, ok := found.QuarantinedTask(d5Claimed)
+	if !ok || q.SessionID != d5Torn || q.Manifest.Status != QuarantineAsserted {
+		t.Fatalf("the quarantined task is not visible: %+v", found.Quarantined)
+	}
+	if _, err := found.ScopedTo(d5Torn); !isErr(err, ErrSessionQuarantined) {
+		t.Fatalf("the quarantined session was scoped: %v", err)
+	}
+	if _, err := torn.AcquireTaskInvocation(t.Context(), d5Claimed); !isErr(err, ErrSessionQuarantined) {
+		t.Fatalf("the quarantined task was leased through its own record: %v", err)
+	}
+	if _, err := otherStore(t, repo, "S-new").AcquireTaskInvocation(t.Context(), d5Claimed); !isErr(err, ErrTaskQuarantined) {
+		t.Fatalf("the quarantined task was leased through another record: %v", err)
+	}
+	status, err := QuarantineStatus(repo)
+	if err != nil || len(status) != 1 || status[0].State != QuarantineActive || status[0].SessionID != d5Torn {
+		t.Fatalf("the operator status is %+v: %v", status, err)
+	}
+}
+
+// D5-W13: with only valid sessions, task creation and discovery are what
+// they were: nothing is quarantined, nothing is reported, and discovery
+// takes no record lock and writes nothing beside a readable record.
+func TestD5W13ValidSessionsKeepNormalCreationAndDiscovery(t *testing.T) {
+	repo := t.TempDir()
+	first := d5Valid(t, repo, "S-first", "task-d5-first")
+	d5Valid(t, repo, "S-second", "task-d5-second")
+	if err := createTask(t, otherStore(t, repo, "S-third"), "task-d5-first"); !isErr(err, ErrTaskLedgerAmbiguous) {
+		t.Fatalf("a task another valid record created was created again: %v", err)
+	}
+	found, err := FindActive(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := activeIDs(found); !sameIDs(got, []string{"S-first/task-d5-first", "S-second/task-d5-second"}) {
+		t.Fatalf("discovery found %v", got)
+	}
+	if len(found.Quarantined) != 0 {
+		t.Fatalf("a valid repository reports quarantined records: %+v", found.Quarantined)
+	}
+	if status, err := QuarantineStatus(repo); err != nil || len(status) != 0 {
+		t.Fatalf("a valid repository reports %+v: %v", status, err)
+	}
+	if exists(t, quarantinePath(first.path)) {
+		t.Fatal("a manifest appeared beside a valid record")
+	}
+	// A readable record no Store has written is discovered without its lock.
+	raw := otherStore(t, repo, "S-raw")
+	writeRaw(t, raw, event.New("S-raw", "task-d5-raw", event.SourceSystem, event.TaskCreated, "objective", nil))
+	if found, err = FindActive(repo); err != nil || len(found.Active) != 3 {
+		t.Fatalf("discovery found %v: %v", activeIDs(found), err)
+	}
+	if exists(t, recordLockPath(raw.path)) {
+		t.Fatal("discovery took the lock of a readable record it did not need to re-read")
+	}
+}
+
+// D5-W13: admission and discovery read one exact inventory of task claims. A
+// readable record's root is compared exactly as written: discovery reports
+// it under that identity and admission refuses that identity, and no other
+// spelling. A historical root whose identity is not canonical -- surrounding
+// space, a control character -- is never read under another spelling: both
+// discovery and the admission of an unrelated task fail closed with the
+// typed refusal, rather than discovery reporting "task-d5-x" while admission
+// leaves it free.
+func TestD5W13AdmissionAndDiscoveryAgreeOnExactRootIdentities(t *testing.T) {
+	repo := t.TempDir()
+	d5Valid(t, repo, "S-exact", "task-d5-x")
+	found, err := FindActive(repo)
+	if err != nil || !sameIDs(activeIDs(found), []string{"S-exact/task-d5-x"}) {
+		t.Fatalf("discovery found %v: %v", activeIDs(found), err)
+	}
+	other := otherStore(t, repo, "S-new")
+	if err := createTask(t, other, "task-d5-x"); !isErr(err, ErrTaskLedgerAmbiguous) {
+		t.Fatalf("the discovered identity was not reserved at admission: %v", err)
+	}
+	if err := createTask(t, other, "Task-D5-X"); err != nil {
+		t.Fatalf("an identity that differs only by case was folded into a reserved one: %v", err)
+	}
+
+	for name, root := range map[string]string{
+		"leading space":     " task-d5-x",
+		"trailing space":    "task-d5-x ",
+		"control character": "task-d5-x\x01",
+	} {
+		repo := t.TempDir()
+		writeRaw(t, otherStore(t, repo, "S-old"), event.New("S-old", root, event.SourceSystem, event.TaskCreated, "objective", nil))
+		if _, err := FindActive(repo); !isErr(err, ErrNoncanonicalTaskID) {
+			t.Fatalf("%s: discovery did not refuse the noncanonical root: %v", name, err)
+		}
+		other := otherStore(t, repo, "S-new")
+		for _, taskID := range []string{"task-d5-x", "task-d5-unrelated"} {
+			if err := createTask(t, other, taskID); !isErr(err, ErrNoncanonicalTaskID) {
+				t.Fatalf("%s: admission of %s did not refuse as discovery did: %v", name, taskID, err)
+			}
+		}
+	}
+}
+
+// D5-W3 (f2, Q-e): a readable historical record whose TaskCreated root names
+// an empty or absent task identity makes an unknown claim, not none: discovery
+// and admission -- through another record and through its own -- fail closed
+// on it with ErrNoncanonicalTaskID rather than read it as claiming nothing.
+func TestD5W3AnEmptyHistoricalRootFailsClosed(t *testing.T) {
+	roots := map[string]string{
+		"empty":  `{"id":"x","time":"2026-10-08T00:00:00Z","session_id":"S-empty","source":"system","kind":"task.created","task_id":""}`,
+		"absent": `{"id":"x","time":"2026-10-08T00:00:00Z","session_id":"S-empty","source":"system","kind":"task.created"}`,
+	}
+	for name, line := range roots {
+		repo := t.TempDir()
+		empty := otherStore(t, repo, "S-empty")
+		writeTail(t, empty, line+"\n")
+		if _, err := empty.Load(); err != nil {
+			t.Fatalf("%s: the record is not readable: %v", name, err)
+		}
+		if _, err := FindActive(repo); !isErr(err, ErrNoncanonicalTaskID) {
+			t.Fatalf("%s: discovery read an empty root as claiming nothing: %v", name, err)
+		}
+		if err := createTask(t, otherStore(t, repo, "S-new"), d5Unrelated); !isErr(err, ErrNoncanonicalTaskID) {
+			t.Fatalf("%s: admission read an empty root as claiming nothing: %v", name, err)
+		}
+		if l, err := empty.AcquireTaskInvocation(t.Context(), d5Unrelated); !isErr(err, ErrNoncanonicalTaskID) {
+			if l != nil {
+				l.Release()
+			}
+			t.Fatalf("%s: admission through the record itself read its empty root as claiming nothing: %v", name, err)
+		}
+	}
+}
+
+// D5-W13 (f1, Q-e): identities are compared as the record's BYTES hold them.
+// encoding/json replaces invalid UTF-8 and an unpaired surrogate escape with
+// U+FFFD, so a readable historical root written that way -- assembled here
+// byte for byte, never through json.Marshal, which would normalize it first
+// -- is not read under the identity the decoder would make of it: discovery
+// and every admission boundary (AcquireTaskInvocation, CreateTaskRoot,
+// BindSessionLineage) refuse it with ErrNoncanonicalTaskID. A lossless
+// escape, and a well-formed surrogate pair, stay compatible.
+func TestD5W13ARawNoncanonicalRootIsNeverNormalized(t *testing.T) {
+	const head = `{"id":"x","time":"2026-10-08T00:00:00Z","session_id":"S-old","source":"system","kind":"task.created",`
+	for name, line := range map[string]string{
+		"invalid UTF-8":       head + "\"task_id\":\"task-d5-x\xff\"}",
+		"truncated UTF-8":     head + "\"task_id\":\"task-d5-x\xc3\"}",
+		"unpaired surrogate":  head + `"task_id":"task-d5-x\ud800"}`,
+		"lone low surrogate":  head + `"task_id":"task-d5-x\udc00"}`,
+		"reversed surrogates": head + `"task_id":"task-d5-x\udc00\ud800"}`,
+		"folded key, invalid": head + "\"Task_ID\":\"task-d5-x\xff\"}",
+	} {
+		repo := t.TempDir()
+		valid := d5Valid(t, repo, "S-valid", "task-d5-valid")
+		lineage, err := valid.TaskSessionLineage("task-d5-valid")
+		if err != nil {
+			t.Fatal(err)
+		}
+		binding, err := lineage.BindingFor("S-next")
+		if err != nil {
+			t.Fatal(err)
+		}
+		old := otherStore(t, repo, "S-old")
+		writeTail(t, old, line+"\n")
+		if _, err := old.Load(); err != nil {
+			t.Fatalf("%s: the record is not readable: %v", name, err)
+		}
+		if _, err := FindActive(repo); !isErr(err, ErrNoncanonicalTaskID) {
+			t.Fatalf("%s: discovery read the root under a normalized identity: %v", name, err)
+		}
+		for _, taskID := range []string{"task-d5-x\ufffd", "task-d5-unrelated"} {
+			if l, err := otherStore(t, repo, "S-new").AcquireTaskInvocation(t.Context(), taskID); !isErr(err, ErrNoncanonicalTaskID) {
+				if l != nil {
+					l.Release()
+				}
+				t.Fatalf("%s: the lease of %q did not refuse as discovery did: %v", name, taskID, err)
+			}
+		}
+		other := otherStore(t, repo, "S-new")
+		root := event.New("S-new", "task-d5-unrelated", event.SourceSystem, event.TaskCreated, "objective", nil)
+		if err := other.CreateTaskRoot(t.Context(), unscreenedLease(t, other, "task-d5-unrelated"), root); !isErr(err, ErrNoncanonicalTaskID) {
+			t.Fatalf("%s: the root did not refuse as discovery did: %v", name, err)
+		}
+		if _, err := valid.BindSessionLineage(t.Context(), unscreenedLease(t, valid, "task-d5-valid"), binding); !isErr(err, ErrNoncanonicalTaskID) {
+			t.Fatalf("%s: the binding did not refuse as discovery did: %v", name, err)
+		}
+	}
+
+	for name, id := range map[string]string{
+		"escaped hyphen": `task\u002dd5-y`,
+		"surrogate pair": `task-d5-\ud83d\ude00`,
+	} {
+		repo := t.TempDir()
+		writeTail(t, otherStore(t, repo, "S-old"), head+`"task_id":"`+id+`"}`+"\n")
+		found, err := FindActive(repo)
+		if err != nil || len(found.Active) != 1 {
+			t.Fatalf("%s: a losslessly written root was not discovered: %v", name, err)
+		}
+	}
+}
+
+// RULING-230: a valid quarantine reserves a record's historical claims and
+// keeps it visible, and does NOT make it an ordinary conversation to continue.
+// These witnesses ask the production selection paths themselves --
+// readableSessions and Latest -- never a Store a test chose by hand.
+
+// d5Selected is what Latest selects and readableSessions lists, refusing the
+// witness when either fails.
+func d5Selected(t *testing.T, repo string) (latest string, found bool, ids []string) {
+	t.Helper()
+	ids, err := readableSessions(repo)
+	if err != nil {
+		t.Fatalf("readableSessions refused: %v", err)
+	}
+	latest, found, err = Latest(repo)
+	if err != nil {
+		t.Fatalf("Latest refused: %v", err)
+	}
+	return latest, found, ids
+}
+
+// D5-W12 (RULING-230 W1, W3, W4): a NEWER validly quarantined session beside
+// an older valid one: Latest selects the older valid session, and the Store
+// the application opens on it creates an unrelated task, while the
+// quarantined identity stays reserved and the quarantined record stays
+// visible to discovery.
+func TestD5W12BLatestNeverReopensANewerQuarantinedSession(t *testing.T) {
+	repo := t.TempDir()
+	d5Valid(t, repo, "S-older", "task-d5-older")
+	torn := tornStore(t, repo, d5Torn, d5Claimed)
+	activate(t, repo, d5Torn)
+	before := string(fileBytes(t, torn.path))
+
+	latest, found, ids := d5Selected(t, repo)
+	if !found || latest != "S-older" {
+		t.Fatalf("Latest selected %q (found %v), not the older valid session", latest, found)
+	}
+	if !sameIDs(ids, []string{"S-older"}) {
+		t.Fatalf("readableSessions offers %v for ordinary reuse", ids)
+	}
+	selected := otherStore(t, repo, latest)
+	if err := createTask(t, selected, d5Unrelated); err != nil {
+		t.Fatalf("an unrelated task was refused through the selected Store: %v", err)
+	}
+	if err := createTask(t, selected, d5Claimed); !isErr(err, ErrTaskQuarantined) {
+		t.Fatalf("the quarantined identity was admitted through the selected Store: %v", err)
+	}
+	discovered, err := FindActive(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q, ok := discovered.QuarantinedTask(d5Claimed); !ok || q.SessionID != d5Torn {
+		t.Fatalf("the quarantined record is no longer visible: %+v", discovered.Quarantined)
+	}
+	if string(fileBytes(t, torn.path)) != before {
+		t.Fatal("selection changed the quarantined record's bytes")
+	}
+}
+
+// D5-W12 (RULING-230 W2, W3, W4): a repository holding only validly
+// quarantined sessions selects none of them for ordinary reuse. The
+// application then opens a fresh record, as interactive startup does, in
+// which an unrelated task is created and the quarantined identity is not;
+// and that fresh record is what Latest selects afterwards.
+func TestD5W12COnlyQuarantinedSessionsSelectNoStore(t *testing.T) {
+	repo := t.TempDir()
+	tornStore(t, repo, d5Torn, d5Claimed)
+	activate(t, repo, d5Torn)
+	tornStore(t, repo, "S-torn-too", "task-d5-claimed-too")
+	activate(t, repo, "S-torn-too")
+
+	if latest, found, ids := d5Selected(t, repo); found || latest != "" || len(ids) != 0 {
+		t.Fatalf("a quarantined session was selected for reuse: Latest %q (found %v), readableSessions %v", latest, found, ids)
+	}
+	fresh := ID(event.New("", "", event.SourceSystem, event.Status, "", nil).Time)
+	opened := otherStore(t, repo, fresh)
+	if err := createTask(t, opened, d5Unrelated); err != nil {
+		t.Fatalf("an unrelated task was refused through the fresh Store: %v", err)
+	}
+	for _, claimed := range []string{d5Claimed, "task-d5-claimed-too"} {
+		if err := createTask(t, opened, claimed); !isErr(err, ErrTaskQuarantined) {
+			t.Fatalf("quarantined identity %s was admitted through the fresh Store: %v", claimed, err)
+		}
+	}
+	if latest, found, ids := d5Selected(t, repo); !found || latest != fresh || !sameIDs(ids, []string{fresh}) {
+		t.Fatalf("after the fresh record, Latest selected %q (found %v) and readableSessions %v", latest, found, ids)
+	}
+}
+
+// D5-W5 (RULING-230 W5): a missing, malformed, digest-mismatched, stale or
+// under-claiming manifest never makes a damaged record eligible for reuse:
+// readableSessions and Latest refuse, typed, rather than select it or skip
+// it in favour of the older valid session.
+func TestD5W5BAnInvalidManifestNeverMakesADamagedRecordReusable(t *testing.T) {
+	cases := map[string]struct {
+		plant   func(t *testing.T, repo string, s *Store)
+		invalid bool
+	}{
+		"missing": {func(*testing.T, string, *Store) {}, false},
+		"malformed": {func(t *testing.T, _ string, s *Store) {
+			writeManifest(t, s, []byte("{not a manifest"))
+		}, true},
+		"digest mismatch": {func(t *testing.T, _ string, s *Store) {
+			m := forged(t, s)
+			m.SHA256 = "0000000000000000000000000000000000000000000000000000000000000000"
+			writeManifest(t, s, encoded(t, m))
+		}, true},
+		"stale": {func(t *testing.T, repo string, s *Store) {
+			activate(t, repo, d5Torn)
+			writeTail(t, s, "more")
+		}, true},
+		"under-claiming": {func(t *testing.T, _ string, s *Store) {
+			m := forged(t, s)
+			m.Claims = []string{}
+			writeManifest(t, s, encoded(t, m))
+		}, true},
+	}
+	for name, c := range cases {
+		repo := t.TempDir()
+		d5Valid(t, repo, "S-older", "task-d5-older")
+		c.plant(t, repo, tornStore(t, repo, d5Torn, d5Claimed))
+		ids, err := readableSessions(repo)
+		if !isErr(err, ErrRecordUnreadable) || c.invalid != isErr(err, ErrQuarantineInvalid) {
+			t.Fatalf("%s: readableSessions answered %v: %v", name, ids, err)
+		}
+		latest, found, err := Latest(repo)
+		if !isErr(err, ErrRecordUnreadable) || c.invalid != isErr(err, ErrQuarantineInvalid) || found || latest != "" {
+			t.Fatalf("%s: Latest selected %q (found %v): %v", name, latest, found, err)
+		}
+	}
+}
+
+// D5-W3 (RULING-230 W6): a genuinely unreadable record no manifest excludes
+// -- torn, ambiguous, or holding a corrupt terminated line -- is a typed
+// refusal of selection, never silently skipped, whether it is the newest
+// record or an older one behind a valid session.
+func TestD5W3BAnUnquarantinedDamagedRecordIsRefusedNotSkipped(t *testing.T) {
+	damage := map[string]string{
+		"torn":      "",
+		"ambiguous": "{}",
+		"corrupt":   "not an event\n",
+	}
+	for name, tail := range damage {
+		for _, valid := range []string{"S-a-older", "S-z-newer"} {
+			repo := t.TempDir()
+			d5Valid(t, repo, valid, "task-d5-valid")
+			s := otherStore(t, repo, d5Torn)
+			if tail == "" {
+				s = tornStore(t, repo, d5Torn, d5Claimed)
+			} else {
+				writeRaw(t, s, event.New(d5Torn, d5Claimed, event.SourceSystem, event.TaskCreated, "objective", nil))
+				writeTail(t, s, tail)
+			}
+			if ids, err := readableSessions(repo); !isErr(err, ErrRecordUnreadable) {
+				t.Fatalf("%s beside %s: readableSessions answered %v: %v", name, valid, ids, err)
+			}
+			if latest, found, err := Latest(repo); !isErr(err, ErrRecordUnreadable) || found || latest != "" {
+				t.Fatalf("%s beside %s: Latest selected %q (found %v): %v", name, valid, latest, found, err)
+			}
+		}
+	}
+}
+
+// D5-W8 (RULING-230 W7): valid-session selection is what it was. No
+// sessions directory selects nothing; a session directory never written to
+// is not a record, and an empty record is one; the newest valid record is
+// selected, and readableSessions lists every valid
+// record oldest first. Beside a quarantined record, a NEWER valid session is
+// still the one selected.
+func TestD5W8BValidSessionSelectionIsUnchanged(t *testing.T) {
+	repo := t.TempDir()
+	if latest, found, ids := d5Selected(t, repo); found || latest != "" || ids != nil {
+		t.Fatalf("a repository that has begun nothing selected %q (found %v), %v", latest, found, ids)
+	}
+	for _, id := range []string{"S-b", "S-a", "S-c"} {
+		d5Valid(t, repo, id, "task-d5-"+id)
+	}
+	otherStore(t, repo, "S-d-unwritten")
+	writeTail(t, otherStore(t, repo, "S-e-dir"), "")
+	if latest, found, ids := d5Selected(t, repo); !found || latest != "S-e-dir" || !sameIDs(ids, []string{"S-a", "S-b", "S-c", "S-e-dir"}) {
+		t.Fatalf("Latest selected %q (found %v), readableSessions %v", latest, found, ids)
+	}
+
+	repo = t.TempDir()
+	d5Valid(t, repo, "S-older", "task-d5-older")
+	tornStore(t, repo, d5Torn, d5Claimed)
+	activate(t, repo, d5Torn)
+	d5Valid(t, repo, "S-z-newer", "task-d5-newer")
+	if latest, found, ids := d5Selected(t, repo); !found || latest != "S-z-newer" || !sameIDs(ids, []string{"S-older", "S-z-newer"}) {
+		t.Fatalf("Latest selected %q (found %v), readableSessions %v", latest, found, ids)
+	}
+}
+
+// D5-W3 (review f1): selection reads the same inventory as admission and
+// discovery, so a record that creates one identity twice is the same typed
+// refusal (ErrDuplicateTaskRoot) from readableSessions, Latest and
+// FindActive alike -- never selected for reuse, and never skipped in favour
+// of a valid session older or newer than it.
+func TestD5W3CADuplicateRootRecordIsRefusedBySelection(t *testing.T) {
+	for _, valid := range []string{"S-a-older", "S-z-newer"} {
+		repo := t.TempDir()
+		d5Valid(t, repo, valid, "task-d5-valid")
+		d5Doubled(t, repo, "S-doubled")
+		if ids, err := readableSessions(repo); !isErr(err, ErrDuplicateTaskRoot) {
+			t.Fatalf("beside %s: readableSessions answered %v: %v", valid, ids, err)
+		}
+		if latest, found, err := Latest(repo); !isErr(err, ErrDuplicateTaskRoot) || found || latest != "" {
+			t.Fatalf("beside %s: Latest selected %q (found %v): %v", valid, latest, found, err)
+		}
+		if _, err := FindActive(repo); !isErr(err, ErrDuplicateTaskRoot) {
+			t.Fatalf("beside %s: discovery did not refuse as selection did: %v", valid, err)
+		}
+	}
+}

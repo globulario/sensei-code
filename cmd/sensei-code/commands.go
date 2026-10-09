@@ -59,6 +59,7 @@ var publicCommands = []command{
 	{Name: "submit", Args: "--task \"...\"", Summary: "place one objective into the running control process"},
 	{Name: "proposal", Args: "list|show|approve ...", Summary: "inspect or approve inert objective proposals received through GitHub"},
 	{Name: "review", Args: "submit --file <artifact>", Summary: "relay a reviewer's complete review artifact to the control process, which validates and publishes it"},
+	{Name: "quarantine", Args: "status|inspect|activate ...", Summary: "inspect, or with the owner's exact authorization quarantine, a damaged session record"},
 	{Name: "routine-scan", Summary: "classify tracked files by how routine a change to them would be"},
 	{Name: "help", Summary: "show this help"},
 }
