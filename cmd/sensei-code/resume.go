@@ -90,6 +90,11 @@ func selectAuthorityResume(tasks []session.Interrupted, taskID, answer string) (
 	if found == nil {
 		return authorityResume{}, fmt.Errorf("%w: %s", errTaskUnknown, taskID)
 	}
+	// A task whose history cannot be read as its own lineage asks nothing
+	// anyone can answer: its question, if it has one, is unknown.
+	if found.Unavailable != nil {
+		return authorityResume{}, fmt.Errorf("%w: %v", errTaskHistoryUnavailable, found.Unavailable)
+	}
 	if len(found.AwaitingAuthority) == 0 {
 		return authorityResume{}, fmt.Errorf("%w: %s", errNoQuestion, taskID)
 	}
@@ -296,7 +301,7 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 	}
 	active := inventory.Active
 	if scoped != "" {
-		narrowed, err := inventory.ScopedTo(scoped)
+		narrowed, err := inventory.ResumableIn(scoped)
 		if err != nil {
 			// A session nobody recorded is the person's mistake, not a storage
 			// failure: discovery read every record this repository holds and
@@ -317,6 +322,11 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 			return exitFailed
 		}
 		printActiveTasks(os.Stdout, scoped, active, owed)
+		if scoped == "" {
+			// A quarantined record's tasks are reserved, visible and never
+			// resumable: listed as such, never as absent.
+			printQuarantinedTasks(os.Stdout, inventory.Quarantined)
+		}
 		if scoped != "" && countStanding(tasksOf(active)) == 0 {
 			// A named session is a window onto one account. Say where else to
 			// look rather than letting "none here" read as "there are none".
@@ -335,6 +345,17 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 	// resumed task continues one account of what happened; writing into the
 	// newest session instead would leave the question in one file and its answer
 	// in another.
+	// REFUSAL PRECEDES SELECTION. A task some record holds with a history
+	// that cannot be read as its own session lineage, and a task a
+	// quarantined record claims, are refused here, typed, before any lane or
+	// answer is considered -- and before the ordinary miss below could call
+	// either of them absent. Read across the whole inventory, not the scoped
+	// view: a session filter does not waive what the repository holds. The
+	// TUI's /resume reads the same refusal (Discovery.ResumableIn).
+	if refusing, refusal := inventory.TaskRefusal(*taskID); refusal != nil {
+		fmt.Fprintln(os.Stderr, "sensei-code resume:", taskRefusalError(refusing, refusal))
+		return exitFailed
+	}
 	holder, held := activeTask(active, *taskID)
 	if !held {
 		// A SCOPED MISS IS NOT A REPOSITORY-WIDE ABSENCE. errTaskUnknown speaks
@@ -527,7 +548,9 @@ type reviewState struct {
 func loadReviewStates(repoRoot string, active []session.Active) (map[string]reviewState, error) {
 	states := map[string]reviewState{}
 	for _, entry := range active {
-		if _, seen := states[entry.Task.TaskID]; seen {
+		if _, seen := states[entry.Task.TaskID]; seen || entry.Task.Unavailable != nil {
+			// A refused task is shown with its refusal and routed nowhere, so
+			// no obligation is read for it -- and none can hide the others.
 			continue
 		}
 		owed, err := owedReviewObligation(repoRoot, entry.Task.TaskID)
@@ -562,6 +585,13 @@ func printActiveTasks(out io.Writer, scope string, active []session.Active, revi
 		fmt.Fprintf(out, "task %s  session %s\n", task.TaskID, entry.SessionID)
 		if s := strings.TrimSpace(task.Task); s != "" {
 			fmt.Fprintf(out, "  objective  %s\n", s)
+		}
+		if task.Unavailable != nil {
+			// Shown, typed, and routed nowhere: the refusal precedes every
+			// other reading of the task, its review state included.
+			_, laneErr := selectResumeLane(task, false)
+			fmt.Fprintf(out, "  owed       %v\n\n", laneErr)
+			continue
 		}
 		state := review[task.TaskID]
 		if state.conflict != nil {
@@ -671,6 +701,28 @@ func activeTask(active []session.Active, taskID string) (session.Active, bool) {
 		}
 	}
 	return session.Active{}, false
+}
+
+// taskRefusalError is the command's typed refusal for a task the repository's
+// discovery refuses (Discovery.TaskRefusal): QUARANTINED for a task a
+// quarantined record claims, unavailable for one whose history cannot be read
+// as its own session lineage.
+func taskRefusalError(sessionID string, refusal *session.TaskHistoryRefusal) error {
+	if refusal.Reason == session.TaskHistoryQuarantined {
+		return fmt.Errorf("%w: %s is claimed by quarantined session %s (QUARANTINED)", errTaskQuarantined,
+			refusal.TaskID, sessionID)
+	}
+	return fmt.Errorf("%w (session %s): %w", errTaskHistoryUnavailable, sessionID, refusal)
+}
+
+// printQuarantinedTasks lists every task a quarantined session record claims:
+// reserved, visible and not resumable. Diagnostic only; it grants nothing.
+func printQuarantinedTasks(out io.Writer, quarantined []session.QuarantinedRecord) {
+	for _, q := range quarantined {
+		for _, taskID := range q.Manifest.Claims {
+			fmt.Fprintf(out, "task %s  session %s\n  owed       nothing: QUARANTINED -- %v\n\n", taskID, q.SessionID, errTaskQuarantined)
+		}
+	}
 }
 
 // oneLine keeps a multi-line review readable inside a listing.

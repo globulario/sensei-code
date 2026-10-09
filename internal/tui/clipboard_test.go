@@ -234,6 +234,14 @@ func zeroOf[T any](*T) *T { return new(T) }
 
 func constant[T any](v T) func() T { return func() T { return v } }
 
+// emptyInventory is the zero value of New's discovery inventory, named here
+// only through New's own signature: an inventory holding no session record,
+// so nothing in it refuses a task repository-wide and each task's standing is
+// decided by the canonical projection of the record New replays.
+var emptyInventory = inventoryParam(New)
+
+func inventoryParam[A, B, C, D, E, F, R any](func(A, B, C, D, E, F) R) (zero E) { return zero }
+
 // haltedRun is a model mid-/run of task taskID: busy, with the composer
 // waiting on that invocation, and no event stream -- nothing on the bus can
 // release it.
@@ -366,4 +374,120 @@ func TestB2a1HaltIsReportedTheMomentItHappens(t *testing.T) {
 	if got := haltOf(ctx, halted, ended, constant(appendHaltedMsg{}.failure)); got != nil {
 		t.Fatalf("an unhalted ending reported a halt: %v", got)
 	}
+}
+
+// resumeTyped submits /resume through the composer, as a person does.
+func resumeTyped(m Model) Model {
+	m.input.SetValue("/resume")
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	return next.(Model)
+}
+
+// proposed is a correctly framed plan.proposed record of taskID by sessionID.
+func proposed(sessionID, taskID string) event.Event {
+	return event.New(sessionID, taskID, event.SourceArchitect, event.PlanProposed, "the plan",
+		map[string]string{"decision": "proceed", "summary": "s", "plan": "the plan", "plan_attempt_id": "attempt-1", "plan_source": "architect"})
+}
+
+// A2-W2 / R220-W6 / D8: the TUI's /resume honours the canonical discovery's
+// typed refusals exactly as the CLI does. A task whose history cannot be read
+// as its own session lineage is refused, typed, stays visible, and no older
+// task is resumed in its place; a discovery that refused is reported as that
+// refusal, never as "nothing to resume".
+func TestB2a2R220W6TUIResumeHonoursTheCanonicalRefusal(t *testing.T) {
+	const holder = "session-holder"
+	// The replayed record, classified by New itself: an older planned task,
+	// and a task whose second record is malformed (it has no event id).
+	history := []event.Event{
+		event.New(holder, "task-older", event.SourceSystem, event.TaskCreated, "older resumable work", nil),
+		proposed(holder, "task-older"),
+		event.New(holder, "task-refused", event.SourceSystem, event.TaskCreated, "refused work", nil),
+		{SessionID: holder, TaskID: "task-refused", Source: event.SourceSystem, Kind: event.Status, Summary: "no event id"},
+	}
+	m := New(transcript(1).ctx, nil, nil, history, emptyInventory, nil)
+	if len(m.resumable) != 2 || m.resumable[1].TaskID != "task-refused" || m.resumable[1].Unavailable == nil {
+		t.Fatalf("premise: the canonical discovery of the record refuses task-refused: %+v", m.resumable)
+	}
+	// A real (zero) engine, so a /resume that skipped the refusal reaches an
+	// actual resume invocation -- observed below as the model continuing it --
+	// rather than a nil-engine panic that would say nothing about precedence.
+	m.engine = zeroOf(m.engine)
+	got, attempted := func() (got Model, attempted any) {
+		defer func() { attempted = recover() }()
+		return resumeTyped(m), nil
+	}()
+	if attempted != nil {
+		t.Fatalf("REFUSAL PRECEDENCE: /resume attempted a resume invocation of the refused task before stopping at its typed refusal (%v)", attempted)
+	}
+	if got.busy || got.currentTask != "" {
+		t.Fatalf("REFUSAL PRECEDENCE: /resume continued a resume invocation (busy=%v current=%q) instead of stopping at the refused task's typed refusal, or resumed an older task in its place", got.busy, got.currentTask)
+	}
+	text := transcriptOf(got)
+	if !strings.Contains(text, "✗ RESUME") || !strings.Contains(text, "task-refused") || !strings.Contains(text, "malformed") {
+		t.Fatalf("the refusal was not reported, typed:\n%s", text)
+	}
+	if len(got.resumable) != 2 {
+		t.Fatalf("the refused task is no longer visible: %+v", got.resumable)
+	}
+
+	refused := New(transcript(1).ctx, nil, nil, history, emptyInventory, fmt.Errorf("two session records claim one task"))
+	got = resumeTyped(refused)
+	text = transcriptOf(got)
+	if strings.Contains(text, "nothing to resume") || !strings.Contains(text, "two session records claim one task") {
+		t.Fatalf("a refused discovery was reported as absence:\n%s", text)
+	}
+	if got.busy || got.currentTask != "" || len(got.resumable) != 0 {
+		t.Fatalf("a refused discovery still offered the record's tasks: busy=%v current=%q %+v", got.busy, got.currentTask, got.resumable)
+	}
+}
+
+// R238-X2b / A2-W2 / P1-W2 / A2-W11: the TUI's resume eligibility is decided
+// by the canonical discovery of the record it replays -- the record handed to
+// New, classified there (Discovery.ResumableRecord), never folded raw -- and
+// Model.Update's /resume acts on nothing else. The record carries foreign and
+// pre-root records that a raw fold would act on.
+func TestB2a2R238X2bTUIResumeEligibilityIsDecidedByLineageMembersAlone(t *testing.T) {
+	const holder, unrelated = "session-holder", "session-unrelated"
+	resume := func(t *testing.T, history []event.Event) Model {
+		t.Helper()
+		m := New(transcript(1).ctx, nil, nil, history, emptyInventory, nil)
+		// A real (zero) engine: a /resume that starts an invocation is
+		// observed as the model's own transition, and the invocation itself
+		// refuses downstream for want of a session record, without panicking.
+		m.engine = zeroOf(m.engine)
+		return resumeTyped(m)
+	}
+
+	t.Run("a pre-root completion does not hide the rooted task", func(t *testing.T) {
+		got := resume(t, []event.Event{
+			event.New(holder, "t-later", event.SourceSystem, event.WorkflowCompleted, "pre-root completion", nil),
+			event.New(holder, "t-later", event.SourceSystem, event.TaskCreated, "the objective", nil),
+			proposed(holder, "t-later"),
+		})
+		if !got.busy || got.currentTask != "t-later" {
+			t.Fatalf("R238-X2b: a pre-root WorkflowCompleted decided the TUI's resume eligibility: /resume did not "+
+				"continue the rooted task t-later (busy=%v current=%q):\n%s", got.busy, got.currentTask, transcriptOf(got))
+		}
+	})
+
+	t.Run("a foreign session's records of a task are not resumable authority", func(t *testing.T) {
+		got := resume(t, []event.Event{
+			event.New(holder, "t-valid", event.SourceSystem, event.TaskCreated, "valid work", nil),
+			proposed(holder, "t-valid"),
+			// An unrelated session's correctly framed records of a task this
+			// record never rooted: historical evidence, not a resumable task.
+			proposed(unrelated, "t-foreign"),
+		})
+		if got.busy || got.currentTask != "" {
+			t.Fatalf("R238-X2b: an unrelated session's same-record history became TUI resume authority: /resume "+
+				"continued %q (busy=%v) instead of refusing the foreign-only task:\n%s", got.currentTask, got.busy, transcriptOf(got))
+		}
+		text := transcriptOf(got)
+		if !strings.Contains(text, "✗ RESUME") || !strings.Contains(text, "t-foreign") || !strings.Contains(text, "foreign_only") {
+			t.Fatalf("R238-X2b: the foreign-only task was not reported as its typed refusal:\n%s", text)
+		}
+		if len(got.resumable) != 2 || got.resumable[0].TaskID != "t-valid" || got.resumable[0].Unavailable != nil {
+			t.Fatalf("R238-X2b: the foreign records hid or degraded the record's valid task: %+v", got.resumable)
+		}
+	})
 }

@@ -327,8 +327,15 @@ func (e *Engine) spendClosure(taskID, gap string) bool {
 // store, while whether a gap is settled for this task is a fact about the
 // task's own authority record.
 
-// gapResolutions returns the task's P9 state, reading the session record into
-// it the first time it is asked for. The record is read outside the lock.
+// gapResolutions returns the task's P9 state, reading the task's canonical
+// member history (session.Store.TaskHistory) into it the first time it is
+// asked for. The record is read outside the lock.
+//
+// Only the task's lineage members are read: a correctly framed answer,
+// question or plan transition a foreign session wrote settles, opens and
+// scopes nothing (RULING-216). A history that cannot be read or projected
+// leaves the state UNHYDRATED with its typed refusal in unavailable -- never
+// an empty ledger marked read -- and is read again by the next caller.
 func (e *Engine) gapResolutions(taskID string) *taskResolutions {
 	e.mu.Lock()
 	tr := e.resolutions[taskID]
@@ -337,9 +344,12 @@ func (e *Engine) gapResolutions(taskID string) *taskResolutions {
 	if hydrated {
 		return tr
 	}
-	var history []event.Event
+	var (
+		history []event.Event
+		failed  error
+	)
 	if e.Store != nil {
-		history, _ = e.Store.Load()
+		history, failed = e.memberHistory(taskID)
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -354,7 +364,11 @@ func (e *Engine) gapResolutions(taskID string) *taskResolutions {
 	if tr.hydrated {
 		return tr
 	}
-	tr.hydrated = true
+	if failed != nil {
+		tr.unavailable = failed
+		return tr
+	}
+	tr.hydrated, tr.unavailable = true, nil
 	// The record's answer scope, read by the one reader answeredConditions
 	// also uses; this process's later starts and transitions are added to it
 	// as they are recorded (notePlanAttemptStarted, noteOperativeTransition).
@@ -398,6 +412,116 @@ func (e *Engine) gapResolutions(taskID string) *taskResolutions {
 	}
 	return tr
 }
+
+// taskHistoryRefusal is the typed refusal of a task whose P9 state cannot be
+// read from its canonical member history, or nil once it has been. It is the
+// gate every invocation passes before anything decides from that state
+// (execute, ResumeTask), so no routing, settlement, restoration or answer
+// consumption reads an unknown history as an empty one. The refusal is a
+// RestorationRefusal: the invocation ends, and the task and its record are
+// preserved.
+//
+// A state that was read and later recorded unavailable
+// (noteTaskHistoryUnavailable) is re-established here, at the next
+// invocation's entry, only by a fresh read that projects.
+func (e *Engine) taskHistoryRefusal(taskID string) error {
+	tr := e.gapResolutions(taskID)
+	e.mu.Lock()
+	failed, hydrated := tr.unavailable, tr.hydrated
+	e.mu.Unlock()
+	if failed != nil && hydrated && e.Store != nil {
+		if _, err := e.memberHistory(taskID); err == nil {
+			e.mu.Lock()
+			tr.unavailable = nil
+			e.mu.Unlock()
+			return nil
+		} else {
+			failed = err
+		}
+	}
+	if failed == nil {
+		return nil
+	}
+	var refusal *RestorationRefusal
+	if errors.As(failed, &refusal) {
+		return failed
+	}
+	return taskHistoryRestorationRefusal(taskID, failed)
+}
+
+// noteTaskHistoryUnavailable records that a read of the task's canonical
+// member history failed after its P9 state was read: the state the task was
+// routed on can no longer be shown to be its history, and every caller that
+// decides from it refuses (historyUnavailable) until the next invocation
+// re-establishes it (taskHistoryRefusal).
+func (e *Engine) noteTaskHistoryUnavailable(taskID string, err error) {
+	tr := e.gapResolutions(taskID)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	tr.unavailable = err
+}
+
+// historyUnavailable is the task's recorded unavailable history as its typed
+// refusal, or nil. It reads the state and never re-reads the record: a later
+// read that succeeds does not erase a failure a decision in flight observed.
+func (e *Engine) historyUnavailable(taskID string) error {
+	e.mu.Lock()
+	tr := e.resolutions[taskID]
+	var failed error
+	if tr != nil {
+		failed = tr.unavailable
+	}
+	e.mu.Unlock()
+	if failed == nil {
+		return nil
+	}
+	var refusal *RestorationRefusal
+	if errors.As(failed, &refusal) {
+		return failed
+	}
+	return taskHistoryRestorationRefusal(taskID, failed)
+}
+
+// restorationSubjectTaskHistory names a task history a resume or run could
+// not project onto the task's canonical session lineage.
+const restorationSubjectTaskHistory = "task-session-history"
+
+// taskHistoryRestorationRefusal is the typed refusal for a task whose history
+// could not be read or projected (session.ErrTaskHistoryUnavailable): a
+// RestorationRefusal, as every restoration owner reads it, that keeps its
+// cause.
+// memberHistory is the task's canonical member history for an
+// authority-bearing reader (gapResolutions, answeredConditions,
+// authorityDecisions). A record that does not exist proves nothing about
+// what the task decided, so it is the typed refusal exactly as a record that
+// cannot be read or projected is -- never an empty, authoritative history.
+func (e *Engine) memberHistory(taskID string) ([]event.Event, error) {
+	h, err := e.Store.TaskHistory(taskID)
+	if err != nil {
+		return nil, err
+	}
+	if !h.Recorded {
+		return nil, fmt.Errorf("the session record holding task %s does not exist, so what it decided is unknown: %w",
+			taskID, os.ErrNotExist)
+	}
+	return h.Members, nil
+}
+
+func taskHistoryRestorationRefusal(taskID string, cause error) error {
+	return &taskHistoryUnavailable{RestorationRefusal: &RestorationRefusal{TaskID: taskID, Subject: restorationSubjectTaskHistory,
+		Instrument: RestorationInstrumentRecord, Binding: RestorationRecordUnreadable,
+		Detail: "the task's history is not available as its canonical session lineage: " + cause.Error() +
+			"; no answer, plan, grant, gap or obligation is restored from it"}, cause: cause}
+}
+
+// taskHistoryUnavailable is a RestorationRefusal about a task's history,
+// carrying the typed cause it was refused for.
+type taskHistoryUnavailable struct {
+	*RestorationRefusal
+	cause error
+}
+
+func (u *taskHistoryUnavailable) Unwrap() []error { return []error{u.RestorationRefusal, u.cause} }
 
 // notePlanAttemptStarted adds a durably started attempt to the task's answer
 // scope: an answer naming it may be consumed (answerScope).
@@ -918,6 +1042,10 @@ func (e *Engine) unauthenticatedCoverageRestore(taskID string, gap GapIdentity) 
 	tr := e.gapResolutions(taskID)
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if tr.unavailable != nil {
+		return refuse("the task's history is not available as its canonical session lineage (" + tr.unavailable.Error() +
+			"), so whether this identity was restored cannot be established")
+	}
 	if r, ok := tr.byKey[gap.Key()]; ok && r.restored {
 		return refuse("its identity was restored from the durable record, which holds no canonical episode for it, " +
 			"so neither its opening semantics nor its pinned-world binding can be authenticated")
@@ -1879,6 +2007,92 @@ func (a *ResumeAttempt) Failure() *RecordAppendFailure {
 // invocation is not halted.
 func (a *ResumeAttempt) Err() error { return failureErr(a.Failure()) }
 
+// restorationSubjectDeferredAuthority names a deferred question a resume
+// could not establish as the task's own.
+const restorationSubjectDeferredAuthority = "deferred-authority-question"
+
+// deferredAuthorityRefusal establishes the historical DeferredAuthority a
+// resume would ask against the task's canonical session history, before any
+// answer can be consumed: it must be byte for byte the standing question the
+// task's member history holds (canonical), and a question naming the session
+// that asked it must name a session of the task's lineage. An unrelated
+// session's question is not answerable here.
+func deferredAuthorityRefusal(task, canonical session.Interrupted, lineage session.SessionLineage) error {
+	refuse := func(detail string) error {
+		return &RestorationRefusal{TaskID: task.TaskID, Subject: restorationSubjectDeferredAuthority,
+			Instrument: RestorationInstrumentRecord, Binding: RestorationRecordInconsistent,
+			Detail: detail + "; the question is not asked and no answer is consumed"}
+	}
+	if !bytes.Equal(task.AwaitingAuthority, canonical.AwaitingAuthority) {
+		return refuse("the question to be asked is not the standing question of the task's canonical session history")
+	}
+	var q struct {
+		SessionID string `json:"session_id"`
+	}
+	if err := json.Unmarshal(task.AwaitingAuthority, &q); err == nil && q.SessionID != "" && !lineage.Includes(q.SessionID) {
+		return refuse("the question names session " + q.SessionID + ", which is not a session of the task's lineage")
+	}
+	return nil
+}
+
+// restorationSubjectResumeLane names a resume whose caller selected a lane the
+// task's post-bind canonical projection does not hold.
+const restorationSubjectResumeLane = "resume-lane"
+
+// resumeLaneRefusal compares the lane the caller selected the task for -- the
+// question it would answer, an owed review -- with the task's post-bind
+// canonical projection. A caller that chose its lane (and, for a question, its
+// answer) from a projection the canonical history no longer holds is refused,
+// typed, before anything is asked or restored: the lane is never silently
+// swapped under it. Everything else the caller carried is replaced by the
+// canonical projection, not compared -- whether the task holds a plan
+// included: the caller consumes nothing on it, and only a plan the task's
+// member history records is continued (an unrecorded one owes the architect
+// turn), so the caller's value is neither trusted nor a refusal.
+func resumeLaneRefusal(selected, canonical session.Interrupted) error {
+	var differs string
+	switch {
+	case !bytes.Equal(selected.AwaitingAuthority, canonical.AwaitingAuthority):
+		differs = "the standing question"
+	case selected.AwaitingReview != canonical.AwaitingReview:
+		differs = "the owed review"
+	default:
+		return nil
+	}
+	return &RestorationRefusal{TaskID: selected.TaskID, Subject: restorationSubjectResumeLane,
+		Instrument: RestorationInstrumentRecord, Binding: RestorationRecordInconsistent,
+		Detail: "the resume was selected for a lane the task's canonical session history no longer holds (" + differs +
+			" differs); nothing is asked, answered or restored"}
+}
+
+// canonicalTask is what the task owes, reconstructed from its canonical
+// member history in this engine's Store (session.CanonicalInterrupted). A
+// record that cannot be read, a history that cannot be projected, and a task
+// its members do not show as active are typed refusals: none of them is a task
+// owing nothing.
+func (e *Engine) canonicalTask(taskID string) (session.Interrupted, error) {
+	if e.Store == nil {
+		return session.Interrupted{}, taskHistoryRestorationRefusal(taskID, session.ErrNoStore)
+	}
+	record, err := e.Store.ReadRecord()
+	if err != nil {
+		return session.Interrupted{}, taskHistoryRestorationRefusal(taskID, err)
+	}
+	for _, t := range session.CanonicalInterrupted(record) {
+		if t.TaskID != taskID {
+			continue
+		}
+		if t.Unavailable != nil {
+			return session.Interrupted{}, taskHistoryRestorationRefusal(taskID, t.Unavailable)
+		}
+		return t, nil
+	}
+	return session.Interrupted{}, &RestorationRefusal{TaskID: taskID, Subject: restorationSubjectTaskHistory,
+		Instrument: RestorationInstrumentRecord, Binding: RestorationRecordInconsistent,
+		Detail: "the task's canonical member history records no active task: it ended, or was never created, in its own " +
+			"lineage; nothing of it is continued"}
+}
+
 // bindLineage makes inv's session the current session of the task it
 // resumes and returns the lineage that proves it. The task's lineage is
 // proven from the holder Store's TaskCreated root. A session that is already
@@ -2480,16 +2694,25 @@ func (e *Engine) recordedObjective(taskID string) (Objective, error) {
 	if store == nil {
 		return Objective{}, objectiveAbsent{TaskID: taskID}
 	}
-	history, err := store.Load()
+	// The task's canonical member history, and nothing else: a TaskCreated a
+	// foreign session wrote, or one that precedes the task's root, is not the
+	// task's submission.
+	history, err := store.TaskHistory(taskID)
 	if err != nil {
 		// Unreadable is not absent: nothing has shown that no objective was
-		// recorded, only that the record could not be read.
+		// recorded, only that the record could not be read -- or could not be
+		// read as the task's own lineage.
 		return Objective{}, objectiveUnreadable{TaskID: taskID, Cause: err}
+	}
+	if !history.Recorded {
+		// No record file has shown nothing either: absence is established
+		// only by reading a record that exists.
+		return Objective{}, objectiveUnreadable{TaskID: taskID, Cause: fmt.Errorf("the session record does not exist: %w", os.ErrNotExist)}
 	}
 	// The task's first TaskCreated is its submission; its bytes are the objective.
 	text := ""
-	for _, ev := range history {
-		if ev.TaskID == taskID && ev.Kind == event.TaskCreated {
+	for _, ev := range history.Members {
+		if ev.Kind == event.TaskCreated {
 			text = ev.Summary
 			break
 		}
@@ -2688,6 +2911,15 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// its first step still emits a receipt, and that receipt says it never
 	// reached the gate rather than saying nothing at all.
 	e.beginReceipt(taskID)
+	// A task re-entering execute on resume -- a recorded task the canonical
+	// history holds no plan for, or a deferred question -- may already hold a
+	// retained candidate. The receipt opens at NONE, so the inherited
+	// candidate is measured before anything here can fail: an early failure
+	// must not record "no candidate" beside work sitting on disk. A fresh run
+	// has no candidate recorded and is untouched.
+	if inherited, ok, err := candidate.Load(e.Repo.Root, taskID); err == nil && ok {
+		e.noteInheritedCandidate(taskID, observeCandidate(ctx, inherited.Worktree, inherited.BaseSHA))
+	}
 	// A supplied plan governs the run from its first instruction, so its
 	// identity is recorded before anything can fail. Waiting until the plan is
 	// assembled would let an early failure report no plan for a run that was
@@ -2701,6 +2933,13 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// carried exactly as submitted.
 	if strings.TrimSpace(task) == "" {
 		fail(errEmptyTask)
+		return
+	}
+	// The task's P9 state is read from its canonical member history before
+	// anything can decide from it; an unknown history is refused, typed, and
+	// never routed as an empty one.
+	if err := e.taskHistoryRefusal(taskID); err != nil {
+		fail(err)
 		return
 	}
 	if !e.Config.Permissions.ReadRepository {
@@ -3125,12 +3364,23 @@ func (e *Engine) reportOutcome(ctx context.Context, status, task, note string) {
 // human's contribution was authorizing the task — which is what /run is. Saying
 // "accepted by the human" for that case, as this once did unconditionally,
 // attributes to a person a judgement they never made.
+//
+// A task history that cannot be read as the task's canonical lineage claims
+// no owner: who authorized the work is then unknown, and is neither "a human"
+// nor "the architect". The zero Authority is returned and the task's history
+// is recorded unavailable (noteTaskHistoryUnavailable), which recordDecision
+// reads before it writes anything.
 func (e *Engine) decisionAuthority(taskID string, start certifiedStart) decision.Authority {
 	certified := strings.TrimSpace(start.Domain())
 	if commit := strings.TrimSpace(start.GraphBuildCommit()); commit != "" {
 		certified = strings.TrimSpace(certified + " @ " + commit)
 	}
-	if answered := e.authorityDecisions(taskID); len(answered) != 0 {
+	answered, err := e.authorityDecisions(taskID)
+	if err != nil {
+		e.noteTaskHistoryUnavailable(taskID, err)
+		return decision.Authority{}
+	}
+	if len(answered) != 0 {
 		// The last answer is the one the plan finally rested on: an earlier
 		// condition that was answered and then superseded did not authorize
 		// the work that shipped.
@@ -3180,10 +3430,16 @@ func (e *Engine) decisionAuthority(taskID string, start certifiedStart) decision
 // event names the pending file, because that is where the human promotion step
 // finds it.
 func (e *Engine) recordDecision(ctx context.Context, taskID string, tc *taskContext, start certifiedStart, changed []string) {
+	authorizedBy := e.decisionAuthority(taskID, start)
+	if err := e.historyUnavailable(taskID); err != nil {
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.DecisionRecorded,
+			"decision not recorded: who authorized it cannot be established: "+err.Error(), nil))
+		return
+	}
 	record := decision.Record{
 		Title:        strings.TrimSpace(tc.Rationale),
 		Rationale:    tc.Task,
-		Authority:    e.decisionAuthority(taskID, start),
+		Authority:    authorizedBy,
 		Consequences: tc.Consequences,
 		SourceFiles:  changed,
 		Invariants:   tc.Invariants,
@@ -6701,7 +6957,11 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 	case routing.ClosesGap():
 		return architectureDecision{}, refusePlanAdmission(refusalSuppliedPlan, nil, errSuppliedPlanCannotBeRevised("a bounded knowledge gap must be closed first: "+routing.Condition))
 	case routing.RequiresHuman():
-		if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); asked {
+		authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...)
+		if err := e.historyUnavailable(taskID); err != nil {
+			return architectureDecision{}, err
+		}
+		if asked {
 			if !authorized {
 				return architectureDecision{}, refusePlanAdmission(refusalAuthorityDeclined, nil, fmt.Errorf("the human declined this architectural change and the plan still requires it: %s", routing.Condition))
 			}
@@ -6719,7 +6979,11 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 		// The answer is read back through the same record an architect's
 		// re-plan would consult, so what authorises the run is the recorded
 		// resolution and not the option string the prompt returned.
-		if authorized, _ := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); !authorized {
+		authorized, _ = e.applyAnsweredCondition(taskID, routing.Condition, d.Files...)
+		if err := e.historyUnavailable(taskID); err != nil {
+			return architectureDecision{}, err
+		}
+		if !authorized {
 			return architectureDecision{}, refusePlanAdmission(refusalSuppliedPlan, nil, errSuppliedPlanCannotBeRevised("the human's answer did not authorise the plan as supplied: "+routing.Condition))
 		}
 		if err := unexaminedAfterAnswer(); err != nil {
@@ -7169,6 +7433,9 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 				if !asked {
 					authorized, asked = e.applyAnsweredCondition(taskID, routing.Condition, d.Files...)
 				}
+				if err := e.historyUnavailable(taskID); err != nil {
+					return architectureDecision{}, err
+				}
 				if asked {
 					if !authorized {
 						return architectureDecision{}, refusePlanAdmission(refusalAuthorityDeclined, nil, fmt.Errorf(
@@ -7211,6 +7478,9 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 							authorized, asked := e.gapSettlement(taskID, stillOpen)
 							if !asked {
 								authorized, asked = e.applyAnsweredCondition(taskID, stillOpen.Condition, d.Files...)
+							}
+							if err := e.historyUnavailable(taskID); err != nil {
+								return architectureDecision{}, err
 							}
 							if asked {
 								if !authorized {
@@ -7348,6 +7618,9 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			authorized, asked := e.gapSettlement(taskID, routing)
 			if !asked {
 				authorized, asked = e.applyAnsweredCondition(taskID, routing.Condition, d.Files...)
+			}
+			if err := e.historyUnavailable(taskID); err != nil {
+				return architectureDecision{}, err
 			}
 			if asked {
 				if !authorized {
@@ -9364,6 +9637,12 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 			return "", refusal
 		}
 	}
+	// And a question whose task history is recorded unavailable is not
+	// asked: whether it was already answered cannot be shown, so asking it
+	// would read an unknown history as one with no answer in it.
+	if err := e.historyUnavailable(taskID); err != nil {
+		return "", err
+	}
 	ch := make(chan string, 1)
 	e.mu.Lock()
 	e.pending[taskID] = ch
@@ -10508,7 +10787,11 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	// restart the thinking. It is rebuilt from what is known now rather than
 	// trusted from disk, and it carries no authority: a lost state file must
 	// mean re-certifying, never proceeding on a remembered yes.
-	state := e.taskState(taskID, tc, identity, start)
+	state, err := e.taskState(taskID, tc, identity, start)
+	if err != nil {
+		fail(err)
+		return
+	}
 
 	// carried arrives non-empty on a resume, so the first worker starts from the
 	// findings the interrupted run had already earned.
@@ -11755,7 +12038,23 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 // having recorded and published nothing. An attempt made while another
 // invocation of the task is live is refused with ErrTaskInvocationLive, as
 // its own outcome only: the live invocation is untouched.
+//
+// The caller's projection is the task's canonical projection
+// (session.CanonicalInterrupted, which every production caller reads through
+// FindActive or the interactive startup; RULING-220 D9). One whose history
+// could not be projected (Interrupted.Unavailable) is refused before anything
+// is admitted, and once the session is bound the task's canonical member
+// history in the record it is now bound to must still hold it as active and
+// projectable (canonicalTask), or the invocation ends, typed, before any lane
+// reads anything. The caller's projection only SELECTS the task: the lane and
+// question it was selected for must be the canonical projection's
+// (resumeLaneRefusal, deferredAuthorityRefusal), and every lane, restoration
+// and continuation after binding reads the post-bind canonical projection.
 func (e *Engine) ResumeTask(ctx context.Context, task session.Interrupted) *ResumeAttempt {
+	if task.Unavailable != nil {
+		return refusedResumeAttempt(e, task.TaskID, newRecordAppendFailure(
+			event.New(e.SessionID, task.TaskID, event.SourceSystem, session.SessionLineageBound, "", nil), task.Unavailable))
+	}
 	inv, err := e.admitInvocation(ctx, task.TaskID)
 	if err != nil {
 		return refusedResumeAttempt(e, task.TaskID, newRecordAppendFailure(
@@ -11788,6 +12087,43 @@ func (e *Engine) ResumeTask(ctx context.Context, task session.Interrupted) *Resu
 			return
 		}
 		attempt.settle(ResumeBinding{TaskID: task.TaskID, CurrentSessionID: lineage.Tip()})
+		// THE CANONICAL TASK. The record this session is now bound to must
+		// still hold the task as active in its member history, and its P9
+		// state must be read from that history: a history that cannot be
+		// projected, or that shows the task ended in its own lineage, ends
+		// the invocation, typed, before any lane, answer or restoration
+		// reads anything.
+		canonical, err := e.canonicalTask(task.TaskID)
+		if err == nil {
+			err = e.taskHistoryRefusal(task.TaskID)
+		}
+		if err == nil && len(task.AwaitingAuthority) != 0 {
+			// The question is answerable only as the task's own: the standing
+			// question of its canonical member history, asked by a session of
+			// its lineage. Refused, typed, before anyone is asked.
+			err = deferredAuthorityRefusal(task, canonical, lineage)
+		}
+		if err == nil {
+			err = resumeLaneRefusal(task, canonical)
+		}
+		if err != nil {
+			// The objective recorded beside the refusal is the canonical
+			// one's whenever the history could be projected at all.
+			objective := task.Task
+			if canonical.TaskID != "" {
+				objective = canonical.Task
+			}
+			e.beginReceipt(task.TaskID)
+			e.terminateRun(ctx, task.TaskID, objective, err)
+			return
+		}
+		// THE CALLER'S PROJECTION SELECTED THE TASK; THE CANONICAL ONE DECIDES
+		// IT. From here every lane, restoration, objective, plan, grant,
+		// review, re-plan and refusal reads the post-bind canonical projection
+		// -- never a caller value that may be stale, forged, or older than a
+		// transition recorded between discovery and binding. The caller's value
+		// was used only to check the lane and question it asked for, above.
+		task = canonical
 		// A resumed task keeps the mode it was running in. Resumption is not a
 		// new entry point a person chose, so its provenance says so.
 		e.announceMode(ctx, task.TaskID, governedMode(ResumedGoverned))
@@ -12134,9 +12470,13 @@ func (p senseiProposer) CallTool(name string, args map[string]any) (authority.To
 // known. It is deliberately a projection of live facts rather than a record
 // loaded from disk: the file exists so a later process can read the position,
 // not so this one can skip establishing it.
-func (e *Engine) taskState(taskID string, tc *taskContext, id candidate.Identity, start certifiedStart) taskstate.State {
+func (e *Engine) taskState(taskID string, tc *taskContext, id candidate.Identity, start certifiedStart) (taskstate.State, error) {
 	required := make([]string, 0, len(start.RequiredActions()))
 	required = append(required, start.RequiredActions()...)
+	answered, err := e.authorityDecisions(taskID)
+	if err != nil {
+		return taskstate.State{}, err
+	}
 	return taskstate.State{
 		TaskID: taskID, SessionID: e.SessionID, Task: tc.Task, Domain: id.Domain,
 		BaseSHA: id.BaseSHA, Worktree: id.Worktree, Branch: id.Branch,
@@ -12146,12 +12486,12 @@ func (e *Engine) taskState(taskID string, tc *taskContext, id candidate.Identity
 			Consequences: tc.Consequences,
 			Invariants:   tc.Invariants,
 		},
-		Authority:        e.authorityDecisions(taskID),
+		Authority:        answered,
 		Evidence:         taskstate.Evidence{RequiredTests: required},
 		Phase:            taskstate.Planning,
 		GraphBuildCommit: start.GraphBuildCommit(),
 		ObservedAt:       time.Now().UTC(),
-	}
+	}, nil
 }
 
 // authorityDecisions reads the human decisions already made for this task out
@@ -12159,17 +12499,22 @@ func (e *Engine) taskState(taskID string, tc *taskContext, id candidate.Identity
 //
 // It reads the event log rather than a decisions file, because the event log is
 // the record that already exists and a second one would need reconciling.
-func (e *Engine) authorityDecisions(taskID string) []taskstate.AuthorityDecision {
+//
+// It reads the task's canonical member history (session.Store.TaskHistory)
+// and nothing else: an answer a foreign session recorded decided nothing for
+// this task. A history that cannot be read or projected is the typed refusal,
+// never an empty set of decisions.
+func (e *Engine) authorityDecisions(taskID string) ([]taskstate.AuthorityDecision, error) {
 	if e.Store == nil {
-		return nil
+		return nil, nil
 	}
-	events, err := e.Store.Load()
+	history, err := e.memberHistory(taskID)
 	if err != nil {
-		return nil
+		return nil, taskHistoryRestorationRefusal(taskID, err)
 	}
 	var out []taskstate.AuthorityDecision
-	for _, ev := range events {
-		if ev.TaskID != taskID || ev.Kind != event.AuthorityResolved {
+	for _, ev := range history {
+		if ev.Kind != event.AuthorityResolved {
 			continue
 		}
 		var res authority.Resolution
@@ -12184,7 +12529,7 @@ func (e *Engine) authorityDecisions(taskID string) []taskstate.AuthorityDecision
 			DecidedAt: res.DecidedAt,
 		})
 	}
-	return out
+	return out, nil
 }
 
 // openFindings turns what the last cycle produced into the list the next worker
@@ -12229,19 +12574,24 @@ func openFindings(review, audit string, cause error) []taskstate.Finding {
 // is authority.Persist, and it stays separate. What is remembered here binds
 // this task only, which is exactly the status a resolution has before Sensei
 // promotes it.
-func (e *Engine) answeredConditions(taskID string) []authority.Resolution {
+//
+// Only the task's canonical member history is read (session.Store.TaskHistory):
+// an answer a foreign session recorded authorizes nothing here, and a history
+// that cannot be read or projected is the typed refusal -- never an empty set
+// of answers, which would read as "never asked".
+func (e *Engine) answeredConditions(taskID string) ([]authority.Resolution, error) {
 	var out []authority.Resolution
 	if e.Store == nil {
-		return out
+		return out, nil
 	}
-	events, err := e.Store.Load()
+	events, err := e.memberHistory(taskID)
 	if err != nil {
-		return out
+		return nil, taskHistoryRestorationRefusal(taskID, err)
 	}
 	scope, epochAt := answerScopeOf(taskID, events)
 	pending := e.pendingPlanAttempt(taskID).ID
 	for i, ev := range events {
-		if ev.TaskID != taskID || ev.Kind != event.AuthorityResolved {
+		if ev.Kind != event.AuthorityResolved {
 			continue
 		}
 		var res resolvedAuthority
@@ -12272,7 +12622,7 @@ func (e *Engine) answeredConditions(taskID string) []authority.Resolution {
 			out = append(out, res.Resolution)
 		}
 	}
-	return out
+	return out, nil
 }
 
 // answerScopeOf reads a task's answer scope out of its session record, and the
@@ -12306,6 +12656,11 @@ func answerScopeOf(taskID string, events []event.Event) (answerScope, []int) {
 // authorized reports whether the run may proceed without asking again. asked
 // reports whether the question has been put at all, so a caller can tell "the
 // human said yes" from "the human has not been asked".
+//
+// A task history that cannot be read as the task's canonical lineage claims
+// neither: it is recorded as the task's unavailable state
+// (noteTaskHistoryUnavailable), which every caller reads (historyUnavailable)
+// before it acts on either answer.
 func (e *Engine) applyAnsweredCondition(taskID, condition string, scope ...string) (authorized, asked bool) {
 	// Matched on the plan as well as the question. A condition is a property of
 	// the region, not of the work: reusing an answer across plans let one yes
@@ -12319,7 +12674,12 @@ func (e *Engine) applyAnsweredCondition(taskID, condition string, scope ...strin
 	// A refusal that covers this plan governs over an authorisation that also
 	// covers it. Both were given about a region containing this work, and
 	// between "you may" and "you may not" the only safe reading is the refusal.
-	for _, res := range e.answeredConditions(taskID) {
+	answered, err := e.answeredConditions(taskID)
+	if err != nil {
+		e.noteTaskHistoryUnavailable(taskID, err)
+		return false, false
+	}
+	for _, res := range answered {
 		if !res.Covers(condition, scope) {
 			continue
 		}

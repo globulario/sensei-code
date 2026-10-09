@@ -307,14 +307,151 @@ func TestWorkerSwitchCarriesSemanticStateNotJustProse(t *testing.T) {
 // sourced from the event log that already exists. A second store of past human
 // decisions would need reconciling with the first, and the two would disagree
 // exactly when it mattered.
+//
+// The record is read through the task's canonical member history (70B2a2,
+// RULING-220 D6): a decision a foreign session recorded is not this task's.
 func TestAuthorityDecisionsAreReadFromTheRecordNotReinvented(t *testing.T) {
 	fn := funcBody(t, "internal/workflow/engine.go", "authorityDecisions")
-	if !strings.Contains(fn, "e.Store.Load") {
-		t.Fatal("prior human decisions are not read from the session record")
+	if !strings.Contains(fn, "e.memberHistory") {
+		t.Fatal("prior human decisions are not read from the task's canonical member history")
+	}
+	if strings.Contains(fn, "e.Store.Load") {
+		t.Fatal("prior human decisions are read from the raw holder record, so a foreign session's answer is the task's")
 	}
 	if strings.Contains(fn, "os.ReadFile") {
 		t.Fatal("prior human decisions are read from a separate file, creating a second source of truth")
 	}
+}
+
+// TestB2a2R220W8EveryAuthorityBearingReaderReachesTheCanonicalProjection is
+// the structural supplement to the behavioral witnesses (RULING-220 D1, D6,
+// W8): every production reader of task history that can influence resume,
+// discovery, authority, plan, grant, gap or terminal state reaches the
+// canonical member-history projection, and none reads the raw record or folds
+// it raw. Indirect callers count: ResumeTask re-reads the task through
+// canonicalTask, and every restorer it calls reads only the task it was
+// handed; FindActive and the TUI (Discovery.ResumableRecord) read
+// CanonicalInterrupted.
+func TestB2a2R220W8EveryAuthorityBearingReaderReachesTheCanonicalProjection(t *testing.T) {
+	for _, reader := range []struct{ fn, via string }{
+		{"memberHistory", "e.Store.TaskHistory"},
+		{"memberHistory", "h.Recorded("},
+		{"gapResolutions", "e.memberHistory"},
+		{"answeredConditions", "e.memberHistory"},
+		{"authorityDecisions", "e.memberHistory"},
+		{"recordedObjective", "store.TaskHistory"},
+		{"canonicalTask", "session.CanonicalInterrupted"},
+		{"taskHistoryRefusal", "e.gapResolutions"},
+	} {
+		body := funcBody(t, "internal/workflow/engine.go", reader.fn)
+		if !strings.Contains(body, reader.via) {
+			t.Errorf("%s does not read through %s", reader.fn, reader.via)
+		}
+		for _, raw := range []string{".Load(", "session.FindInterrupted("} {
+			if strings.Contains(body, raw) {
+				t.Errorf("%s reads raw task history (%s)", reader.fn, raw)
+			}
+		}
+	}
+	// ResumeTask re-reads what the task owes after binding, and gates its P9
+	// state, before any lane: the caller's projection only selects the task.
+	resume := funcBody(t, "internal/workflow/engine.go", "ResumeTask")
+	for _, step := range []string{"e.canonicalTask(", "e.taskHistoryRefusal(", "task.Unavailable"} {
+		if !strings.Contains(resume, step) {
+			t.Errorf("ResumeTask does not reach %s", step)
+		}
+	}
+	// And the post-bind canonical projection is what every lane and
+	// restoration consumes: the caller's lane is checked against it, and the
+	// task is REPLACED by it before the first consumer reads anything.
+	src := rawSource(t, "internal/workflow/engine.go")
+	resumeSrc := src[strings.Index(src, "func (e *Engine) ResumeTask("):]
+	resumeSrc = resumeSrc[:strings.Index(resumeSrc, "\n}\n")]
+	replaced := strings.Index(resumeSrc, "task = canonical\n")
+	if replaced < 0 || !strings.Contains(resumeSrc, "resumeLaneRefusal(task, canonical)") {
+		t.Error("ResumeTask does not replace the caller's projection with the post-bind canonical one")
+	}
+	for _, consumer := range []string{"e.restorePlanAdmissionRefusals(task)", "e.resumeAuthority(ctx, task)",
+		"e.resumeUnplannedArchitecture(ctx, task)", "e.restorePlanBound(task)", "e.restorePlanAttempt(task",
+		"e.restoreTestEditGrants(task", "e.restoreProspectiveGrants(task", "waitingReviewFrom(task)",
+		"owedReplan(task.NotConverged", "e.owedPlanAdmissionRefusal(task.TaskID)"} {
+		if at := strings.Index(resumeSrc, consumer); at < 0 || at < replaced {
+			t.Errorf("ResumeTask's consumer %s does not read the post-bind canonical projection", consumer)
+		}
+	}
+	// The CLI and the TUI select through ONE repository-wide refusal
+	// precedence, and a continued record is never loaded as an empty one.
+	if b := funcBody(t, "cmd/sensei-code/main.go", "interactiveDiscovery"); !strings.Contains(b, ".ResumableIn(") || strings.Contains(b, ".ScopedTo(") {
+		t.Error("the TUI's record is not established through the shared refusal precedence (Discovery.ResumableIn)")
+	}
+	if b := funcBody(t, "internal/tui/model.go", "New"); !strings.Contains(b, "inventory.ResumableRecord(") {
+		t.Error("the TUI's resumable set is not the canonical discovery of the record it replays (Discovery.ResumableRecord)")
+	}
+	if b := funcBody(t, "internal/session/store.go", "ResumableRecord"); !strings.Contains(b, "CanonicalInterrupted ") || !strings.Contains(b, "d.TaskRefusal(") {
+		t.Error("Discovery.ResumableRecord does not fold the canonical projection under the repository-wide TaskRefusal")
+	}
+	if !strings.Contains(funcBody(t, "cmd/sensei-code/resume.go", "resumeAuthorityAnswered"), "inventory.TaskRefusal(") {
+		t.Error("CLI selection bypasses the shared refusal precedence (Discovery.TaskRefusal)")
+	}
+	if b := funcBody(t, "internal/session/store.go", "ResumableIn"); !strings.Contains(b, "d.TaskRefusal(") {
+		t.Error("Discovery.ResumableIn does not apply the repository-wide TaskRefusal")
+	}
+	if strings.Contains(funcBody(t, "cmd/sensei-code/main.go", "loadConversation"), "ReadRecord(") {
+		t.Error("the startup loads a selected record through a reader that turns its absence into an empty history")
+	}
+	if !strings.Contains(funcBody(t, "internal/workflow/engine.go", "execute"), "e.taskHistoryRefusal(") {
+		t.Error("execute decides from the task's P9 state without first establishing its canonical history")
+	}
+	// A task history's presence and contents are ONE observation: a separate
+	// presence check lets a record that vanishes before the read report an
+	// empty history as a recorded one.
+	if b := funcBody(t, "internal/session/store.go", "TaskHistory"); strings.Contains(b, "os.Stat(") ||
+		strings.Contains(b, "ReadRecord(") || !strings.Contains(b, "s.Load(") {
+		t.Error("Store.TaskHistory observes the record's presence apart from reading it, or through a reader that turns absence into an empty history")
+	}
+	// Discovery folds members only, and the raw fold has no production caller
+	// but the projection.
+	if !strings.Contains(funcBody(t, "internal/session/store.go", "FindActive"), "CanonicalInterrupted ") {
+		t.Error("FindActive folds a record without the canonical projection")
+	}
+	canonical := funcBody(t, "internal/session/store.go", "CanonicalInterrupted")
+	if !strings.Contains(canonical, "ProjectTaskHistory ") || !strings.Contains(canonical, "h.Members") {
+		t.Error("CanonicalInterrupted does not fold the canonical member history")
+	}
+	for _, rel := range []string{
+		"internal/session/store.go", "internal/workflow/engine.go", "internal/workflow/authority.go",
+		"internal/tui/model.go", "cmd/sensei-code/main.go", "cmd/sensei-code/resume.go",
+		"cmd/sensei-code/resume_blocked.go", "internal/workflow/suppliedplan.go", "internal/workflow/testedit.go",
+		"internal/workflow/prospective.go", "internal/workflow/waiting_review.go", "cmd/sensei-code/resume_review.go",
+	} {
+		src := rawSource(t, rel)
+		calls := strings.Count(src, "FindInterrupted(")
+		allowed := 0
+		if rel == "internal/session/store.go" {
+			// The declaration and the one call inside CanonicalInterrupted.
+			allowed = strings.Count(src, "func FindInterrupted(") + strings.Count(canonicalSource(t), "FindInterrupted(")
+		}
+		if calls > allowed {
+			t.Errorf("%s calls the raw fold FindInterrupted outside the canonical projection (%d > %d)", rel, calls, allowed)
+		}
+	}
+	// The TUI's resumable tasks come from the same discovery as the CLI's,
+	// never from a fold of the history it replays.
+	if !strings.Contains(funcBody(t, "cmd/sensei-code/main.go", "interactiveDiscovery"), "session.FindActive(") {
+		t.Error("the interactive startup does not take /resume's tasks from canonical discovery")
+	}
+}
+
+// canonicalSource is CanonicalInterrupted's source text.
+func canonicalSource(t *testing.T) string {
+	t.Helper()
+	src := rawSource(t, "internal/session/store.go")
+	start := strings.Index(src, "func CanonicalInterrupted(")
+	if start < 0 {
+		t.Fatal("CanonicalInterrupted is not declared")
+	}
+	end := strings.Index(src[start:], "\n}\n")
+	return src[start : start+end]
 }
 
 // exprPath renders a possibly nested selector as a dotted path, so a test can
@@ -345,8 +482,11 @@ func TestAnAnsweredConditionIsNotAskedTwice(t *testing.T) {
 		t.Fatal("the escalation path does not consult conditions the human already answered")
 	}
 	fn := funcBody(t, "internal/workflow/engine.go", "answeredConditions")
-	if !strings.Contains(fn, "e.Store.Load") {
-		t.Error("answered conditions are not read from the session record")
+	if !strings.Contains(fn, "e.memberHistory") {
+		t.Error("answered conditions are not read from the task's canonical member history")
+	}
+	if strings.Contains(fn, "e.Store.Load") {
+		t.Error("answered conditions are read from the raw holder record, so a foreign session's answer authorizes this task")
 	}
 	// Classification lives with the lookup, which is where subset coverage is
 	// decided; answeredConditions now returns the answers themselves.

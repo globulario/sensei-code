@@ -618,10 +618,17 @@ func (r AuthorityResolution) Open() bool { return r.Observed && !r.Settled }
 // session record has been read into it (the engine does that; this router file
 // reads no store), so a restarted process reconstructs the same open and
 // settled identities the interrupted one held.
+//
+// unavailable is the typed refusal of the last attempt to read it: the task's
+// history could not be read or projected onto its session lineage
+// (session.TaskHistory). The state is then NOT hydrated -- it is unknown, not
+// empty -- and every caller deciding from it refuses on unavailable before it
+// reads anything else (Engine.taskHistoryRefusal).
 type taskResolutions struct {
-	hydrated bool
-	byKey    map[string]*AuthorityResolution
-	order    []string
+	hydrated    bool
+	unavailable error
+	byKey       map[string]*AuthorityResolution
+	order       []string
 	// settlements are the explicit answers given about each identity, in the
 	// order given, each owned by the plan attempt it was asked about.
 	settlements map[string][]gapAnswer
