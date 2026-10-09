@@ -94,6 +94,9 @@ type Model struct {
 	pendingTask   string
 	currentTask   string
 	resumable     []session.Interrupted
+	// discoveryRefusal is the canonical discovery's typed refusal, when it
+	// refused: /resume reports it, never "nothing to resume".
+	discoveryRefusal error
 	// lastResponse is the most recent thing the architect said, kept as the
 	// plain text the event carried. Recovering it from `lines` would mean
 	// parsing speaker headings back out of rendered styling, which is a guess
@@ -132,7 +135,20 @@ type Model struct {
 	scrollUp int
 }
 
-func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event, history []event.Event) Model {
+// New is the TUI over a reopened conversation's history -- replayed as
+// conversation only -- and the tasks /resume may continue in it, which are
+// that record's canonical discovery (inventory.ResumableRecord: its lineage
+// members' tasks, each carrying the repository-wide refusal of the inventory
+// the record was established in, refused tasks included) and never a raw
+// fold of the history. discovery is that discovery's typed refusal, when it
+// refused: /resume then reports it rather than "nothing to resume", and
+// nothing is offered.
+func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event, history []event.Event,
+	inventory session.Discovery, discovery error) Model {
+	var resumable []session.Interrupted
+	if discovery == nil {
+		resumable = inventory.ResumableRecord(history)
+	}
 	ta := textarea.New()
 	ta.Placeholder = "Describe a task for Sensei Code..."
 	ta.Prompt = "› "
@@ -150,12 +166,21 @@ func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event
 		// A task that was approved and then interrupted still has its candidate
 		// on disk. Offering it is the difference between resuming work and
 		// silently abandoning it.
-		resumable: session.FindInterrupted(history),
+		resumable:        resumable,
+		discoveryRefusal: discovery,
 	}
-	if n := len(m.resumable); n > 0 {
+	if discovery != nil {
+		m.lines = append(m.lines, errorStyle.Render("✗ RESUME"),
+			"  the interrupted tasks of this session could not be established: "+discovery.Error(), "")
+	} else if n := len(resumable); n > 0 && resumable[n-1].Unavailable != nil {
+		m.lines = append(m.lines,
+			authorityStyle.Render("⚑ UNAVAILABLE"),
+			"  task "+resumable[n-1].TaskID+": "+resumable[n-1].Unavailable.Error(),
+			dimStyle.Render("  it is shown and is not continued"), "")
+	} else if n > 0 {
 		m.lines = append(m.lines,
 			authorityStyle.Render("⚑ INTERRUPTED"),
-			"  "+m.resumable[n-1].Task,
+			"  "+resumable[n-1].Task,
 			dimStyle.Render("  its candidate is still on disk · /resume to continue it"), "")
 	}
 	return m
@@ -1199,16 +1224,29 @@ func (m Model) runCommand(c command.Command, arg string) (Model, tea.Cmd) {
 		m.lines = banner(false)
 		m.activity = ""
 		m.resumable = nil
+		m.discoveryRefusal = nil
 		if err := m.engine.RotateSession(); err != nil {
 			m.lines = append(m.lines, errorStyle.Render("✗ SESSION"), "  "+err.Error(), "")
 		}
 		return m, tea.ClearScreen
 	case "/resume":
+		if m.discoveryRefusal != nil {
+			m.lines = append(m.lines, errorStyle.Render("✗ RESUME"),
+				"  the interrupted tasks of this session could not be established: "+m.discoveryRefusal.Error(), "")
+			return m, tea.ClearScreen
+		}
 		if len(m.resumable) == 0 {
 			m.lines = append(m.lines, dimStyle.Render("nothing to resume: no task was left mid-flight or holding a deferred decision"), "")
 			return m, tea.ClearScreen
 		}
 		task := m.resumable[len(m.resumable)-1]
+		if task.Unavailable != nil {
+			// REFUSAL PRECEDES CONTINUATION, as in the CLI: a task whose
+			// history cannot be read as its own lineage is shown, typed, and
+			// stays visible; no older task is resumed in its place.
+			m.lines = append(m.lines, errorStyle.Render("✗ RESUME"), "  task "+task.TaskID+": "+task.Unavailable.Error(), "")
+			return m, tea.ClearScreen
+		}
 		m.resumable = nil
 		m.busy = true
 		m.startedAt = time.Now()

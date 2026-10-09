@@ -2660,3 +2660,517 @@ func TestObj61AResumeRefusingAnOwedRefusalMeasuresTheRetainedCandidate(t *testin
 		t.Fatalf("the restoration refusal receipt does not account for the retained candidate work: %+v", receipt.Receipt)
 	}
 }
+
+// OBJECTIVE 70B2a2 ENGINE WITNESSES. Every engine reader of a task's history
+// that can influence resume, authority, plan, grant, gap or terminal state
+// acts on the task's canonical lineage members only, and a history that cannot
+// be read or projected is a typed refusal, never an empty authoritative one.
+
+const b2a2Task = "task-b2a2"
+
+// b2a2Holder is a repository whose record of holder s1 holds b2a2Task's root,
+// and the path of that record, so a witness can leave in it what a foreign or
+// legacy writer could have.
+func b2a2Holder(t *testing.T, preRoot ...event.Event) (*session.Store, string) {
+	t.Helper()
+	repo := t.TempDir()
+	store, err := session.New(repo, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preRoot) != 0 {
+		b2a2Raw(t, filepath.Join(repo, ".sensei-code", "sessions", "s1", "events.jsonl"), preRoot...)
+	}
+	if err := seedAppend(t, store, event.New("s1", b2a2Task, event.SourceUser, event.TaskCreated, attemptObjective, nil)); err != nil {
+		t.Fatal(err)
+	}
+	return store, filepath.Join(repo, ".sensei-code", "sessions", "s1", "events.jsonl")
+}
+
+// b2a2Raw appends evs to the record at path without the Store's
+// authorization: exactly what the Store would refuse to write.
+func b2a2Raw(t *testing.T, path string, evs ...event.Event) {
+	t.Helper()
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	for _, ev := range evs {
+		line, err := json.Marshal(ev)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Write(append(line, '\n')); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// b2a2Answer is a well-formed AuthorityResolved sessionID recorded: an
+// authorization of condition over a.go, about gap when one is named.
+func b2a2Answer(sessionID, condition string, gap *GapIdentity) event.Event {
+	return event.New(sessionID, b2a2Task, event.SourceUser, event.AuthorityResolved, condition, resolvedAuthority{
+		Resolution: authority.Resolution{TaskID: b2a2Task, SessionID: sessionID, DecidedAt: time.Now().UTC(),
+			Question: "may " + condition + " proceed?", Condition: condition, OptionID: "1", OptionLabel: "Authorize",
+			Scope: []string{"a.go"}, Outcome: authority.Authorize, State: authority.Proposed},
+		Gap: gap})
+}
+
+// b2a2Question is a well-formed deferred question sessionID recorded.
+func b2a2Question(sessionID, condition string) event.Event {
+	q := DeferredAuthority{Condition: condition, TaskID: b2a2Task, SessionID: sessionID, Scope: []string{"a.go"}, ScopeRecorded: true,
+		Decision: authority.Decision{Level: authority.Human, Subject: "May this change proceed?", Options: realOptions()}}
+	return event.New(sessionID, b2a2Task, event.SourceUser, event.WorkflowAwaitingAuthority, condition, q)
+}
+
+// A2-W6 / P1-W4 / R220-W4 / A2-W11: the gap ledger, answer scope, answered
+// conditions and authority decisions keep a valid ancestor's settlements and
+// answers, under a fresh descendant session, while a correctly framed answer an
+// unrelated session injected into the holder ledger settles, authorizes and
+// decides nothing. The foreign evidence stays in the ledger.
+func TestB2a2A2W6TheGapLedgerKeepsAncestorsAndIgnoresForeignRecords(t *testing.T) {
+	store, path := b2a2Holder(t)
+	ancestorGap := GapIdentity{Kind: "consequence", Subject: "ancestor", Scope: []string{"a.go"}}
+	foreignGap := GapIdentity{Kind: "consequence", Subject: "foreign", Scope: []string{"a.go"}}
+	for _, ev := range []event.Event{b2a2Answer("s1", "ancestor condition", nil), b2a2Answer("s1", "ancestor gap", &ancestorGap)} {
+		if err := seedAppend(t, store, ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bindFixtureSession(t, store, b2a2Task, "s2")
+	b2a2Raw(t, path, b2a2Answer("sC", "foreign condition", nil), b2a2Answer("sC", "foreign gap", &foreignGap))
+	if raw, _ := store.Load(); len(raw) != 6 {
+		t.Fatalf("premise: the ledger holds the root, two ancestor answers, the binding and two foreign answers; got %d records", len(raw))
+	}
+
+	e := &Engine{Bus: event.NewBus(), SessionID: "s2", Store: store, pending: map[string]chan string{}}
+	if err := e.taskHistoryRefusal(b2a2Task); err != nil {
+		t.Fatalf("valid lineage history with foreign evidence was refused: %v", err)
+	}
+	tr := e.gapResolutions(b2a2Task)
+	e.mu.Lock()
+	ancestorSettled, foreignSettled := len(tr.settlements[ancestorGap.Key()]), len(tr.settlements[foreignGap.Key()])
+	e.mu.Unlock()
+	if ancestorSettled != 1 || foreignSettled != 0 {
+		t.Errorf("gap ledger: ancestor settlements %d (want 1), foreign settlements %d (want 0)", ancestorSettled, foreignSettled)
+	}
+	if authorized, asked := e.applyAnsweredCondition(b2a2Task, "ancestor condition", "a.go"); !authorized || !asked {
+		t.Errorf("the ancestor's answer no longer authorizes its condition: authorized=%v asked=%v", authorized, asked)
+	}
+	if authorized, asked := e.applyAnsweredCondition(b2a2Task, "foreign condition", "a.go"); authorized || asked {
+		t.Errorf("a foreign session's answer authorized this task: authorized=%v asked=%v", authorized, asked)
+	}
+	decisions, err := e.authorityDecisions(b2a2Task)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range decisions {
+		if strings.Contains(d.Condition, "foreign") {
+			t.Errorf("a foreign session's answer is recorded as this task's decision: %+v", d)
+		}
+	}
+	if len(decisions) != 2 {
+		t.Errorf("the ancestor's decisions were not all kept: %+v", decisions)
+	}
+	if err := e.historyUnavailable(b2a2Task); err != nil {
+		t.Errorf("a valid history was recorded unavailable: %v", err)
+	}
+}
+
+// R220-W5 / D4 / D5 / X5-X8: a task history that cannot be projected -- here
+// one malformed record of the task -- is never empty authoritative state. The
+// gap ledger stays unhydrated and refuses, typed; answered conditions,
+// authority decisions and the recorded objective refuse rather than read as
+// "nothing answered" or "nothing recorded"; and the authority rendezvous asks
+// nothing.
+func TestB2a2R220W5AFailedHistoryReadIsNeverEmptyAuthoritativeState(t *testing.T) {
+	store, path := b2a2Holder(t)
+	if err := seedAppend(t, store, b2a2Answer("s1", "ancestor condition", nil)); err != nil {
+		t.Fatal(err)
+	}
+	b2a2Raw(t, path, event.Event{TaskID: b2a2Task, Kind: event.AuthorityResolved, Source: event.SourceUser, Summary: "unframed"})
+
+	e := &Engine{Bus: event.NewBus(), SessionID: "s2", Store: store, pending: map[string]chan string{}}
+	err := e.taskHistoryRefusal(b2a2Task)
+	var refusal *RestorationRefusal
+	if !errors.As(err, &refusal) || refusal.Subject != restorationSubjectTaskHistory || !errors.Is(err, err) {
+		t.Fatalf("the gap ledger's unavailable history was not refused, typed: %v", err)
+	}
+	if _, perr := ParseRestorationRefusal(mustJSON(t, refusal)); perr != nil {
+		t.Fatalf("the refusal is not a valid restoration refusal: %v", perr)
+	}
+	tr := e.gapResolutions(b2a2Task)
+	e.mu.Lock()
+	hydrated, unavailable := tr.hydrated, tr.unavailable
+	e.mu.Unlock()
+	if hydrated || !errors.Is(unavailable, session.ErrTaskHistoryUnavailable) {
+		t.Errorf("the gap ledger was marked read over a history it could not project: hydrated=%v unavailable=%v", hydrated, unavailable)
+	}
+	if _, err := e.answeredConditions(b2a2Task); !errors.Is(err, session.ErrTaskHistoryUnavailable) {
+		t.Errorf("answered conditions read a failed history as an answer set: %v", err)
+	}
+	if _, err := e.authorityDecisions(b2a2Task); !errors.Is(err, session.ErrTaskHistoryUnavailable) {
+		t.Errorf("authority decisions read a failed history as a decision set: %v", err)
+	}
+	if _, err := e.recordedObjective(b2a2Task); err == nil {
+		t.Error("the recorded objective was read from a history that cannot be projected")
+	} else if _, ok := err.(objectiveUnreadable); !ok {
+		t.Errorf("an unprojectable history was not reported as unreadable: %T %v", err, err)
+	}
+
+	// The deciding callers: a condition lookup claims neither answer and
+	// records the history unavailable, which every caller reads before it
+	// acts on either; a decision record claims no owner; the rendezvous asks
+	// nothing.
+	fresh := &Engine{Bus: event.NewBus(), SessionID: "s2", Store: store, pending: map[string]chan string{}}
+	fresh.gapResolutions(b2a2Task)
+	if authorized, asked := fresh.applyAnsweredCondition(b2a2Task, "ancestor condition", "a.go"); authorized || asked {
+		t.Errorf("an unreadable history answered the condition: authorized=%v asked=%v", authorized, asked)
+	}
+	if err := fresh.historyUnavailable(b2a2Task); !errors.Is(err, session.ErrTaskHistoryUnavailable) {
+		t.Errorf("the deciding caller is not told the history is unavailable: %v", err)
+	}
+	if a := fresh.decisionAuthority(b2a2Task, certifiedStart{}); a.Owner != "" || a.HumanGrant != "" {
+		t.Errorf("a decision owner was claimed from an unreadable history: %+v", a)
+	}
+	if _, err := fresh.awaitChoice(t.Context(), nil, b2a2Task, "c", "", "", authority.Decision{Options: realOptions()}, realOptions()); err == nil {
+		t.Error("the authority rendezvous asked a question over an unavailable history")
+	}
+	fresh.mu.Lock()
+	_, pending := fresh.pending[b2a2Task]
+	fresh.mu.Unlock()
+	if pending {
+		t.Error("a question was left pending over an unavailable history")
+	}
+}
+
+// R220-W7 / D9 / A2-W3: ResumeTask refuses a task whose history could not be
+// projected before anything is admitted or bound, and -- for a caller that
+// bypassed the canonical projection -- refuses after binding, typed, before
+// any lane reads the history: a raw-folded foreign question is never asked,
+// and a malformed history is never continued.
+// b2a2Resume runs ResumeTask for task in a fresh-session engine over store
+// and returns the attempt, once it ended, and everything it published.
+func b2a2Resume(t *testing.T, store *session.Store, task session.Interrupted) (*ResumeAttempt, []event.Event) {
+	t.Helper()
+	bus := event.NewBus()
+	take, done := collect(t, bus)
+	defer done()
+	e := &Engine{Bus: bus, SessionID: "s-fresh", Store: store, pending: map[string]chan string{}}
+	attempt := e.ResumeTask(context.Background(), task)
+	select {
+	case <-attempt.Ended():
+	case <-time.After(15 * time.Second):
+		t.Fatal("the resume did not end")
+	}
+	return attempt, take()
+}
+
+// b2a2RefusedAs holds that a resume asked nothing and was refused, typed,
+// as subject.
+func b2a2RefusedAs(t *testing.T, evs []event.Event, subject string) {
+	t.Helper()
+	for _, ev := range evs {
+		if ev.Kind == event.AuthorityRequired {
+			t.Fatalf("a question was asked: %s", ev.Summary)
+		}
+	}
+	var r RestorationRefusal
+	payloadOf(t, evs, event.WorkflowRestorationRefused, &r)
+	if r.Subject != subject {
+		t.Fatalf("the resume was not refused as %s: %+v (%v)", subject, r, kindsOf(evs))
+	}
+}
+
+func TestB2a2R220W7ResumeRefusesWhatTheCanonicalHistoryDoesNotHold(t *testing.T) {
+	resume, refusedAs := b2a2Resume, b2a2RefusedAs
+
+	t.Run("unavailable projection is refused before binding", func(t *testing.T) {
+		store, path := b2a2Holder(t)
+		b2a2Raw(t, path, event.Event{TaskID: b2a2Task, Kind: event.Status, Source: event.SourceSystem, Summary: "unframed"})
+		record, _ := store.Load()
+		var task session.Interrupted
+		for _, it := range session.CanonicalInterrupted(record) {
+			if it.TaskID == b2a2Task {
+				task = it
+			}
+		}
+		if task.Unavailable == nil {
+			t.Fatalf("premise: the canonical projection refuses the task: %+v", task)
+		}
+		attempt, _ := resume(t, store, task)
+		if attempt.Binding().Refusal == nil || !errors.Is(attempt.Binding().Refusal, session.ErrTaskHistoryUnavailable) {
+			t.Fatalf("an unavailable task was not refused before binding: %+v", attempt.Binding())
+		}
+		record, _ = store.Load()
+		for _, ev := range record {
+			if ev.Kind == session.SessionLineageBound {
+				t.Fatalf("a refused task was bound anyway: %+v", ev)
+			}
+		}
+	})
+	t.Run("a raw projection of a malformed history is refused after binding", func(t *testing.T) {
+		// Pre-root, so the lineage binds and only the projection can refuse.
+		store, _ := b2a2Holder(t, event.Event{TaskID: b2a2Task, Kind: event.Status, Source: event.SourceSystem, Summary: "unframed"})
+		record, _ := store.Load()
+		raw := session.FindInterrupted(record)
+		if len(raw) != 1 {
+			t.Fatalf("premise: the raw fold offers the task: %+v", raw)
+		}
+		_, evs := resume(t, store, raw[0])
+		refusedAs(t, evs, restorationSubjectTaskHistory)
+	})
+	t.Run("a task its own lineage ended is not continued from a stale projection", func(t *testing.T) {
+		store, _ := b2a2Holder(t)
+		record, _ := store.Load()
+		stale := session.CanonicalInterrupted(record)
+		if len(stale) != 1 || stale[0].Unavailable != nil {
+			t.Fatalf("premise: the task was active when it was projected: %+v", stale)
+		}
+		if err := seedAppend(t, store, event.New("s1", b2a2Task, event.SourceSystem, event.WorkflowCompleted, "done",
+			map[string]string{"workspace": "w", "implementor": "claude", "plan": "p", "review": "accept", "audit": "pass",
+				"publication": "declined"})); err != nil {
+			t.Fatal(err)
+		}
+		_, evs := resume(t, store, stale[0])
+		refusedAs(t, evs, restorationSubjectTaskHistory)
+	})
+	t.Run("a foreign question is never asked", func(t *testing.T) {
+		store, path := b2a2Holder(t)
+		b2a2Raw(t, path, b2a2Question("sC", "a foreign question"))
+		record, _ := store.Load()
+		raw := session.FindInterrupted(record)
+		if len(raw) != 1 || len(raw[0].AwaitingAuthority) == 0 {
+			t.Fatalf("control: the raw fold offers the foreign question: %+v", raw)
+		}
+		for _, it := range session.CanonicalInterrupted(record) {
+			if it.TaskID == b2a2Task && len(it.AwaitingAuthority) != 0 {
+				t.Fatal("the canonical projection offers a foreign session's question")
+			}
+		}
+		_, evs := resume(t, store, raw[0])
+		refusedAs(t, evs, restorationSubjectDeferredAuthority)
+	})
+	t.Run("an ancestor's question is the task's own", func(t *testing.T) {
+		store, _ := b2a2Holder(t)
+		if err := seedAppend(t, store, b2a2Question("s1", "the ancestor's question")); err != nil {
+			t.Fatal(err)
+		}
+		record, _ := store.Load()
+		canonical := session.CanonicalInterrupted(record)
+		if len(canonical) != 1 || len(canonical[0].AwaitingAuthority) == 0 {
+			t.Fatalf("the canonical projection lost the ancestor's question: %+v", canonical)
+		}
+		lineage, err := store.TaskSessionLineage(b2a2Task)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := deferredAuthorityRefusal(canonical[0], canonical[0], lineage); err != nil {
+			t.Fatalf("the ancestor's question was refused: %v", err)
+		}
+		_, evs := resume(t, store, canonical[0])
+		for _, ev := range evs {
+			if ev.Kind == event.WorkflowRestorationRefused {
+				t.Fatalf("the ancestor's question was refused on resume: %s", ev.Summary)
+			}
+		}
+	})
+}
+
+// b2a2Projected is b2a2Task as the canonical projection of store's record
+// holds it now.
+func b2a2Projected(t *testing.T, store *session.Store) session.Interrupted {
+	t.Helper()
+	record, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, it := range session.CanonicalInterrupted(record) {
+		if it.TaskID == b2a2Task {
+			if it.Unavailable != nil {
+				t.Fatalf("premise: the task's history is projectable: %v", it.Unavailable)
+			}
+			return it
+		}
+	}
+	t.Fatal("premise: the canonical projection holds the task as active")
+	return session.Interrupted{}
+}
+
+// R220-W7 / D9 / review f1: the caller's projection only SELECTS the task.
+// After binding, every lane and restoration of ResumeTask reads the post-bind
+// canonical projection: a caller value carrying state the canonical history
+// does not hold is not consumed, a transition recorded between discovery and
+// binding is consumed, and a lane the canonical history no longer holds is
+// refused, typed, before anything is asked or restored.
+func TestB2a2R220W7ResumeTaskConsumesOnlyThePostBindCanonicalProjection(t *testing.T) {
+	t.Run("caller fields the canonical history does not hold are not consumed", func(t *testing.T) {
+		store, _ := b2a2Holder(t)
+		caller := b2a2Projected(t, store)
+		caller.Task = "a forged objective"
+		caller.PlanAdmissionRefused = json.RawMessage(`{"refusal_id":`)
+		// Control: the forged state is effective wherever it is consumed.
+		control := &Engine{Bus: event.NewBus(), SessionID: "s-control", Store: store, pending: map[string]chan string{}}
+		var r *RestorationRefusal
+		if err := control.restorePlanAdmissionRefusals(caller); !errors.As(err, &r) || r.Subject != restorationSubjectPlanAdmissionRefusal {
+			t.Fatalf("control: the forged refusal state is not one a restoration would act on: %v", err)
+		}
+		_, evs := b2a2Resume(t, store, caller)
+		for _, ev := range evs {
+			if ev.Kind == event.WorkflowRestorationRefused {
+				var got RestorationRefusal
+				if json.Unmarshal(ev.Payload, &got) == nil && got.Subject == restorationSubjectPlanAdmissionRefusal {
+					t.Fatalf("the resume restored plan-admission state from the caller, not the canonical history: %s", ev.Summary)
+				}
+			}
+			if line, _ := json.Marshal(ev); strings.Contains(string(line), caller.Task) {
+				t.Fatalf("the resume consumed the caller's objective, not the canonical one: %s", line)
+			}
+		}
+	})
+	t.Run("a transition recorded between discovery and binding is consumed", func(t *testing.T) {
+		store, _ := b2a2Holder(t)
+		stale := b2a2Projected(t, store)
+		if err := seedAppend(t, store, event.New("s1", b2a2Task, event.SourceSystem, event.WorkflowPlanAdmissionRefused,
+			"refused at admission", map[string]string{"task_id": b2a2Task, "refusal_id": "r-unbound", "plan_attempt_id": "pa-unbound",
+				"reason": "no admitted plan"})); err != nil {
+			t.Fatal(err)
+		}
+		if now := b2a2Projected(t, store); len(now.PlanAdmissionRefused) == 0 || len(stale.PlanAdmissionRefused) != 0 {
+			t.Fatalf("premise: only the post-bind projection owes the refusal: stale %s, now %s", stale.PlanAdmissionRefused, now.PlanAdmissionRefused)
+		}
+		_, evs := b2a2Resume(t, store, stale)
+		b2a2RefusedAs(t, evs, restorationSubjectPlanAdmissionRefusal)
+	})
+	t.Run("a lane the canonical history no longer holds is refused", func(t *testing.T) {
+		store, _ := b2a2Holder(t)
+		stale := b2a2Projected(t, store)
+		if err := seedAppend(t, store, b2a2Question("s1", "a question asked after discovery")); err != nil {
+			t.Fatal(err)
+		}
+		_, evs := b2a2Resume(t, store, stale)
+		b2a2RefusedAs(t, evs, restorationSubjectResumeLane)
+	})
+}
+
+// RULING-220 D4/D5 (70B2a2 c3): a task record that does not exist, or that
+// vanished after the task was recorded in it, proves nothing about what the
+// task decided. Every authority-bearing reader refuses it, typed: P9 is left
+// unhydrated with the refusal, and neither the answered conditions nor the
+// prior decisions are ever an empty -- authoritative -- set. Presence and
+// contents are one observation (Store.TaskHistory), so a record that vanishes
+// between a presence check and its read cannot report an empty history as a
+// recorded one.
+func TestB2a2R220W5AnAbsentOrVanishedRecordIsNeverEmptyAuthority(t *testing.T) {
+	const taskID = "task-b2a2-absent"
+	for name, store := range map[string]func(t *testing.T) *session.Store{
+		"never written": sessionStore,
+		"vanished after it was recorded": func(t *testing.T) *session.Store {
+			dir := t.TempDir()
+			store, err := session.New(dir, "s1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			rootFixtureTask(t, store, "s1", taskID, "an objective")
+			if h, err := store.TaskHistory(taskID); err != nil || !h.Recorded || len(h.Members) == 0 {
+				t.Fatalf("premise: the task is recorded in its record: %+v %v", h, err)
+			}
+			if err := os.Remove(dir + "/.sensei-code/sessions/s1/events.jsonl"); err != nil {
+				t.Fatal(err)
+			}
+			return store
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e := &Engine{Bus: event.NewBus(), SessionID: "s1", Store: store(t), pending: map[string]chan string{}}
+			if h, err := e.Store.TaskHistory(taskID); err != nil || h.Recorded || len(h.Members) != 0 {
+				t.Fatalf("a missing record is not reported as unrecorded: %+v %v", h, err)
+			}
+			var refusal *RestorationRefusal
+			answers, err := e.answeredConditions(taskID)
+			if !errors.As(err, &refusal) || answers != nil {
+				t.Fatalf("answeredConditions read a missing record as an empty answer set: %v %v", answers, err)
+			}
+			decisions, err := e.authorityDecisions(taskID)
+			if !errors.As(err, &refusal) || decisions != nil {
+				t.Fatalf("authorityDecisions read a missing record as no decisions: %v %v", decisions, err)
+			}
+			tr := e.gapResolutions(taskID)
+			e.mu.Lock()
+			hydrated, unavailable := tr.hydrated, tr.unavailable
+			e.mu.Unlock()
+			if hydrated || unavailable == nil {
+				t.Fatalf("gapResolutions hydrated an empty gap ledger from a missing record (hydrated=%v unavailable=%v)", hydrated, unavailable)
+			}
+			if err := e.taskHistoryRefusal(taskID); !errors.As(err, &refusal) {
+				t.Fatalf("a missing record let an invocation decide from P9: %v", err)
+			}
+		})
+	}
+}
+
+// R238-X8a / P1-W4 / A2-W11: the recorded objective a fresh engine recovers
+// -- exactly as a restarted process reads it, nothing held in memory -- is the
+// TaskCreated of the task's canonical member history and nothing else. A
+// TaskCreated a foreign writer left beside the holder's root, before it or
+// after it, is not a lineage member: it cannot establish the operative
+// objective, and since the task then has no single root, no objective is
+// established at all -- typed unreadable, never the foreign bytes, never the
+// first creation a raw read would pick. Foreign evidence that leaves the
+// lineage valid does not disturb the canonical objective.
+func TestB2a2R238X8aANonMemberTaskCreatedCannotEstablishTheObjective(t *testing.T) {
+	const foreignObjective = "an objective an unrelated session recorded"
+	recovered := func(t *testing.T, store *session.Store) (Objective, error) {
+		t.Helper()
+		e := &Engine{Bus: event.NewBus(), SessionID: "s2", Store: store, pending: map[string]chan string{}}
+		if len(e.objectives) != 0 {
+			t.Fatal("premise: the fresh engine holds no objective, so the history is what is read")
+		}
+		return e.recordedObjective(b2a2Task)
+	}
+	rawRecord := func(t *testing.T, evs ...event.Event) *session.Store {
+		t.Helper()
+		repo := t.TempDir()
+		store, err := session.New(repo, "s1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		b2a2Raw(t, filepath.Join(repo, ".sensei-code", "sessions", "s1", "events.jsonl"), evs...)
+		return store
+	}
+	root := event.New("s1", b2a2Task, event.SourceUser, event.TaskCreated, attemptObjective, nil)
+	foreign := event.New("sC", b2a2Task, event.SourceUser, event.TaskCreated, foreignObjective, nil)
+
+	for name, store := range map[string]*session.Store{
+		"a foreign TaskCreated before the holder's root": rawRecord(t, foreign, root),
+		"a foreign TaskCreated after the holder's root":  rawRecord(t, root, foreign),
+	} {
+		t.Run(name, func(t *testing.T) {
+			o, err := recovered(t, store)
+			if err == nil {
+				t.Fatalf("R238-X8a: a non-member TaskCreated was read as history the objective can be decided from: "+
+					"the objective %q was established for a task with no single root", o.Text)
+			}
+			if _, ok := err.(objectiveUnreadable); !ok {
+				t.Fatalf("R238-X8a: the contested objective was not reported unreadable, typed: %T %v", err, err)
+			}
+			if o.Text != "" {
+				t.Fatalf("R238-X8a: a refused objective still carried bytes: %q", o.Text)
+			}
+			if !errors.Is(err.(objectiveUnreadable).Cause, session.ErrTaskHistoryUnavailable) {
+				t.Errorf("R238-X8a: the refusal does not name the unprojectable history: %v", err)
+			}
+		})
+	}
+
+	t.Run("foreign evidence beside a valid lineage", func(t *testing.T) {
+		store, path := b2a2Holder(t)
+		bindFixtureSession(t, store, b2a2Task, "s2")
+		b2a2Raw(t, path, b2a2Answer("sC", "foreign condition", nil), b2a2Question("sC", "foreign question"))
+		o, err := recovered(t, store)
+		if err != nil || o.Text != attemptObjective {
+			t.Fatalf("R238-X8a: foreign evidence displaced the canonical objective: %q %v", o.Text, err)
+		}
+	})
+}

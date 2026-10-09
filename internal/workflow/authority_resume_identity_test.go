@@ -838,6 +838,15 @@ func TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity(t *testing.T) {
 	// The earlier invocation of the task ends, and gives back its lease,
 	// before the fresh process resumes it.
 	endFixtureInvocation(e, task.TaskID)
+	// Its run stopped at the capability gate and recorded the task's ending,
+	// so that record no longer holds an interrupted task: Resume reads what
+	// the task owes from the record's canonical member history (70B2a2), not
+	// from the caller's projection. The restart is driven over a holder record
+	// in the shape the crashed task left -- created, and nothing after.
+	store = sessionStore(t)
+	if err := seedAppend(t, store, event.New("s1", task.TaskID, event.SourceUser, event.TaskCreated, task.Task, nil)); err != nil {
+		t.Fatal(err)
+	}
 	r := &Engine{Bus: resumed, SessionID: fresh, Store: store, pending: map[string]chan string{}}
 	if got := r.Resume(context.Background(), task); got != task.TaskID {
 		t.Fatalf("Resume continued %q instead of the task it was given", got)
@@ -3703,5 +3712,59 @@ func TestDF30RestoreBoundaryTheRendezvousRefusesARestoredCoverageIdentity(t *tes
 	}
 	if authorized, settled := e.gapSettlement(taskID, Routing{Gap: *q.Gap}); authorized || settled {
 		t.Fatal("a refused question settled the restored identity")
+	}
+}
+
+// A2-W10 (70B2a2): RULING-181 still fails closed once a valid session lineage
+// is established. A coverage question its ancestor holder recorded is the
+// task's own canonical question, and a fresh process binds to the task's
+// lineage -- and the restored coverage episode is still refused, typed,
+// before anyone is asked: lineage authenticates the session, never the
+// episode (objective 59b).
+func TestB2a2A2W10TheRestoredCoverageGateFailsClosedUnderAValidLineage(t *testing.T) {
+	const taskID = "task-b2a2-df30"
+	store := heldTaskStore(t, taskID)
+	gap := GapIdentity{Kind: gapCoverageUnexamined, Subject: "region", Scope: []string{"internal/x.go"}, World: "w"}
+	q := DeferredAuthority{Condition: "coverage", TaskID: taskID, SessionID: "s0-holder", Scope: gap.Scope, ScopeRecorded: true,
+		Gap: &gap, Decision: authority.Decision{Level: authority.Human, Subject: "May this proceed?", Options: realOptions()}}
+	if err := seedAppend(t, store, event.New("s0-holder", taskID, event.SourceUser, event.WorkflowAwaitingAuthority, q.Condition, q)); err != nil {
+		t.Fatal(err)
+	}
+	record, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var task session.Interrupted
+	for _, it := range session.CanonicalInterrupted(record) {
+		if it.TaskID == taskID {
+			task = it
+		}
+	}
+	if task.Unavailable != nil || len(task.AwaitingAuthority) == 0 {
+		t.Fatalf("premise: the ancestor's coverage question is the task's canonical question: %+v", task)
+	}
+	bus := event.NewBus()
+	take, done := collect(t, bus)
+	defer done()
+	e := &Engine{Bus: bus, SessionID: "s-fresh", Store: store, pending: map[string]chan string{}}
+	attempt := e.ResumeTask(context.Background(), task)
+	if b := attempt.Binding(); b.Refusal != nil || b.CurrentSessionID != "s-fresh" {
+		t.Fatalf("premise: the fresh session is bound to the task's valid lineage: %+v", b)
+	}
+	select {
+	case <-attempt.Ended():
+	case <-time.After(15 * time.Second):
+		t.Fatal("the resume did not end")
+	}
+	evs := take()
+	for _, ev := range evs {
+		if ev.Kind == event.AuthorityRequired || ev.Kind == event.AuthorityResolved {
+			t.Fatalf("the restored coverage question was asked or answered under a valid lineage: %s", ev.Kind)
+		}
+	}
+	var refusal RestorationRefusal
+	payloadOf(t, evs, event.WorkflowRestorationRefused, &refusal)
+	if refusal.Subject != restorationSubjectCoverageEpisode {
+		t.Fatalf("the restored coverage question was not refused by RULING-181: %+v", refusal)
 	}
 }

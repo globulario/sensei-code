@@ -1024,6 +1024,182 @@ type Interrupted struct {
 	// question included, and this says why the last attempt did not execute.
 	PreconditionRefusal       event.Kind
 	PreconditionRefusalReason string
+	// Unavailable is set, by CanonicalInterrupted, when the task's history in
+	// this record cannot be projected onto its canonical session lineage
+	// (ProjectTaskHistory): a
+	// record of it is malformed, or the record holds records of it and no
+	// lineage member. The task is then REPORTED, never skipped, and nothing
+	// else here is reconstructed for it -- every other field but TaskID is
+	// empty, and empty is not what it owes. No continuation consumes it:
+	// every lane refuses it, typed, before ordinary lane selection.
+	Unavailable *TaskHistoryRefusal
+}
+
+// THE CANONICAL MEMBER-HISTORY PROJECTION (70B2a2, RULING-216/219/220).
+//
+// A holder ledger may hold records of a task that are correctly framed and
+// still not the task's: written by an unrelated, unbound or superseded
+// session, or before the task's root. They are historical evidence and stay
+// in the ledger exactly as written. They are never authority: no resume,
+// discovery, authority, plan, grant, gap or terminal state is decided from
+// them. ProjectTaskHistory is the one reader that says which records of a
+// task its operative state may be decided from -- the HistoryLineageMember
+// records ClassifyTaskHistory admits -- and every authority-bearing history
+// consumer reads through it (CanonicalInterrupted, FindActive,
+// Store.TaskHistory).
+
+// TaskHistoryUnavailableReason is why a task's history cannot be projected.
+// The vocabulary is closed and read by membership.
+type TaskHistoryUnavailableReason string
+
+const (
+	// TaskHistoryMalformed: a record of the task -- before its root included
+	// -- is not a valid governed event, or its lineage cannot be established.
+	TaskHistoryMalformed TaskHistoryUnavailableReason = "malformed"
+	// TaskHistoryForeignOnly: the record holds records of the task and no
+	// root of it, so none of them is a lineage member.
+	TaskHistoryForeignOnly TaskHistoryUnavailableReason = "foreign_only"
+	// TaskHistoryUnreadable: the record that holds the task could not be read.
+	TaskHistoryUnreadable TaskHistoryUnavailableReason = "unreadable"
+	// TaskHistoryQuarantined: a quarantined session record claims the task
+	// (Discovery.QuarantinedTask); its identity is reserved and no record's
+	// account of it is continued.
+	TaskHistoryQuarantined TaskHistoryUnavailableReason = "quarantined"
+)
+
+// ErrTaskHistoryUnavailable is every TaskHistoryRefusal.
+var ErrTaskHistoryUnavailable = errors.New("the task's history cannot be projected onto its session lineage")
+
+// TaskHistoryRefusal is the typed per-task outcome of a history that cannot
+// be projected. It is never an empty history: what the task owes is unknown,
+// not nothing. The counts are diagnostic only; they never become authority
+// and never stand in for membership.
+type TaskHistoryRefusal struct {
+	TaskID string
+	Reason TaskHistoryUnavailableReason
+	// At is the record position of the first malformed record, -1 when the
+	// refusal names none.
+	At     int
+	Detail string
+	// Members, Foreign, PreRoot and Malformed count the task's records by
+	// class (ClassifyTaskHistory).
+	Members, Foreign, PreRoot, Malformed int
+	cause                                error
+}
+
+func (r *TaskHistoryRefusal) Error() string {
+	return fmt.Sprintf("%v: task %s is %s (%d member, %d foreign, %d pre-root, %d malformed records): %s; "+
+		"the task and its record are preserved and it is not continued", ErrTaskHistoryUnavailable, r.TaskID, r.Reason,
+		r.Members, r.Foreign, r.PreRoot, r.Malformed, r.Detail)
+}
+
+// Unwrap is ErrTaskHistoryUnavailable and the cause, when one is known.
+func (r *TaskHistoryRefusal) Unwrap() []error {
+	if r.cause != nil {
+		return []error{ErrTaskHistoryUnavailable, r.cause}
+	}
+	return []error{ErrTaskHistoryUnavailable}
+}
+
+// TaskHistory is a task's canonical member history in one holder record.
+type TaskHistory struct {
+	TaskID  string
+	Lineage SessionLineage
+	// Members are the task's HistoryLineageMember records, in record order,
+	// and nothing else. Empty only when the record holds no record of the
+	// task at all: a read that succeeded and found none.
+	Members []event.Event
+	// Foreign and PreRoot count the well-formed records of the task that are
+	// not members. Diagnostic only: they are kept in the ledger and never
+	// consumed.
+	Foreign, PreRoot int
+	// Recorded reports that Store.TaskHistory read an existing record file. A
+	// reader whose contract does not permit a missing record to stand for an
+	// empty one refuses on false.
+	Recorded bool
+}
+
+// ProjectTaskHistory is the canonical member-history projection of taskID
+// over record. A record holding no record of the task is a proven absence and
+// projects an empty history. Any HistoryMalformed record of the task, a
+// pre-root one included, and a lineage that cannot be established, are a
+// TaskHistoryMalformed refusal; records of the task with no root are a
+// TaskHistoryForeignOnly refusal. Foreign and pre-root records of a task with
+// a valid lineage are excluded and counted, never erased.
+func ProjectTaskHistory(record []event.Event, taskID string) (TaskHistory, error) {
+	classified, lineage, err := ClassifyTaskHistory(record, taskID)
+	if len(classified) == 0 && (err == nil || isNoTaskRoot(err)) {
+		return TaskHistory{TaskID: taskID}, nil
+	}
+	refusal := &TaskHistoryRefusal{TaskID: taskID, At: -1}
+	h := TaskHistory{TaskID: taskID, Lineage: lineage}
+	for _, c := range classified {
+		switch c.Class {
+		case HistoryLineageMember:
+			refusal.Members++
+			h.Members = append(h.Members, c.Event)
+		case HistoryForeign:
+			refusal.Foreign++
+		case HistoryPreRoot:
+			// ClassifyTaskHistory leaves every record of a task with no root
+			// pre-root, framed or not. A malformed one is malformed here: a
+			// well-formed foreign record and a malformed one stay distinct.
+			if ValidGovernedEvent(c.Event) == nil {
+				refusal.PreRoot++
+				break
+			}
+			fallthrough
+		default:
+			// Read by membership: anything not one of the three classes
+			// above is malformed.
+			refusal.Malformed++
+			if refusal.At < 0 {
+				refusal.At = c.Index
+				if verr := ValidGovernedEvent(c.Event); verr != nil {
+					refusal.cause = verr
+				}
+			}
+		}
+	}
+	h.Foreign, h.PreRoot = refusal.Foreign, refusal.PreRoot
+	switch {
+	case refusal.Malformed != 0 || (err != nil && !isNoTaskRoot(err)):
+		refusal.Reason = TaskHistoryMalformed
+		if err != nil {
+			refusal.cause = err
+		}
+		refusal.Detail = fmt.Sprintf("the record at position %d is malformed", refusal.At)
+		if refusal.cause != nil {
+			refusal.Detail += ": " + refusal.cause.Error()
+		}
+		return TaskHistory{}, refusal
+	case err != nil:
+		refusal.Reason, refusal.cause = TaskHistoryForeignOnly, err
+		refusal.Detail = "the record holds records of the task and no root of it, so none of them is a lineage member"
+		return TaskHistory{}, refusal
+	}
+	return h, nil
+}
+
+// TaskHistory is the canonical member history of taskID in this Store's
+// record. Presence and contents come from ONE read of the record (Load): no
+// record file is reported as Recorded=false with no members -- never as a
+// record that was read -- and a record that exists and cannot be read is a
+// TaskHistoryUnreadable refusal, never an empty history. A separate presence
+// check would let a record that vanishes between it and the read report an
+// empty history as Recorded.
+func (s *Store) TaskHistory(taskID string) (TaskHistory, error) {
+	record, err := s.Load()
+	if errors.Is(err, os.ErrNotExist) {
+		return TaskHistory{TaskID: taskID}, nil
+	}
+	if err != nil {
+		return TaskHistory{}, &TaskHistoryRefusal{TaskID: taskID, Reason: TaskHistoryUnreadable, At: -1,
+			Detail: "the session record could not be read: " + err.Error(), cause: err}
+	}
+	h, err := ProjectTaskHistory(record, taskID)
+	h.Recorded = err == nil
+	return h, err
 }
 
 // blockedRole reads only the role an external-block record names. The workflow
@@ -1081,6 +1257,39 @@ func refusalOf(raw json.RawMessage) (id, continuation string) {
 	return r.RefusalID, r.Continuation
 }
 
+// CanonicalInterrupted is THE resume and discovery projection of one holder
+// record: every task that has begun and not ended, reconstructed from its
+// canonical member history (ProjectTaskHistory) and nothing else. A correctly
+// framed record of a task that a foreign, unbound or superseded session wrote,
+// or one that precedes the task's root, neither creates, ends, asks, answers,
+// plans nor grants anything here: it stays in the ledger as evidence. A task
+// whose history cannot be projected is reported with its typed refusal
+// (Interrupted.Unavailable) and nothing else -- never skipped, never read as
+// empty, and never hiding another task of the record. Tasks are reported in
+// the order the record first names them.
+func CanonicalInterrupted(record []event.Event) []Interrupted {
+	var order []string
+	seen := map[string]bool{}
+	for _, e := range record {
+		if e.TaskID != "" && !seen[e.TaskID] {
+			seen[e.TaskID] = true
+			order = append(order, e.TaskID)
+		}
+	}
+	var out []Interrupted
+	for _, id := range order {
+		h, err := ProjectTaskHistory(record, id)
+		if err != nil {
+			refusal := &TaskHistoryRefusal{TaskID: id, Reason: TaskHistoryMalformed, At: -1, Detail: err.Error(), cause: err}
+			errors.As(err, &refusal)
+			out = append(out, Interrupted{TaskID: id, Unavailable: refusal})
+			continue
+		}
+		out = append(out, FindInterrupted(h.Members)...)
+	}
+	return out
+}
+
 // FindInterrupted reconstructs, from one session record, every task that has
 // begun and not ended, together with what each of them currently owes.
 //
@@ -1097,6 +1306,13 @@ func refusalOf(raw json.RawMessage) (id, continuation string) {
 // a task-terminal event closes it. Deriving existence from the obligations
 // instead -- resumable if planned, or deferring, or blocked -- left the task
 // undiscoverable in every window between them.
+//
+// IT FOLDS THE RECORDS IT IS HANDED, ALL OF THEM, and is therefore not an
+// authority over a holder ledger: a correctly framed record a foreign session
+// wrote would fold here as if it were the task's. No production reader calls
+// it on a record. CanonicalInterrupted is the projection every resume and
+// discovery path reads, and it hands this fold one task's canonical member
+// history (ProjectTaskHistory) at a time.
 func FindInterrupted(events []event.Event) []Interrupted {
 	type partial struct {
 		Interrupted
@@ -1488,6 +1704,62 @@ func (d Discovery) QuarantinedTask(taskID string) (QuarantinedRecord, bool) {
 	return QuarantinedRecord{}, false
 }
 
+// TaskRefusal is the ONE repository-wide refusal of taskID that every resume
+// selection -- the CLI's and the TUI's alike -- reads before any scoped entry
+// or lane: the first record holding the task with a history that cannot be
+// projected onto its session lineage, and then a quarantined record claiming
+// it. sessionID names the refusing record. A refusal from any record refuses
+// the task everywhere: which account of it is the task's cannot be decided past
+// it, and naming a session is a filter, never a waiver (ScopedTo). nil when
+// nothing refuses the task.
+func (d Discovery) TaskRefusal(taskID string) (sessionID string, refusal *TaskHistoryRefusal) {
+	taskID = strings.TrimSpace(taskID)
+	for _, entry := range d.Active {
+		if entry.Task.TaskID == taskID && entry.Task.Unavailable != nil {
+			return entry.SessionID, entry.Task.Unavailable
+		}
+	}
+	if q, ok := d.QuarantinedTask(taskID); ok {
+		return q.SessionID, &TaskHistoryRefusal{TaskID: taskID, Reason: TaskHistoryQuarantined, At: -1,
+			Detail: "claimed by quarantined session record " + q.SessionID + "; its identity stays reserved",
+			cause:  ErrTaskQuarantined}
+	}
+	return "", nil
+}
+
+// ResumableIn is what may be continued from ONE session record: ScopedTo's
+// entries, each carrying the repository-wide TaskRefusal of its task when one
+// exists, so a scoped view never offers a task another record refuses or a
+// quarantine reserves. Refused entries stay visible, typed.
+func (d Discovery) ResumableIn(sessionID string) ([]Active, error) {
+	scoped, err := d.ScopedTo(sessionID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range scoped {
+		if _, refusal := d.TaskRefusal(scoped[i].Task.TaskID); refusal != nil {
+			scoped[i].Task.Unavailable = refusal
+		}
+	}
+	return scoped, nil
+}
+
+// ResumableRecord is ResumableIn for a holder record the caller has already
+// read -- the record the TUI replays: its CanonicalInterrupted tasks, each
+// carrying the repository-wide TaskRefusal of its task when one exists. The
+// record's raw fold is never consulted, and refused tasks stay visible, typed.
+// The caller establishes the record through ResumableIn first, so a record
+// this inventory does not hold or a quarantine excludes is refused there.
+func (d Discovery) ResumableRecord(record []event.Event) []Interrupted {
+	tasks := CanonicalInterrupted(record)
+	for i := range tasks {
+		if _, refusal := d.TaskRefusal(tasks[i].TaskID); refusal != nil {
+			tasks[i].Unavailable = refusal
+		}
+	}
+	return tasks
+}
+
 // ScopedTo narrows an already-validated inventory to the tasks of ONE session
 // record.
 //
@@ -1615,7 +1887,10 @@ func FindActive(repo string) (Discovery, error) {
 			found.Quarantined = append(found.Quarantined, QuarantinedRecord{SessionID: id, Manifest: *r.quarantine})
 			continue
 		}
-		for _, task := range FindInterrupted(r.events) {
+		// The canonical projection: a task's operative state is decided from
+		// its lineage members alone, and a task whose history cannot be
+		// projected is carried with its typed refusal, never dropped.
+		for _, task := range CanonicalInterrupted(r.events) {
 			found.Active = append(found.Active, Active{SessionID: id, Task: task})
 		}
 	}

@@ -658,14 +658,48 @@ func TestTheCommandRefusesAnInadmissibleAnswerAndLeavesTheLogUntouched(t *testin
 		t.Fatal(err)
 	}
 
-	repo, err := gitx.Discover(t.Context(), root)
+	// Since 70B2a1 these records are not valid governed events -- no event id,
+	// and a question naming no task, session or scope state -- so the task's
+	// history cannot be projected onto its session lineage (70B2a2, RULING-220
+	// D2/D3). The command refuses it, typed, before any answer is considered,
+	// and never reads it as an absent task.
+	code, _, stderr := runResume(t, root, "--task", "t-legacy", "--answer", "1", "--quiet")
+	if code != exitFailed || !strings.Contains(stderr, errTaskHistoryUnavailable.Error()) {
+		t.Fatalf("a legacy, unframed history was not refused as unavailable: exit %d\n%s", code, stderr)
+	}
+	assertLogUntouched(t, log, before)
+
+	// The answer's own gate, reached by a well-formed question that cannot
+	// prove its scope (scope_recorded false): an inadmissible answer exits as
+	// a usage error and the log is untouched.
+	scoped := gitRepoRoot(t)
+	q := workflow.DeferredAuthority{Condition: "a condition nobody can re-derive", Domain: "example.com/fixture",
+		BaseSHA: "0000000000000000000000000000000000000000", TaskID: "t-legacy", SessionID: sid, ScopeRecorded: false,
+		Decision: authority.Decision{Level: authority.Human, Subject: "Architectural authority reached a human-owned boundary.",
+			Reason: "the scope was not recorded", Options: []authority.Option{
+				{ID: "1", Label: "Authorize", Outcome: authority.Authorize}, {ID: "3", Label: "Stop this task", Outcome: authority.Stop}}}}
+	writeSession(t, scoped, sid,
+		event.New(sid, "t-legacy", event.SourceSystem, event.TaskCreated, "do the work", nil),
+		event.New(sid, "t-legacy", event.SourceUser, event.WorkflowAwaitingAuthority, "deferred", q))
+	log = filepath.Join(scoped, ".sensei-code", "sessions", sid, "events.jsonl")
+	if before, err = os.ReadFile(log); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := gitx.Discover(t.Context(), scoped)
 	if err != nil {
 		t.Fatalf("discover: %v", err)
 	}
-	code := resumeAuthorityAnswered(t.Context(), repo, config.Config{}, []string{"--task", "t-legacy", "--answer", "1", "--quiet"})
+	code = resumeAuthorityAnswered(t.Context(), repo, config.Config{}, []string{"--task", "t-legacy", "--answer", "1", "--quiet"})
 	if code != exitUsage {
 		t.Fatalf("exit %d, want %d: an inadmissible answer must be refused as a usage error", code, exitUsage)
 	}
+	assertLogUntouched(t, log, before)
+}
+
+// assertLogUntouched holds that a refusal changed nothing in the durable log
+// and recorded no resolution.
+func assertLogUntouched(t *testing.T, log string, before []byte) {
+	t.Helper()
 	after, err := os.ReadFile(log)
 	if err != nil {
 		t.Fatal(err)
@@ -1708,4 +1742,384 @@ func seedAppend(t *testing.T, store *session.Store, ev event.Event) error {
 		}
 	}
 	return store.Append(t.Context(), lease, ev)
+}
+
+// OBJECTIVE 70B2a2 CLI AND STARTUP WITNESSES. Resume discovery, selection and
+// listing consume each task's canonical session-lineage members only, and keep
+// quarantined, malformed, foreign-only, scoped-miss and ordinary-absent
+// outcomes distinct before any lane is chosen or any answer is consumed.
+
+// b2a2Deferred is a well-formed question sessionID deferred in taskID.
+func b2a2Deferred(sessionID, taskID string) event.Event {
+	q := workflow.DeferredAuthority{Condition: "a condition", Domain: "example.com/fixture", BaseSHA: "b", TaskID: taskID,
+		SessionID: sessionID, Scope: []string{"a.go"}, ScopeRecorded: true,
+		Decision: authority.Decision{Level: authority.Human, Subject: "May this change proceed?", Reason: "it is a boundary",
+			Options: []authority.Option{{ID: "1", Label: "Authorize", Outcome: authority.Authorize},
+				{ID: "3", Label: "Stop this task", Outcome: authority.Stop}}}}
+	return event.New(sessionID, taskID, event.SourceUser, event.WorkflowAwaitingAuthority, "deferred", q)
+}
+
+// A2-W1 / P1-W1: a holder record in which an unrelated session left one
+// correctly framed same-task record. A foreign answer does not make the
+// task's question unanswerable, and a foreign question is not one the CLI
+// will deliver an answer to: it is refused before anything starts.
+func TestB2a2A2W1CLIResumeDoesNotConsumeAnUnrelatedSameTaskRecord(t *testing.T) {
+	const holder = "session-20260102T000000.000000000Z"
+	t.Run("a foreign answer does not discharge the standing question", func(t *testing.T) {
+		root := t.TempDir()
+		writeRawSession(t, root, holder,
+			event.New(holder, "t-mixed", event.SourceSystem, event.TaskCreated, "the objective", nil),
+			b2a2Deferred(holder, "t-mixed"),
+			event.New("session-unrelated", "t-mixed", event.SourceUser, event.AuthorityResolved, "answered elsewhere",
+				map[string]string{"option": "1"}))
+		record, err := session.New(root, holder)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := record.Load()
+		if folded := session.FindInterrupted(raw); len(folded) != 1 || len(folded[0].AwaitingAuthority) != 0 {
+			t.Fatalf("control: the raw fold lets the foreign answer clear the question: %+v", folded)
+		}
+		inventory, err := session.FindActive(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := selectAuthorityResume(tasksOf(inventory.Active), "t-mixed", "1"); err != nil {
+			t.Fatalf("the canonical question is no longer answerable: %v", err)
+		}
+	})
+	t.Run("a foreign question is refused before anything starts", func(t *testing.T) {
+		root := gitRepoRoot(t)
+		writeRawSession(t, root, holder,
+			event.New(holder, "t-mixed", event.SourceSystem, event.TaskCreated, "the objective", nil),
+			b2a2Deferred("session-unrelated", "t-mixed"))
+		code, _, stderr := runResume(t, root, "--task", "t-mixed", "--answer", "1", "--quiet")
+		if code != exitUsage || !strings.Contains(stderr, errNoQuestion.Error()) {
+			t.Fatalf("an unrelated session's question was treated as answerable: exit %d\n%s", code, stderr)
+		}
+	})
+}
+
+// R220-W1 / X3 / X4: one task of a record whose history is malformed is
+// refused, typed, ahead of every lane -- its question, objective and review
+// state are never read -- and it hides no other task.
+func TestB2a2R220W1AMalformedTaskIsRefusedFirstAndHidesNoOtherTask(t *testing.T) {
+	root := gitRepoRoot(t)
+	writeRawSession(t, root, "session-20260103T000000.000000000Z",
+		event.New("session-20260103T000000.000000000Z", "t-bad", event.SourceSystem, event.TaskCreated, "bad work", nil),
+		b2a2Deferred("session-20260103T000000.000000000Z", "t-bad"),
+		event.Event{SessionID: "session-20260103T000000.000000000Z", TaskID: "t-bad", Source: event.SourceSystem,
+			Kind: event.Status, Summary: "no event id"})
+	writeSession(t, root, "session-20260104T000000.000000000Z",
+		event.New("session-20260104T000000.000000000Z", "t-ok", event.SourceSystem, event.TaskCreated, "good work", nil))
+
+	inventory, err := session.FindActive(root)
+	if err != nil {
+		t.Fatalf("one malformed task refused the whole repository: %v", err)
+	}
+	bad, ok := activeTask(inventory.Active, "t-bad")
+	if _, refusal := inventory.TaskRefusal("t-bad"); !ok || refusal == nil || !errorIs(bad.Task.Unavailable, session.ErrTaskHistoryUnavailable) {
+		t.Fatalf("the malformed task is not visible as refused: %+v", inventory.Active)
+	}
+	if lane, err := selectResumeLane(bad.Task, true); lane != laneRefused || !errorIs(err, errTaskHistoryUnavailable) {
+		t.Fatalf("the refusal lost precedence over lane selection: %v %v", lane, err)
+	}
+	if good, ok := activeTask(inventory.Active, "t-ok"); !ok || good.Task.Unavailable != nil {
+		t.Fatalf("the valid task is hidden or refused beside the malformed one: %+v", good)
+	}
+	for _, args := range [][]string{{"--task", "t-bad"}, {"--task", "t-bad", "--answer", "1"}} {
+		code, _, stderr := runResume(t, root, append(args, "--quiet")...)
+		if code != exitFailed || !strings.Contains(stderr, errTaskHistoryUnavailable.Error()) ||
+			strings.Contains(stderr, errTaskUnknown.Error()) {
+			t.Fatalf("%v: the malformed task was not refused, typed, ahead of every lane: exit %d\n%s", args, code, stderr)
+		}
+	}
+	code, stdout, _ := runResume(t, root, "--list")
+	if code != exitCompleted || !strings.Contains(stdout, "task t-bad") || !strings.Contains(stdout, errTaskHistoryUnavailable.Error()) ||
+		!strings.Contains(stdout, "resume     --task t-ok") {
+		t.Fatalf("the listing does not show the refused task beside the resumable one: exit %d\n%s", code, stdout)
+	}
+}
+
+// b2a2Quarantined writes a torn record of sessionID that claims taskID and
+// activates its quarantine under an owner's authorization.
+func b2a2Quarantined(t *testing.T, root, sessionID, taskID string) {
+	t.Helper()
+	writeRawSession(t, root, sessionID,
+		event.New(sessionID, taskID, event.SourceSystem, event.TaskCreated, "the objective", nil))
+	path := filepath.Join(root, ".sensei-code", "sessions", sessionID, "events.jsonl")
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := json.Marshal(event.New(sessionID, taskID, event.SourceClaude, event.Output, "a line",
+		map[string]string{"stream": "assistant"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cut := strings.Index(string(output), `"payload":{"str`)
+	if cut < 0 {
+		t.Fatalf("the encoded output event has no payload to cut: %s", output)
+	}
+	if _, err := f.Write(output[:cut+len(`"payload":{"str`)]); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	in, err := session.InspectQuarantine(root, sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.ActivateQuarantine(t.Context(), root, sessionID, session.QuarantineAuthorization{
+		ExpectedSize: in.Size, ExpectedSHA256: in.SHA256, AuthorizedBy: "owner@example.invalid", Provenance: "70B2a2 C1 witness"}); err != nil {
+		t.Fatalf("the quarantine was not activated: %v", err)
+	}
+}
+
+// C1-W1..W5 (RULING-235): a quarantined task is never an ordinarily absent
+// task to resume discovery -- typed QUARANTINED, not resumable, its identity
+// reserved -- and unrelated valid tasks stay discoverable; the CLI and the
+// Store's discovery agree on it.
+func TestB2a2C1W1QuarantinedTaskIsNeverReportedAbsent(t *testing.T) {
+	root := gitRepoRoot(t)
+	const quarantined, valid = "session-20260105T000000.000000000Z", "session-20260106T000000.000000000Z"
+	b2a2Quarantined(t, root, quarantined, "t-quarantined")
+	writeSession(t, root, valid, event.New(valid, "t-ok", event.SourceSystem, event.TaskCreated, "good work", nil))
+
+	for _, args := range [][]string{
+		{"--task", "t-quarantined"},
+		{"--task", "t-quarantined", "--answer", "1"},
+		{"--task", "t-quarantined", "--session", valid},
+	} {
+		code, _, stderr := runResume(t, root, append(args, "--quiet")...)
+		if code != exitFailed || !strings.Contains(stderr, "QUARANTINED") || !strings.Contains(stderr, errTaskQuarantined.Error()) {
+			t.Errorf("%v: the quarantined task was not reported typed: exit %d\n%s", args, code, stderr)
+		}
+		if strings.Contains(stderr, errTaskUnknown.Error()) || strings.Contains(stderr, errTaskNotInSession.Error()) {
+			t.Errorf("%v: the quarantined task was reported as ordinarily absent:\n%s", args, stderr)
+		}
+	}
+	// C1-W3: its identity stays reserved.
+	other, err := session.New(root, "session-20260107T000000.000000000Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.AcquireTaskInvocation(t.Context(), "t-quarantined"); !errorIs(err, session.ErrTaskQuarantined) {
+		t.Errorf("the quarantined task's identity is not reserved: %v", err)
+	}
+	// C1-W4 / C1-W5: the listing shows both, as the Store's discovery does.
+	inventory, err := session.FindActive(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q, ok := inventory.QuarantinedTask("t-quarantined"); !ok || q.SessionID != quarantined {
+		t.Fatalf("premise: the Store reports the task quarantined: %+v", inventory.Quarantined)
+	}
+	if _, ok := activeTask(inventory.Active, "t-ok"); !ok {
+		t.Fatal("the unrelated valid task is not discoverable")
+	}
+	code, stdout, _ := runResume(t, root, "--list")
+	if code != exitCompleted || !strings.Contains(stdout, "task t-quarantined  session "+quarantined) ||
+		!strings.Contains(stdout, "QUARANTINED") || !strings.Contains(stdout, "resume     --task t-ok") {
+		t.Fatalf("the listing does not agree with discovery: exit %d\n%s", code, stdout)
+	}
+	// A scoped miss and an ordinary absence stay what they are.
+	if code, _, stderr := runResume(t, root, "--task", "t-nowhere"); code != exitUsage || !strings.Contains(stderr, errTaskUnknown.Error()) {
+		t.Errorf("an ordinary absence is no longer reported as one: exit %d\n%s", code, stderr)
+	}
+}
+
+// C1-W6: a damaged record whose quarantine manifest is malformed or
+// unauthenticated never yields an ordinary absent result.
+func TestB2a2C1W6AnInvalidManifestNeverYieldsAnAbsentTask(t *testing.T) {
+	root := gitRepoRoot(t)
+	const torn = "session-20260108T000000.000000000Z"
+	b2a2Quarantined(t, root, torn, "t-torn")
+	manifest := filepath.Join(root, ".sensei-code", "sessions", torn, "quarantine.json")
+	for name, body := range map[string]string{
+		"malformed":       "{not a manifest",
+		"unauthenticated": `{"version":1,"session_id":"` + torn + `"}`,
+	} {
+		if err := os.WriteFile(manifest, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		code, _, stderr := runResume(t, root, "--task", "t-torn", "--quiet")
+		if code != exitFailed || strings.Contains(stderr, errTaskUnknown.Error()) {
+			t.Errorf("%s manifest: the damaged task was reported as absent rather than refused: exit %d\n%s", name, code, stderr)
+		}
+	}
+}
+
+// A2-W2 / R220-W6 / D8: the TUI's /resume takes its tasks from the SAME
+// canonical discovery as the CLI, for the record it continues: membership,
+// questions and typed refusals agree, and the record's raw fold is not
+// consulted.
+func TestB2a2R220W6TUIAndCLIAgreeOnMembershipAndRefusal(t *testing.T) {
+	root := t.TempDir()
+	const holder = "session-20260109T000000.000000000Z"
+	writeRawSession(t, root, holder,
+		event.New(holder, "t-valid", event.SourceSystem, event.TaskCreated, "valid work", nil),
+		b2a2Deferred(holder, "t-valid"),
+		event.New("session-unrelated", "t-valid", event.SourceUser, event.AuthorityResolved, "answered elsewhere",
+			map[string]string{"option": "1"}),
+		event.New(holder, "t-bad", event.SourceSystem, event.TaskCreated, "bad work", nil),
+		event.Event{SessionID: holder, TaskID: "t-bad", Source: event.SourceSystem, Kind: event.Status, Summary: "no event id"},
+		b2a2Deferred("session-unrelated", "t-foreign-only"))
+
+	inventory, err := session.FindActive(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cli, err := inventory.ScopedTo(holder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tui := tuiResumable(t, root, holder)
+	if len(tui) != len(cli) || len(tui) != 3 {
+		t.Fatalf("the TUI and the CLI disagree on the record's tasks: tui %d, cli %d", len(tui), len(cli))
+	}
+	for i := range tui {
+		c := cli[i].Task
+		if tui[i].TaskID != c.TaskID || (tui[i].Unavailable == nil) != (c.Unavailable == nil) ||
+			string(tui[i].AwaitingAuthority) != string(c.AwaitingAuthority) {
+			t.Errorf("task %d: the TUI sees %+v, the CLI %+v", i, tui[i], c)
+		}
+	}
+	want := map[string]session.TaskHistoryUnavailableReason{"t-bad": session.TaskHistoryMalformed, "t-foreign-only": session.TaskHistoryForeignOnly}
+	for _, task := range tui {
+		reason, refused := want[task.TaskID]
+		switch {
+		case refused && (task.Unavailable == nil || task.Unavailable.Reason != reason):
+			t.Errorf("%s is not refused as %s: %+v", task.TaskID, reason, task.Unavailable)
+		case !refused && (task.Unavailable != nil || len(task.AwaitingAuthority) == 0):
+			t.Errorf("%s lost its canonical question to a foreign answer: %+v", task.TaskID, task)
+		}
+	}
+}
+
+// tuiResumable is what the TUI's /resume may continue in recordID, reached
+// through the interactive startup's production path: continueConversation
+// reopens the record and establishes it in the canonical discovery, and the
+// tasks are exactly what tui.New takes from them (Discovery.ResumableRecord
+// over the replayed record).
+func tuiResumable(t *testing.T, root, recordID string) []session.Interrupted {
+	t.Helper()
+	store, err := session.New(root, recordID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start, err := continueConversation(root, store, recordID, true)
+	if err != nil || start.discovery != nil {
+		t.Fatalf("the interactive startup did not establish record %s: %v %v", recordID, err, start.discovery)
+	}
+	return start.inventory.ResumableRecord(start.history)
+}
+
+// D10 / R220-W5 / X9 / review f3: the interactive startup's production load
+// path. A record openConversation selected to continue that then cannot be
+// read -- because it is unreadable, or because it vanished between selection
+// and load -- is a typed refusal, never an empty conversation with nothing to
+// resume. Only a new conversation (resumed=false) starts empty.
+func TestB2a2R220W5AFailedConversationLoadIsATypedRefusal(t *testing.T) {
+	refused := func(t *testing.T, recordID string, start interactiveStart, err error) {
+		t.Helper()
+		if !errorIs(err, errConversationUnavailable) {
+			t.Fatalf("UNREADABLE SELECTED RECORD: the startup did not refuse selected record %s it could not read, typed "+
+				"(err=%v); its failed load became a conversation of %d replayed events and %d resumable tasks, i.e. an "+
+				"empty history", recordID, err, len(start.history), len(start.inventory.ResumableRecord(start.history)))
+		}
+		if start.history != nil || start.inventory.Records != nil || start.discovery != nil {
+			t.Fatalf("a refused load produced a conversation for unreadable selected record %s: %+v", recordID, start)
+		}
+	}
+	// The startup's clock, read through an event's own timestamp.
+	now := event.New("", "", event.SourceSystem, event.Status, "", nil).Time
+	t.Run("a new conversation starts empty", func(t *testing.T) {
+		root := t.TempDir()
+		recordID, _, resumed, err := openConversation(root, now)
+		if err != nil || resumed {
+			t.Fatalf("premise: an empty repository opens a new conversation: %v %v", resumed, err)
+		}
+		store, err := session.New(root, recordID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if start, err := continueConversation(root, store, recordID, resumed); err != nil || start.history != nil || start.inventory.Records != nil {
+			t.Fatalf("a new conversation did not start empty: %+v %v", start, err)
+		}
+	})
+	t.Run("a selected record that vanished before loading", func(t *testing.T) {
+		root := t.TempDir()
+		const holder = "session-20260110T000000.000000000Z"
+		writeSession(t, root, holder, event.New(holder, "t-gone", event.SourceSystem, event.TaskCreated, "the objective", nil))
+		recordID, _, resumed, err := openConversation(root, now)
+		if err != nil || !resumed || recordID != holder {
+			t.Fatalf("premise: the startup selects the existing record: %s %v %v", recordID, resumed, err)
+		}
+		store, err := session.New(root, recordID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Remove(filepath.Join(root, ".sensei-code", "sessions", holder, "events.jsonl")); err != nil {
+			t.Fatal(err)
+		}
+		start, err := continueConversation(root, store, recordID, resumed)
+		refused(t, recordID, start, err)
+	})
+	t.Run("a selected record that cannot be read", func(t *testing.T) {
+		root := t.TempDir()
+		const holder = "session-20260111T000000.000000000Z"
+		// The record exists, as a directory nothing can read events from.
+		if err := os.MkdirAll(filepath.Join(root, ".sensei-code", "sessions", holder, "events.jsonl"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		store, err := session.New(root, holder)
+		if err != nil {
+			t.Fatal(err)
+		}
+		start, err := continueConversation(root, store, holder, true)
+		refused(t, holder, start, err)
+	})
+}
+
+// A2-W2 / R220-W6 / C1-W5 / review f2: the TUI's /resume and CLI selection
+// apply ONE repository-wide refusal precedence before any scoped entry. The
+// record the TUI reopens holds a valid rooted task; another record holds an
+// unavailable (foreign-only) history of the same TaskID. Both the CLI --
+// scoped to that record or not -- and the TUI report the same typed refusal,
+// and neither starts a resume.
+func TestB2a2R220W6TUIAndCLIRefuseASplitTaskAlike(t *testing.T) {
+	root := gitRepoRoot(t)
+	const reopened, other = "session-20260113T000000.000000000Z", "session-20260112T000000.000000000Z"
+	writeRawSession(t, root, other, b2a2Deferred("session-unrelated", "t-split"))
+	writeSession(t, root, reopened, event.New(reopened, "t-split", event.SourceSystem, event.TaskCreated, "valid work", nil))
+	log := filepath.Join(root, ".sensei-code", "sessions", reopened, "events.jsonl")
+	before, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inventory, err := session.FindActive(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if valid, err := inventory.ScopedTo(reopened); err != nil || len(valid) != 1 || valid[0].Task.Unavailable != nil {
+		t.Fatalf("premise: the reopened record alone holds the task as valid: %+v %v", valid, err)
+	}
+	refusing, refusal := inventory.TaskRefusal("t-split")
+	if refusal == nil || refusing != other || refusal.Reason != session.TaskHistoryForeignOnly {
+		t.Fatalf("premise: the other record refuses the task repository-wide: %s %+v", refusing, refusal)
+	}
+
+	tui := tuiResumable(t, root, reopened)
+	if len(tui) != 1 || tui[0].TaskID != "t-split" || tui[0].Unavailable == nil || tui[0].Unavailable.Error() != refusal.Error() {
+		t.Fatalf("the TUI offers the task the CLI refuses: %+v", tui)
+	}
+	cliRefusal := taskRefusalError(refusing, refusal).Error()
+	for _, args := range [][]string{{"--task", "t-split"}, {"--task", "t-split", "--session", reopened}} {
+		code, _, stderr := runResume(t, root, append(args, "--quiet")...)
+		if code != exitFailed || !strings.Contains(stderr, cliRefusal) || !strings.Contains(stderr, tui[0].Unavailable.Error()) {
+			t.Errorf("%v: the CLI does not report the TUI's typed refusal: exit %d\n%s", args, code, stderr)
+		}
+	}
+	assertLogUntouched(t, log, before)
 }

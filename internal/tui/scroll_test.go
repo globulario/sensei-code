@@ -9,7 +9,7 @@ import (
 
 // transcript builds a real model holding more lines than any window can show.
 func transcript(height int) Model {
-	m := New(context.Background(), nil, nil, nil)
+	m := New(context.Background(), nil, nil, nil, emptyInventory, nil)
 	m.width, m.height = 80, height
 	m.lines = nil
 	for i := 0; i < 200; i++ {

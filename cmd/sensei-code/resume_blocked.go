@@ -37,6 +37,16 @@ var (
 	// The task stays visible -- hiding it is the failure class this whole repair
 	// is about -- and every continuation of it is refused by name.
 	errObjectiveUnusable = errors.New("that task recorded no objective, so there is nothing to continue it as; its identity and any candidate it left are on disk, but no continuation can supply the work the owner asked for")
+	// errTaskHistoryUnavailable is the refusal for a task whose history in its
+	// holder record cannot be read as its own session lineage: a record of it
+	// is malformed, or the record holds records of it and no lineage member
+	// (session.ProjectTaskHistory). What it owes is unknown, not nothing, so
+	// it is shown and no continuation of it is offered.
+	errTaskHistoryUnavailable = errors.New("that task's history cannot be read as its own session lineage, so what it owes is unknown; it is shown and is not continued")
+	// errTaskQuarantined is the refusal for a task a quarantined session
+	// record claims: its identity is reserved and visible, and it is never an
+	// ordinary resumable task -- nor an absent one.
+	errTaskQuarantined = errors.New("that task is claimed by a quarantined session record; its identity stays reserved and it is not resumable")
 )
 
 // resumeLane is what a task named WITHOUT an answer is continued as.
@@ -48,12 +58,17 @@ var (
 type resumeLane int
 
 const (
+	// laneRefused is not a lane, and it precedes every other decision: the
+	// task's history could not be projected onto its session lineage
+	// (Interrupted.Unavailable), so nothing read from it -- not even its
+	// objective -- may decide how it is continued.
+	laneRefused resumeLane = iota
 	// laneUnusable is not a lane either, and it comes first because it is the
 	// one condition no continuation survives: the task recorded no objective,
 	// so there is no work to continue, not even by answering its question --
 	// an answer would re-enter a governed path that refuses an empty objective,
 	// and the question would have been spent on nothing.
-	laneUnusable resumeLane = iota
+	laneUnusable
 	// laneQuestion is not a lane. It is the refusal: this task owes a human
 	// decision, and only --answer may continue it.
 	laneQuestion
@@ -70,6 +85,8 @@ const (
 
 func (l resumeLane) String() string {
 	switch l {
+	case laneRefused:
+		return "nothing: its history cannot be read as its own session lineage"
 	case laneUnusable:
 		return "nothing: it recorded no objective"
 	case laneQuestion:
@@ -94,7 +111,9 @@ func (l resumeLane) String() string {
 // its architect turn reached "no interrupted task with that id": every lane
 // correctly said "not mine", and nothing said what it was.
 //
-// The order is: an unusable objective first, because a task that cannot say what
+// The order is: a history that cannot be projected onto the task's session
+// lineage first, because every other answer is read from that history; then an
+// unusable objective, because a task that cannot say what
 // it is for cannot be continued as anything; then a standing human-owned
 // question, always (sensei_code.resume.never_skips_a_human_decision); then the
 // review a candidate is already owed, so an accepted candidate is never handed
@@ -103,6 +122,8 @@ func (l resumeLane) String() string {
 // implementation of a plan that already exists.
 func selectResumeLane(task session.Interrupted, reviewOwed bool) (resumeLane, error) {
 	switch {
+	case task.Unavailable != nil:
+		return laneRefused, fmt.Errorf("%w: %v", errTaskHistoryUnavailable, task.Unavailable)
 	case !task.ObjectiveUsable():
 		return laneUnusable, fmt.Errorf("%w: %s", errObjectiveUnusable, task.TaskID)
 	case len(task.AwaitingAuthority) != 0:
@@ -131,6 +152,9 @@ func selectBlockedResume(tasks []session.Interrupted, taskID string, reviewOwed 
 	for _, task := range tasks {
 		if task.TaskID != taskID {
 			continue
+		}
+		if task.Unavailable != nil {
+			return session.Interrupted{}, false, fmt.Errorf("%w: %v", errTaskHistoryUnavailable, task.Unavailable)
 		}
 		if (len(task.BlockedExternal) == 0 && len(task.NotConverged) == 0) || task.AwaitingReview || reviewOwed {
 			return session.Interrupted{}, false, nil

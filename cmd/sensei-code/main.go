@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -128,13 +129,12 @@ func main() {
 	}
 	store, err := session.New(repo.Root, recordID)
 	fatalIf(err)
-	var history []event.Event
-	if resumed {
-		history, err = store.Load()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "sensei-code: could not replay the previous session:", err)
-			history = nil
-		}
+	// A reopened record that cannot be read -- or is gone -- is fatal, never an
+	// empty conversation, and what /resume may continue is canonical discovery's.
+	start, err := continueConversation(repo.Root, store, recordID, resumed)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sensei-code:", err)
+		os.Exit(1)
 	}
 	bus := event.NewBus()
 	events, unsubscribe := bus.Subscribe(512)
@@ -157,7 +157,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, banner)
 	}
 
-	p := tea.NewProgram(tui.New(ctx, engine, events, history))
+	p := tea.NewProgram(tui.New(ctx, engine, events, start.history, start.inventory, start.discovery))
 	_, err = p.Run()
 	fatalIf(err)
 }
@@ -184,6 +184,80 @@ func openConversation(root string, now time.Time) (recordID, sessionID string, r
 		return "", "", false, err
 	}
 	return recordID, sessionID, true, nil
+}
+
+// errConversationUnavailable is a session record the interactive startup
+// selected to continue and could not read -- one that vanished after it was
+// selected included. It is never an empty
+// conversation: starting one would replay nothing and offer nothing to resume
+// from a history nobody could open.
+var errConversationUnavailable = errors.New("the session record this startup continues could not be read; " +
+	"it is not replayed or resumed as an empty conversation")
+
+// interactiveStart is what the interactive startup continues in the record
+// openConversation named: the conversation that record replays, and the
+// inventory /resume's tasks in it are discovered against.
+type interactiveStart struct {
+	history []event.Event
+	// inventory is the repository's canonical discovery, in which the record
+	// was established (interactiveDiscovery); the TUI takes /resume's tasks
+	// from it and the replayed record (Discovery.ResumableRecord), refused
+	// tasks included. discovery is that discovery's own typed refusal, when it
+	// refused.
+	inventory session.Discovery
+	discovery error
+}
+
+// continueConversation is what the interactive startup continues in store,
+// the record openConversation named. A new conversation reads nothing. A
+// reopened one replays its record through loadConversation, which refuses a
+// selected record it cannot read, a vanished one included, and takes what /resume may continue
+// from the same canonical discovery the resume command reads
+// (interactiveDiscovery), never from the raw record.
+func continueConversation(root string, store *session.Store, recordID string, resumed bool) (interactiveStart, error) {
+	if !resumed {
+		return interactiveStart{}, nil
+	}
+	history, err := loadConversation(store, recordID)
+	if err != nil {
+		return interactiveStart{}, err
+	}
+	start := interactiveStart{history: history}
+	start.inventory, start.discovery = interactiveDiscovery(root, recordID)
+	return start, nil
+}
+
+// loadConversation is the replayed history of the record the startup
+// continues, which openConversation selected as existing. A new conversation
+// never reaches it (continueConversation's !resumed branch is the only empty
+// startup), so EVERY failure here -- the selected record having disappeared
+// before it was read included -- is errConversationUnavailable, typed, and
+// never an empty history.
+func loadConversation(store *session.Store, recordID string) ([]event.Event, error) {
+	history, err := store.Load()
+	if err != nil {
+		return nil, fmt.Errorf("%w: session %s: %w", errConversationUnavailable, recordID, err)
+	}
+	return history, nil
+}
+
+// interactiveDiscovery is the inventory the TUI's /resume discovers the
+// record it holds against: the SAME canonical discovery and refusal precedence
+// the resume command reads (session.FindActive, Discovery.ResumableIn), in
+// which the record is established as one this repository holds and no
+// quarantine excludes. The TUI's tasks are that record's lineage members'
+// (Discovery.ResumableRecord), a task that any record refuses or a quarantine
+// reserves carried with that repository-wide typed refusal. A discovery that
+// refuses is returned as that refusal, never as "nothing to resume".
+func interactiveDiscovery(root, recordID string) (session.Discovery, error) {
+	inventory, err := session.FindActive(root)
+	if err != nil {
+		return session.Discovery{}, err
+	}
+	if _, err := inventory.ResumableIn(recordID); err != nil {
+		return session.Discovery{}, err
+	}
+	return inventory, nil
 }
 
 func fatalIf(err error) {

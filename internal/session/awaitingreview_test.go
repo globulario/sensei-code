@@ -260,3 +260,56 @@ func TestAStatusLineDoesNotOverwriteABoundedInstruction(t *testing.T) {
 		t.Fatalf("a status line replaced the finding the worker must act on:\n%s", got)
 	}
 }
+
+// A2-W7 / A2-W8 / A2-W9 (70B2a2): the waiting-review, not-converged re-plan
+// and plan-admission-refusal continuations keep their established behaviour
+// under fresh-session semantics. An obligation the holder recorded, or one the
+// bound descendant recorded, is carried by the canonical projection exactly as
+// the fold of the wholly canonical record carries it; the same obligation
+// written by an unrelated session is carried by neither.
+func TestB2a2A2W7W8W9ContinuationsArePreservedAcrossTheLineage(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		kind  event.Kind
+		owed  func(Interrupted) bool
+		after event.Event // a record that precedes the obligation
+	}{
+		{"waiting review", event.WorkflowAwaitingReview, func(i Interrupted) bool { return i.AwaitingReview && len(i.AwaitingReviewRecord) != 0 },
+			governed("A", event.PlanProposed, "the plan")},
+		{"not converged", event.WorkflowNotConverged, func(i Interrupted) bool { return len(i.NotConverged) != 0 },
+			governed("A", event.PlanProposed, "the plan")},
+		{"plan admission refused", event.WorkflowPlanAdmissionRefused, func(i Interrupted) bool { return len(i.PlanAdmissionRefused) != 0 },
+			governed("A", event.PlanAttemptStarted, "started")},
+	} {
+		for _, writer := range []string{"A", "B"} {
+			t.Run(tc.name+" by "+writer, func(t *testing.T) {
+				s := lineageStore(t, "A")
+				mustAppend(t, s, created("A"), tc.after)
+				if writer == "A" {
+					mustAppend(t, s, governed("A", tc.kind, "owed"))
+				}
+				bind(t, s, "B")
+				if writer == "B" {
+					mustAppend(t, s, governed("B", tc.kind, "owed"))
+				}
+				record := recordOf(t, s)
+				task, ok := canonicalTaskOf(t, record)
+				if !ok || task.Unavailable != nil || !tc.owed(task) {
+					t.Fatalf("the continuation was lost under the session lineage: %+v", task)
+				}
+				if raw, _ := rawTaskOf(record); !tc.owed(raw) {
+					t.Fatalf("control: the fold of the canonical record does not owe it either: %+v", raw)
+				}
+			})
+		}
+		t.Run(tc.name+" by an unrelated session", func(t *testing.T) {
+			s := lineageStore(t, "A")
+			mustAppend(t, s, created("A"), tc.after)
+			bind(t, s, "B")
+			writeRaw(t, s, governed("C", tc.kind, "owed elsewhere"))
+			if task, ok := canonicalTaskOf(t, recordOf(t, s)); !ok || task.Unavailable != nil || tc.owed(task) {
+				t.Fatalf("an unrelated session's obligation was carried: %+v", task)
+			}
+		})
+	}
+}

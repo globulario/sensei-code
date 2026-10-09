@@ -3890,3 +3890,271 @@ func TestD5W14ConcurrentActivationAndCreationCannotBypassIdentity(t *testing.T) 
 		t.Fatal("a refused activation published a manifest")
 	}
 }
+
+// Objective 70B2a2 witnesses at the session layer: every resume and discovery
+// projection decides a task's operative state from its canonical lineage
+// members alone (CanonicalInterrupted, FindActive, Store.TaskHistory). Each
+// witness also folds the same record raw (FindInterrupted), as the control
+// that proves the injected record would have decided the outcome.
+
+// b2a2Repo is a repository whose record of holder A holds lineageTask.
+func b2a2Repo(t *testing.T) (string, *Store) {
+	t.Helper()
+	repo := t.TempDir()
+	s, err := New(repo, "A")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return repo, s
+}
+
+// canonicalTaskOf is lineageTask as CanonicalInterrupted reports it.
+func canonicalTaskOf(t *testing.T, record []event.Event) (Interrupted, bool) {
+	t.Helper()
+	for _, task := range CanonicalInterrupted(record) {
+		if task.TaskID == lineageTask {
+			return task, true
+		}
+	}
+	return Interrupted{}, false
+}
+
+// discovered is lineageTask as FindActive reports it across the repository.
+func discovered(t *testing.T, repo string) (Interrupted, bool) {
+	t.Helper()
+	d, err := FindActive(repo)
+	if err != nil {
+		t.Fatalf("discovery refused the repository: %v", err)
+	}
+	for _, a := range d.Active {
+		if a.Task.TaskID == lineageTask {
+			return a.Task, true
+		}
+	}
+	return Interrupted{}, false
+}
+
+// rawTaskOf is lineageTask folded from every same-task record: the control.
+func rawTaskOf(record []event.Event) (Interrupted, bool) {
+	for _, task := range FindInterrupted(record) {
+		if task.TaskID == lineageTask {
+			return task, true
+		}
+	}
+	return Interrupted{}, false
+}
+
+// P1-W1 / R220-W2: a validly framed AuthorityResolved a foreign session wrote
+// does not discharge the canonical outstanding question.
+func TestB2a2P1W1ForeignAuthorityResolvedCannotClearAStandingQuestion(t *testing.T) {
+	repo, s := b2a2Repo(t)
+	mustAppend(t, s, created("A"), governed("A", event.WorkflowAwaitingAuthority, "deferred"))
+	writeRaw(t, s, governed("C", event.AuthorityResolved, "answered by an unrelated session"))
+	record := recordOf(t, s)
+	if raw, _ := rawTaskOf(record); len(raw.AwaitingAuthority) != 0 {
+		t.Fatal("control: the raw fold kept the question, so the injected answer proves nothing")
+	}
+	for name, read := range map[string]func() (Interrupted, bool){
+		"CanonicalInterrupted": func() (Interrupted, bool) { return canonicalTaskOf(t, record) },
+		"FindActive":           func() (Interrupted, bool) { return discovered(t, repo) },
+	} {
+		task, ok := read()
+		if !ok || task.Unavailable != nil {
+			t.Fatalf("%s: the task is not discoverable: %+v", name, task)
+		}
+		if len(task.AwaitingAuthority) == 0 {
+			t.Errorf("%s: a foreign session's answer discharged the canonical standing question", name)
+		}
+	}
+}
+
+// P1-W2 / R220-W3: a well-formed WorkflowCompleted recorded before the task's
+// root does not suppress discovery of the later rooted task.
+func TestB2a2P1W2PreRootCompletionCannotSuppressALaterRootedTask(t *testing.T) {
+	repo, s := b2a2Repo(t)
+	writeRaw(t, s, governed("A", event.WorkflowCompleted, "pre-root completion"))
+	mustAppend(t, s, created("A"), governed("A", event.PlanProposed, "the plan"))
+	record := recordOf(t, s)
+	if _, found := rawTaskOf(record); found {
+		t.Fatal("control: the raw fold still offers the task, so the pre-root completion proves nothing")
+	}
+	for name, read := range map[string]func() (Interrupted, bool){
+		"CanonicalInterrupted": func() (Interrupted, bool) { return canonicalTaskOf(t, record) },
+		"FindActive":           func() (Interrupted, bool) { return discovered(t, repo) },
+	} {
+		task, ok := read()
+		if !ok || task.Unavailable != nil || !task.Planned {
+			t.Errorf("%s: a pre-root completion hid or degraded the rooted task: found=%v %+v", name, ok, task)
+		}
+	}
+}
+
+// P1-W3: foreign post-root terminal events neither complete nor hide the
+// canonical task.
+func TestB2a2P1W3ForeignTerminalCannotCompleteTheCanonicalTask(t *testing.T) {
+	for _, kind := range []event.Kind{event.WorkflowCompleted, event.WorkflowFailed} {
+		repo, s := b2a2Repo(t)
+		mustAppend(t, s, created("A"), governed("A", event.PlanProposed, "the plan"))
+		bind(t, s, "B")
+		writeRaw(t, s, governed("C", kind, "a foreign ending"), governed("A", kind, "a superseded ancestor's ending"))
+		record := recordOf(t, s)
+		if _, found := rawTaskOf(record); found {
+			t.Fatalf("%s control: the raw fold still offers the task", kind)
+		}
+		if task, ok := canonicalTaskOf(t, record); !ok || task.Unavailable != nil {
+			t.Errorf("%s: a foreign ending completed or hid the canonical task: %+v", kind, task)
+		}
+		if _, ok := discovered(t, repo); !ok {
+			t.Errorf("%s: discovery lost the canonical task to a foreign ending", kind)
+		}
+	}
+}
+
+// P1-W4 / R220-W4 / A2-W11: foreign plan, attempt, grant and refusal records
+// restore no operative plan or grant authority.
+func TestB2a2P1W4ForeignPlanAndGrantRecordsRestoreNoAuthority(t *testing.T) {
+	repo, s := b2a2Repo(t)
+	mustAppend(t, s, created("A"))
+	writeRaw(t, s,
+		governed("C", event.PlanAttemptStarted, "started"),
+		governed("C", event.PlanProposed, "a foreign plan"),
+		governed("C", event.ProspectiveGranted, "granted"),
+		governed("C", event.TestEditGranted, "granted"),
+		governed("C", event.WorkflowPlanAdmissionRefused, "refused"),
+		governed("C", event.WorkflowAwaitingReview, "owed"))
+	record := recordOf(t, s)
+	if raw, _ := rawTaskOf(record); !raw.Planned || raw.PlanAttemptID == "" || len(raw.ProspectiveRecord) == 0 {
+		t.Fatalf("control: the raw fold restored nothing from the foreign records: %+v", raw)
+	}
+	for name, read := range map[string]func() (Interrupted, bool){
+		"CanonicalInterrupted": func() (Interrupted, bool) { return canonicalTaskOf(t, record) },
+		"FindActive":           func() (Interrupted, bool) { return discovered(t, repo) },
+	} {
+		task, ok := read()
+		if !ok || task.Unavailable != nil {
+			t.Fatalf("%s: the task is not discoverable: %+v", name, task)
+		}
+		if task.Planned || task.Plan != "" || task.PlanAttemptID != "" || len(task.PlanAttemptStart) != 0 ||
+			len(task.StartedPlanAttempts) != 0 || len(task.ProspectiveRecord) != 0 || len(task.TestEditRecord) != 0 ||
+			len(task.PlanAdmissionRefused) != 0 || task.AwaitingReview {
+			t.Errorf("%s: a foreign session's records became operative authority: %+v", name, task)
+		}
+	}
+	// And the evidence is kept: the ledger still holds every foreign record,
+	// and the projection counts them.
+	h, err := s.TaskHistory(lineageTask)
+	if err != nil || len(h.Members) != 1 || h.Foreign != 6 || len(recordOf(t, s)) != 7 {
+		t.Fatalf("the foreign evidence was not preserved as evidence: members=%d foreign=%d err=%v", len(h.Members), h.Foreign, err)
+	}
+}
+
+// P1-W5 / R220-W1 / X3 / X10: a malformed record of a task -- before its root
+// included -- makes that task unavailable, typed and visible; it never
+// becomes empty authoritative history and never hides another valid task.
+func TestB2a2P1W5MalformedHistoryIsATypedRefusalThatHidesNothingElse(t *testing.T) {
+	malformed := event.Event{TaskID: lineageTask, Kind: event.AuthorityResolved, Source: event.SourceUser, Summary: "no framing"}
+	for name, setup := range map[string]func(*testing.T, *Store){
+		"post-root": func(t *testing.T, s *Store) {
+			mustAppend(t, s, created("A"), governed("A", event.WorkflowAwaitingAuthority, "deferred"))
+			writeRaw(t, s, malformed)
+		},
+		"pre-root": func(t *testing.T, s *Store) {
+			writeRaw(t, s, malformed)
+			mustAppend(t, s, created("A"), governed("A", event.WorkflowAwaitingAuthority, "deferred"))
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			repo, s := b2a2Repo(t)
+			setup(t, s)
+			mustAppend(t, s, event.New("A", "other-task", event.SourceSystem, event.TaskCreated, "unrelated valid work", nil))
+			record := recordOf(t, s)
+			task, ok := canonicalTaskOf(t, record)
+			if !ok || task.Unavailable == nil {
+				t.Fatalf("the malformed task was skipped or folded as ordinary history: found=%v %+v", ok, task)
+			}
+			if task.Unavailable.Reason != TaskHistoryMalformed || task.Unavailable.At < 0 ||
+				!errors.Is(task.Unavailable, ErrTaskHistoryUnavailable) {
+				t.Errorf("the refusal does not say precisely why: %+v", task.Unavailable)
+			}
+			if len(task.AwaitingAuthority) != 0 || task.Task != "" {
+				t.Errorf("a refused task carries reconstructed state: %+v", task)
+			}
+			if _, err := s.TaskHistory(lineageTask); !errors.Is(err, ErrTaskHistoryUnavailable) {
+				t.Errorf("Store.TaskHistory read a malformed history as authoritative: %v", err)
+			}
+			d, err := FindActive(repo)
+			if err != nil {
+				t.Fatalf("one malformed task refused the whole repository: %v", err)
+			}
+			var refused, other bool
+			for _, a := range d.Active {
+				refused = refused || (a.Task.TaskID == lineageTask && a.Task.Unavailable != nil)
+				other = other || (a.Task.TaskID == "other-task" && a.Task.Unavailable == nil && a.Task.ObjectiveUsable())
+			}
+			if !refused || !other {
+				t.Errorf("discovery did not keep the refused task visible beside the valid one: refused=%v other=%v", refused, other)
+			}
+		})
+	}
+}
+
+// Records of a task with no root in the record are a typed foreign-only
+// refusal, never an absent task and never an ordinary one.
+func TestB2a2P1W5ForeignOnlyHistoryIsATypedRefusal(t *testing.T) {
+	_, s := b2a2Repo(t)
+	writeRaw(t, s, governed("C", event.WorkflowAwaitingAuthority, "a question with no root"))
+	task, ok := canonicalTaskOf(t, recordOf(t, s))
+	if !ok || task.Unavailable == nil || task.Unavailable.Reason != TaskHistoryForeignOnly || task.Unavailable.PreRoot != 1 {
+		t.Fatalf("a foreign-only history was not refused as foreign-only: found=%v %+v", ok, task.Unavailable)
+	}
+	// With no root, the classifier leaves every record pre-root; a malformed
+	// one is still malformed, and never counted as foreign evidence.
+	_, m := b2a2Repo(t)
+	writeRaw(t, m, governed("C", event.WorkflowAwaitingAuthority, "a question with no root"),
+		event.Event{TaskID: lineageTask, Kind: event.Status, Source: event.SourceSystem, Summary: "no framing"})
+	task, ok = canonicalTaskOf(t, recordOf(t, m))
+	if !ok || task.Unavailable == nil || task.Unavailable.Reason != TaskHistoryMalformed || task.Unavailable.Malformed != 1 ||
+		task.Unavailable.PreRoot != 1 || task.Unavailable.At != 1 {
+		t.Fatalf("a rootless malformed record was not refused as malformed: found=%v %+v", ok, task.Unavailable)
+	}
+}
+
+// R220-W5 / D4: a record that exists and cannot be read is a typed unavailable
+// history; a record that does not exist is a proven absence.
+func TestB2a2R220W5AnUnreadableRecordIsNeverAnEmptyHistory(t *testing.T) {
+	_, s := b2a2Repo(t)
+	if h, err := s.TaskHistory(lineageTask); err != nil || len(h.Members) != 0 {
+		t.Fatalf("an absent record is not a proven empty history: %+v %v", h, err)
+	}
+	mustAppend(t, s, created("A"))
+	if err := os.WriteFile(s.path, []byte("{not json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.TaskHistory(lineageTask)
+	var refusal *TaskHistoryRefusal
+	if !errors.As(err, &refusal) || refusal.Reason != TaskHistoryUnreadable || !errors.Is(err, ErrTaskHistoryUnavailable) {
+		t.Fatalf("an unreadable record was not a typed unavailable history: %v", err)
+	}
+}
+
+// P1-W6 / R220-W9: valid canonical history -- holder, then a bound
+// descendant -- keeps normal resume and discovery: the projection is exactly
+// the fold of its members.
+func TestB2a2P1W6ValidCanonicalHistoryKeepsNormalDiscovery(t *testing.T) {
+	repo, s := b2a2Repo(t)
+	mustAppend(t, s, created("A"), governed("A", event.WorkflowAwaitingAuthority, "deferred"))
+	bind(t, s, "B")
+	mustAppend(t, s, governed("B", event.AuthorityResolved, "answered"), governed("B", event.PlanProposed, "the plan"))
+	record := recordOf(t, s)
+	raw, _ := rawTaskOf(record)
+	task, ok := canonicalTaskOf(t, record)
+	if !ok || task.Unavailable != nil || !task.Planned || len(task.AwaitingAuthority) != 0 || task.Task != "the objective" {
+		t.Fatalf("valid lineage history lost its normal reconstruction: %+v", task)
+	}
+	if task.Plan != raw.Plan || task.PlanAttemptID != raw.PlanAttemptID || string(task.PlanRecord) != string(raw.PlanRecord) {
+		t.Errorf("the canonical projection differs from the fold of a wholly canonical record:\n got %+v\nwant %+v", task, raw)
+	}
+	if d, ok := discovered(t, repo); !ok || !d.Planned {
+		t.Errorf("discovery lost a valid task: %+v", d)
+	}
+}
