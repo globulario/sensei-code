@@ -36179,6 +36179,78 @@ code_symbols:
     file: internal/session/interrupted_test.go
     symbol: TestB1W6TheCheckpointDecoderRequiresEOFAfterOneValue
     kind: function
+  - id: internal/session/interrupted_test.go:TestD5W12AQuarantinedTaskIsVisibleButNotResumable
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestD5W12AQuarantinedTaskIsVisibleButNotResumable
+    kind: function
+  - id: internal/session/interrupted_test.go:TestD5W12BLatestNeverReopensANewerQuarantinedSession
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestD5W12BLatestNeverReopensANewerQuarantinedSession
+    kind: function
+  - id: internal/session/interrupted_test.go:TestD5W12COnlyQuarantinedSessionsSelectNoStore
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestD5W12COnlyQuarantinedSessionsSelectNoStore
+    kind: function
+  - id: internal/session/interrupted_test.go:TestD5W13ARawNoncanonicalRootIsNeverNormalized
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestD5W13ARawNoncanonicalRootIsNeverNormalized
+    kind: function
+  - id: internal/session/interrupted_test.go:TestD5W13AdmissionAndDiscoveryAgreeOnExactRootIdentities
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestD5W13AdmissionAndDiscoveryAgreeOnExactRootIdentities
+    kind: function
+  - id: internal/session/interrupted_test.go:TestD5W13ValidSessionsKeepNormalCreationAndDiscovery
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestD5W13ValidSessionsKeepNormalCreationAndDiscovery
+    kind: function
+  - id: internal/session/interrupted_test.go:TestD5W3AnEmptyHistoricalRootFailsClosed
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestD5W3AnEmptyHistoricalRootFailsClosed
+    kind: function
+  - id: internal/session/interrupted_test.go:TestD5W3BAnUnquarantinedDamagedRecordIsRefusedNotSkipped
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestD5W3BAnUnquarantinedDamagedRecordIsRefusedNotSkipped
+    kind: function
+  - id: internal/session/interrupted_test.go:TestD5W3CADuplicateRootRecordIsRefusedBySelection
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestD5W3CADuplicateRootRecordIsRefusedBySelection
+    kind: function
+  - id: internal/session/interrupted_test.go:TestD5W5BAnInvalidManifestNeverMakesADamagedRecordReusable
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestD5W5BAnInvalidManifestNeverMakesADamagedRecordReusable
+    kind: function
+  - id: internal/session/interrupted_test.go:TestD5W8BValidSessionSelectionIsUnchanged
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestD5W8BValidSessionSelectionIsUnchanged
+    kind: function
+  - id: internal/session/interrupted_test.go:TestD5W8ExistingValidSessionsRemainDiscoverableAndAuthoritative
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: TestD5W8ExistingValidSessionsRemainDiscoverableAndAuthoritative
+    kind: function
   - id: internal/session/interrupted_test.go:TestDeferredAuthorityIsResumableAndCarriesItsQuestion
     namespace: structural.scip
     language: go
@@ -36215,6 +36287,12 @@ code_symbols:
     file: internal/session/interrupted_test.go
     symbol: TestStoppedTaskRemainsResumable
     kind: function
+  - id: internal/session/interrupted_test.go:activeIDs
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: activeIDs
+    kind: function
   - id: internal/session/interrupted_test.go:answered
     namespace: structural.scip
     language: go
@@ -36245,6 +36323,18 @@ code_symbols:
     file: internal/session/interrupted_test.go
     symbol: ckptB
     kind: const
+  - id: internal/session/interrupted_test.go:d5Selected
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: d5Selected
+    kind: function
+  - id: internal/session/interrupted_test.go:d5Valid
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: d5Valid
+    kind: function
   - id: internal/session/interrupted_test.go:ev
     namespace: structural.scip
     language: go
@@ -36269,6 +36359,12 @@ code_symbols:
     file: internal/session/interrupted_test.go
     symbol: replaceOnce
     kind: function
+  - id: internal/session/interrupted_test.go:sameIDs
+    namespace: structural.scip
+    language: go
+    file: internal/session/interrupted_test.go
+    symbol: sameIDs
+    kind: function
   - id: internal/session/large_event_test.go:TestAPreservedCandidateStaysResumableAcrossALargeEvent
     namespace: structural.scip
     language: go
@@ -36286,6 +36382,48 @@ code_symbols:
     language: go
     file: internal/session/large_event_test.go
     symbol: TestAnOversizedEventIsRefusedBeforeItReachesDurableHistory
+    kind: function
+  - id: internal/session/large_event_test.go:TestD5W11ADigestMismatchRefusesRecovery
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: TestD5W11ADigestMismatchRefusesRecovery
+    kind: function
+  - id: internal/session/large_event_test.go:TestD5W12TheOperatorCommandShowsTheQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: TestD5W12TheOperatorCommandShowsTheQuarantine
+    kind: function
+  - id: internal/session/large_event_test.go:TestD5W3AHiddenPrefixClaimRefusesActivation
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: TestD5W3AHiddenPrefixClaimRefusesActivation
+    kind: function
+  - id: internal/session/large_event_test.go:TestD5W3CADuplicateRootTornRecordIsNeverQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: TestD5W3CADuplicateRootTornRecordIsNeverQuarantined
+    kind: function
+  - id: internal/session/large_event_test.go:TestD5W3UnknownClaimsRemainFailClosed
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: TestD5W3UnknownClaimsRemainFailClosed
+    kind: function
+  - id: internal/session/large_event_test.go:TestD5W4QuarantinePreservesBytesIdentityAndProvenance
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: TestD5W4QuarantinePreservesBytesIdentityAndProvenance
+    kind: function
+  - id: internal/session/large_event_test.go:TestD5W5NoManifestMasqueradesAsRecovery
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: TestD5W5NoManifestMasqueradesAsRecovery
     kind: function
   - id: internal/session/large_event_test.go:TestLoadRefusesAnOversizedRecordItDidNotWrite
     namespace: structural.scip
@@ -36323,11 +36461,41 @@ code_symbols:
     file: internal/session/large_event_test.go
     symbol: bigFrame
     kind: var
+  - id: internal/session/large_event_test.go:d5Prefix
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: d5Prefix
+    kind: function
+  - id: internal/session/large_event_test.go:encoded
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: encoded
+    kind: function
   - id: internal/session/large_event_test.go:encodingOverhead
     namespace: structural.scip
     language: go
     file: internal/session/large_event_test.go
     symbol: encodingOverhead
+    kind: function
+  - id: internal/session/large_event_test.go:failsClosed
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: failsClosed
+    kind: function
+  - id: internal/session/large_event_test.go:filepathDir
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: filepathDir
+    kind: function
+  - id: internal/session/large_event_test.go:forged
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: forged
     kind: function
   - id: internal/session/large_event_test.go:framedAs
     namespace: structural.scip
@@ -36335,12 +36503,24 @@ code_symbols:
     file: internal/session/large_event_test.go
     symbol: framedAs
     kind: function
+  - id: internal/session/large_event_test.go:itoa
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: itoa
+    kind: function
   - id: internal/session/large_event_test.go:largeSession
     namespace: structural.scip
     language: go
     file: internal/session/large_event_test.go
     symbol: largeSession
     kind: const
+  - id: internal/session/large_event_test.go:mustMarshal
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: mustMarshal
+    kind: function
   - id: internal/session/large_event_test.go:owesReview
     namespace: structural.scip
     language: go
@@ -36370,6 +36550,12 @@ code_symbols:
     language: go
     file: internal/session/large_event_test.go
     symbol: under
+    kind: function
+  - id: internal/session/large_event_test.go:writeManifest
+    namespace: structural.scip
+    language: go
+    file: internal/session/large_event_test.go
+    symbol: writeManifest
     kind: function
   - id: internal/session/lineage.go:ClassifiedEvent.Class
     namespace: structural.scip
@@ -37853,6 +38039,84 @@ code_symbols:
     file: internal/session/session_lineage_test.go
     symbol: TestB2a1W9LockRefusesACancelledCallerOnAFreeLock
     kind: function
+  - id: internal/session/session_lineage_test.go:TestD5W10ManifestDirectorySyncIsRealAndPrecedesSuccess
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestD5W10ManifestDirectorySyncIsRealAndPrecedesSuccess
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestD5W10ManifestFileSyncIsRealAndPrecedesPublication
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestD5W10ManifestFileSyncIsRealAndPrecedesPublication
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestD5W10PublicationInterruptedAtEveryStageNeverReleasesAClaim
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestD5W10PublicationInterruptedAtEveryStageNeverReleasesAClaim
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestD5W14ConcurrentActivationAndCreationCannotBypassIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestD5W14ConcurrentActivationAndCreationCannotBypassIdentity
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestD5W1AQuarantinedClaimIsNeverAdmittedAgain
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestD5W1AQuarantinedClaimIsNeverAdmittedAgain
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestD5W1BSameRecordAdmissionValidatesItsOwnRecord
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestD5W1BSameRecordAdmissionValidatesItsOwnRecord
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestD5W1CADuplicateRootRecordAdmitsNothing
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestD5W1CADuplicateRootRecordAdmitsNothing
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestD5W1NoncanonicalTaskIDIsRefusedAtAdmission
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestD5W1NoncanonicalTaskIDIsRefusedAtAdmission
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestD5W2RecoveryUnblocksAnUnrelatedTask
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestD5W2RecoveryUnblocksAnUnrelatedTask
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestD5W6InterruptedRecoveryCannotReleaseAReservation
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestD5W6InterruptedRecoveryCannotReleaseAReservation
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestD5W7ConcurrentCreationCannotBypassTheReservation
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestD5W7ConcurrentCreationCannotBypassTheReservation
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestD5W9APartialAppendIsReReadUnderTheRecordLock
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestD5W9APartialAppendIsReReadUnderTheRecordLock
+    kind: function
+  - id: internal/session/session_lineage_test.go:activate
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: activate
+    kind: function
   - id: internal/session/session_lineage_test.go:appendTip
     namespace: structural.scip
     language: go
@@ -37864,6 +38128,12 @@ code_symbols:
     language: go
     file: internal/session/session_lineage_test.go
     symbol: appendTipUnit
+    kind: function
+  - id: internal/session/session_lineage_test.go:authorized
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: authorized
     kind: function
   - id: internal/session/session_lineage_test.go:bind
     namespace: structural.scip
@@ -37961,23 +38231,107 @@ code_symbols:
     file: internal/session/session_lineage_test.go
     symbol: closableContext
     kind: type
+  - id: internal/session/session_lineage_test.go:createTask
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: createTask
+    kind: function
   - id: internal/session/session_lineage_test.go:created
     namespace: structural.scip
     language: go
     file: internal/session/session_lineage_test.go
     symbol: created
     kind: function
+  - id: internal/session/session_lineage_test.go:d5Claimed
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: d5Claimed
+    kind: const
+  - id: internal/session/session_lineage_test.go:d5Cut
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: d5Cut
+    kind: const
+  - id: internal/session/session_lineage_test.go:d5Doubled
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: d5Doubled
+    kind: function
+  - id: internal/session/session_lineage_test.go:d5Output
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: d5Output
+    kind: function
+  - id: internal/session/session_lineage_test.go:d5Owner
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: d5Owner
+    kind: const
+  - id: internal/session/session_lineage_test.go:d5ReservedAfter
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: d5ReservedAfter
+    kind: function
+  - id: internal/session/session_lineage_test.go:d5SyncFails
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: d5SyncFails
+    kind: function
+  - id: internal/session/session_lineage_test.go:d5SyncOrder
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: d5SyncOrder
+    kind: function
+  - id: internal/session/session_lineage_test.go:d5Torn
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: d5Torn
+    kind: const
+  - id: internal/session/session_lineage_test.go:d5Unrelated
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: d5Unrelated
+    kind: const
   - id: internal/session/session_lineage_test.go:errLineageTestCancelled
     namespace: structural.scip
     language: go
     file: internal/session/session_lineage_test.go
     symbol: errLineageTestCancelled
     kind: var
+  - id: internal/session/session_lineage_test.go:exists
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: exists
+    kind: function
+  - id: internal/session/session_lineage_test.go:fileBytes
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: fileBytes
+    kind: function
   - id: internal/session/session_lineage_test.go:governed
     namespace: structural.scip
     language: go
     file: internal/session/session_lineage_test.go
     symbol: governed
+    kind: function
+  - id: internal/session/session_lineage_test.go:isErr
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: isErr
     kind: function
   - id: internal/session/session_lineage_test.go:lineageStore
     namespace: structural.scip
@@ -38020,6 +38374,12 @@ code_symbols:
     language: go
     file: internal/session/session_lineage_test.go
     symbol: newParkedContext
+    kind: function
+  - id: internal/session/session_lineage_test.go:otherStore
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: otherStore
     kind: function
   - id: internal/session/session_lineage_test.go:parkedContext.Done
     namespace: structural.scip
@@ -38087,6 +38447,24 @@ code_symbols:
     file: internal/session/session_lineage_test.go
     symbol: tipLease
     kind: function
+  - id: internal/session/session_lineage_test.go:tornStore
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: tornStore
+    kind: function
+  - id: internal/session/session_lineage_test.go:tornTail
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: tornTail
+    kind: function
+  - id: internal/session/session_lineage_test.go:unscreenedLease
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: unscreenedLease
+    kind: function
   - id: internal/session/session_lineage_test.go:waitContext.Deadline
     namespace: structural.scip
     language: go
@@ -38122,6 +38500,18 @@ code_symbols:
     language: go
     file: internal/session/session_lineage_test.go
     symbol: writeRaw
+    kind: function
+  - id: internal/session/session_lineage_test.go:writeTail
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: writeTail
+    kind: function
+  - id: internal/session/store.go:ActivateQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ActivateQuarantine
     kind: function
   - id: internal/session/store.go:Active.SessionID
     namespace: structural.scip
@@ -38375,6 +38765,18 @@ code_symbols:
     file: internal/session/store.go
     symbol: Discovery.Active
     kind: var
+  - id: internal/session/store.go:Discovery.Quarantined
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Discovery.Quarantined
+    kind: var
+  - id: internal/session/store.go:Discovery.QuarantinedTask
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Discovery.QuarantinedTask
+    kind: method
   - id: internal/session/store.go:Discovery.Records
     namespace: structural.scip
     language: go
@@ -38405,6 +38807,12 @@ code_symbols:
     file: internal/session/store.go
     symbol: ErrAppendIndeterminate
     kind: var
+  - id: internal/session/store.go:ErrDuplicateTaskRoot
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ErrDuplicateTaskRoot
+    kind: var
   - id: internal/session/store.go:ErrMalformedEvent
     namespace: structural.scip
     language: go
@@ -38429,6 +38837,42 @@ code_symbols:
     file: internal/session/store.go
     symbol: ErrNoTaskRoot
     kind: var
+  - id: internal/session/store.go:ErrNoncanonicalTaskID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ErrNoncanonicalTaskID
+    kind: var
+  - id: internal/session/store.go:ErrQuarantineIndeterminate
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ErrQuarantineIndeterminate
+    kind: var
+  - id: internal/session/store.go:ErrQuarantineInvalid
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ErrQuarantineInvalid
+    kind: var
+  - id: internal/session/store.go:ErrQuarantineMismatch
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ErrQuarantineMismatch
+    kind: var
+  - id: internal/session/store.go:ErrQuarantineRefused
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ErrQuarantineRefused
+    kind: var
+  - id: internal/session/store.go:ErrQuarantineSync
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ErrQuarantineSync
+    kind: var
   - id: internal/session/store.go:ErrRecordLockCanceled
     namespace: structural.scip
     language: go
@@ -38440,6 +38884,12 @@ code_symbols:
     language: go
     file: internal/session/store.go
     symbol: ErrRecordLockTimeout
+    kind: var
+  - id: internal/session/store.go:ErrRecordUnreadable
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ErrRecordUnreadable
     kind: var
   - id: internal/session/store.go:ErrSessionAppendRefused
     namespace: structural.scip
@@ -38465,6 +38915,12 @@ code_symbols:
     file: internal/session/store.go
     symbol: ErrSessionLineageIndeterminate
     kind: var
+  - id: internal/session/store.go:ErrSessionQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ErrSessionQuarantined
+    kind: var
   - id: internal/session/store.go:ErrSessionlessRoot
     namespace: structural.scip
     language: go
@@ -38489,6 +38945,12 @@ code_symbols:
     file: internal/session/store.go
     symbol: ErrTaskLedgerAmbiguous
     kind: var
+  - id: internal/session/store.go:ErrTaskQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ErrTaskQuarantined
+    kind: var
   - id: internal/session/store.go:FindActive
     namespace: structural.scip
     language: go
@@ -38512,6 +38974,12 @@ code_symbols:
     language: go
     file: internal/session/store.go
     symbol: ID
+    kind: function
+  - id: internal/session/store.go:InspectQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: InspectQuarantine
     kind: function
   - id: internal/session/store.go:Interrupted.AwaitingAuthority
     namespace: structural.scip
@@ -38699,6 +39167,342 @@ code_symbols:
     file: internal/session/store.go
     symbol: PreparedAt
     kind: function
+  - id: internal/session/store.go:QuarantineActive
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineActive
+    kind: const
+  - id: internal/session/store.go:QuarantineAsserted
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineAsserted
+    kind: const
+  - id: internal/session/store.go:QuarantineAuthorization.AuthorizedBy
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineAuthorization.AuthorizedBy
+    kind: var
+  - id: internal/session/store.go:QuarantineAuthorization.ExpectedSHA256
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineAuthorization.ExpectedSHA256
+    kind: var
+  - id: internal/session/store.go:QuarantineAuthorization.ExpectedSize
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineAuthorization.ExpectedSize
+    kind: var
+  - id: internal/session/store.go:QuarantineAuthorization.Provenance
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineAuthorization.Provenance
+    kind: var
+  - id: internal/session/store.go:QuarantineAuthorization~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineAuthorization
+    kind: type
+  - id: internal/session/store.go:QuarantineCommand
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineCommand
+    kind: function
+  - id: internal/session/store.go:QuarantineEligible
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineEligible
+    kind: const
+  - id: internal/session/store.go:QuarantineIneligible
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineIneligible
+    kind: const
+  - id: internal/session/store.go:QuarantineInspection.Claims
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineInspection.Claims
+    kind: var
+  - id: internal/session/store.go:QuarantineInspection.Class
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineInspection.Class
+    kind: var
+  - id: internal/session/store.go:QuarantineInspection.Detail
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineInspection.Detail
+    kind: var
+  - id: internal/session/store.go:QuarantineInspection.Manifest
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineInspection.Manifest
+    kind: var
+  - id: internal/session/store.go:QuarantineInspection.PrefixEnd
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineInspection.PrefixEnd
+    kind: var
+  - id: internal/session/store.go:QuarantineInspection.PrefixEvents
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineInspection.PrefixEvents
+    kind: var
+  - id: internal/session/store.go:QuarantineInspection.SHA256
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineInspection.SHA256
+    kind: var
+  - id: internal/session/store.go:QuarantineInspection.SessionID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineInspection.SessionID
+    kind: var
+  - id: internal/session/store.go:QuarantineInspection.Size
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineInspection.Size
+    kind: var
+  - id: internal/session/store.go:QuarantineInspection.State
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineInspection.State
+    kind: var
+  - id: internal/session/store.go:QuarantineInspection.Tail
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineInspection.Tail
+    kind: var
+  - id: internal/session/store.go:QuarantineInspection~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineInspection
+    kind: type
+  - id: internal/session/store.go:QuarantineInvalid
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineInvalid
+    kind: const
+  - id: internal/session/store.go:QuarantineManifest.AuthorizedBy
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.AuthorizedBy
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.Claims
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.Claims
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.CreatedAt
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.CreatedAt
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.PrefixEnd
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.PrefixEnd
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.PrefixEvents
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.PrefixEvents
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.Provenance
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.Provenance
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.Record
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.Record
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.SHA256
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.SHA256
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.Schema
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.Schema
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.SessionID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.SessionID
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.Size
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.Size
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.Status
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.Status
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.Tail
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.Tail
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.Version
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.Version
+    kind: var
+  - id: internal/session/store.go:QuarantineManifest.validFor
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest.validFor
+    kind: method
+  - id: internal/session/store.go:QuarantineManifest~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineManifest
+    kind: type
+  - id: internal/session/store.go:QuarantineNone
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineNone
+    kind: const
+  - id: internal/session/store.go:QuarantineSchema
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineSchema
+    kind: const
+  - id: internal/session/store.go:QuarantineState~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineState
+    kind: type
+  - id: internal/session/store.go:QuarantineStatus
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineStatus
+    kind: function
+  - id: internal/session/store.go:QuarantineTail.Kind
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineTail.Kind
+    kind: var
+  - id: internal/session/store.go:QuarantineTail.Size
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineTail.Size
+    kind: var
+  - id: internal/session/store.go:QuarantineTail.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineTail.TaskID
+    kind: var
+  - id: internal/session/store.go:QuarantineTail~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineTail
+    kind: type
+  - id: internal/session/store.go:QuarantineVersion
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantineVersion
+    kind: const
+  - id: internal/session/store.go:QuarantinedRecord.Manifest
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantinedRecord.Manifest
+    kind: var
+  - id: internal/session/store.go:QuarantinedRecord.SessionID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantinedRecord.SessionID
+    kind: var
+  - id: internal/session/store.go:QuarantinedRecord~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: QuarantinedRecord
+    kind: type
+  - id: internal/session/store.go:RecordAmbiguous
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: RecordAmbiguous
+    kind: const
+  - id: internal/session/store.go:RecordClass~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: RecordClass
+    kind: type
+  - id: internal/session/store.go:RecordCorrupt
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: RecordCorrupt
+    kind: const
+  - id: internal/session/store.go:RecordReadable
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: RecordReadable
+    kind: const
+  - id: internal/session/store.go:RecordTorn
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: RecordTorn
+    kind: const
   - id: internal/session/store.go:RetiredCompleted
     namespace: structural.scip
     language: go
@@ -39053,6 +39857,12 @@ code_symbols:
     file: internal/session/store.go
     symbol: TaskLease
     kind: type
+  - id: internal/session/store.go:activateQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: activateQuarantine
+    kind: function
   - id: internal/session/store.go:appendCommitFault
     namespace: structural.scip
     language: go
@@ -39083,17 +39893,35 @@ code_symbols:
     file: internal/session/store.go
     symbol: candidateResolutionShape
     kind: var
+  - id: internal/session/store.go:canonicalTaskID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: canonicalTaskID
+    kind: function
   - id: internal/session/store.go:checkpointBindingFault
     namespace: structural.scip
     language: go
     file: internal/session/store.go
     symbol: checkpointBindingFault
     kind: function
-  - id: internal/session/store.go:createdIdentities
+  - id: internal/session/store.go:claimInventory
     namespace: structural.scip
     language: go
     file: internal/session/store.go
-    symbol: createdIdentities
+    symbol: claimInventory
+    kind: function
+  - id: internal/session/store.go:classifyRecord
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: classifyRecord
+    kind: function
+  - id: internal/session/store.go:decodeManifest
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: decodeManifest
     kind: function
   - id: internal/session/store.go:decodePayload
     namespace: structural.scip
@@ -39107,12 +39935,30 @@ code_symbols:
     file: internal/session/store.go
     symbol: encodeBounded
     kind: function
+  - id: internal/session/store.go:encodeManifest
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: encodeManifest
+    kind: function
   - id: internal/session/store.go:error
     namespace: structural.scip
     language: go
     file: internal/session/store.go
     symbol: error
     kind: var
+  - id: internal/session/store.go:foldPrefix
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: foldPrefix
+    kind: function
+  - id: internal/session/store.go:hex4
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: hex4
+    kind: function
   - id: internal/session/store.go:initialSessionEventBuffer
     namespace: structural.scip
     language: go
@@ -39131,18 +39977,48 @@ code_symbols:
     file: internal/session/store.go
     symbol: isSessionLineage
     kind: function
+  - id: internal/session/store.go:ledgerRecord.claims
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ledgerRecord.claims
+    kind: var
+  - id: internal/session/store.go:ledgerRecord.events
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ledgerRecord.events
+    kind: var
+  - id: internal/session/store.go:ledgerRecord.path
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ledgerRecord.path
+    kind: var
+  - id: internal/session/store.go:ledgerRecord.quarantine
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ledgerRecord.quarantine
+    kind: var
+  - id: internal/session/store.go:ledgerRecord.sessionID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ledgerRecord.sessionID
+    kind: var
+  - id: internal/session/store.go:ledgerRecord~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ledgerRecord
+    kind: type
   - id: internal/session/store.go:lineageCommitFault
     namespace: structural.scip
     language: go
     file: internal/session/store.go
     symbol: lineageCommitFault
     kind: var
-  - id: internal/session/store.go:loadRecord
-    namespace: structural.scip
-    language: go
-    file: internal/session/store.go
-    symbol: loadRecord
-    kind: function
   - id: internal/session/store.go:lockFileWithin
     namespace: structural.scip
     language: go
@@ -39155,12 +40031,36 @@ code_symbols:
     file: internal/session/store.go
     symbol: lockRecordFile
     kind: function
+  - id: internal/session/store.go:lossless
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: lossless
+    kind: function
+  - id: internal/session/store.go:losslessTaskID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: losslessTaskID
+    kind: function
   - id: internal/session/store.go:maxSessionEvent
     namespace: structural.scip
     language: go
     file: internal/session/store.go
     symbol: maxSessionEvent
     kind: const
+  - id: internal/session/store.go:mayNameIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: mayNameIdentity
+    kind: function
+  - id: internal/session/store.go:noncanonical
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: noncanonical
+    kind: function
   - id: internal/session/store.go:payloadMembers.boolean
     namespace: structural.scip
     language: go
@@ -39233,11 +40133,47 @@ code_symbols:
     file: internal/session/store.go
     symbol: planAttemptOf
     kind: function
+  - id: internal/session/store.go:prefixRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: prefixRefusal
+    kind: function
+  - id: internal/session/store.go:publishManifest
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: publishManifest
+    kind: function
+  - id: internal/session/store.go:publishSeam~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: publishSeam
+    kind: type
+  - id: internal/session/store.go:quarantinePath
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: quarantinePath
+    kind: function
+  - id: internal/session/store.go:quarantineRecord
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: quarantineRecord
+    kind: function
   - id: internal/session/store.go:readEventsFrom
     namespace: structural.scip
     language: go
     file: internal/session/store.go
     symbol: readEventsFrom
+    kind: function
+  - id: internal/session/store.go:readLedgerRecord
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: readLedgerRecord
     kind: function
   - id: internal/session/store.go:readableSessions
     namespace: structural.scip
@@ -39287,17 +40223,101 @@ code_symbols:
     file: internal/session/store.go
     symbol: recordPath
     kind: function
+  - id: internal/session/store.go:recordScan.claimErr
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: recordScan.claimErr
+    kind: var
+  - id: internal/session/store.go:recordScan.claims
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: recordScan.claims
+    kind: var
+  - id: internal/session/store.go:recordScan.class
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: recordScan.class
+    kind: var
+  - id: internal/session/store.go:recordScan.events
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: recordScan.events
+    kind: var
+  - id: internal/session/store.go:recordScan.prefixEnd
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: recordScan.prefixEnd
+    kind: var
+  - id: internal/session/store.go:recordScan.quarantinable
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: recordScan.quarantinable
+    kind: method
+  - id: internal/session/store.go:recordScan.refusal
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: recordScan.refusal
+    kind: var
+  - id: internal/session/store.go:recordScan.sha256
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: recordScan.sha256
+    kind: var
+  - id: internal/session/store.go:recordScan.size
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: recordScan.size
+    kind: var
+  - id: internal/session/store.go:recordScan.tail
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: recordScan.tail
+    kind: var
+  - id: internal/session/store.go:recordScan~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: recordScan
+    kind: type
   - id: internal/session/store.go:refusalOf
     namespace: structural.scip
     language: go
     file: internal/session/store.go
     symbol: refusalOf
     kind: function
+  - id: internal/session/store.go:renderInspection
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: renderInspection
+    kind: function
+  - id: internal/session/store.go:rootClaims
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: rootClaims
+    kind: function
   - id: internal/session/store.go:sameRecord
     namespace: structural.scip
     language: go
     file: internal/session/store.go
     symbol: sameRecord
+    kind: function
+  - id: internal/session/store.go:scanLedgerRecord
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: scanLedgerRecord
     kind: function
   - id: internal/session/store.go:step
     namespace: structural.scip
@@ -39376,6 +40396,24 @@ code_symbols:
     language: go
     file: internal/session/store.go
     symbol: validRole
+    kind: function
+  - id: internal/session/store.go:validSessionName
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: validSessionName
+    kind: function
+  - id: internal/session/store.go:verifyManifest
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: verifyManifest
+    kind: function
+  - id: internal/session/store.go:walkEventIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: walkEventIdentity
     kind: function
   - id: internal/setup/checks.go:DecodeToolNames
     namespace: structural.scip
