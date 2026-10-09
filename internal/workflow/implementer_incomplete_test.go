@@ -1255,3 +1255,303 @@ func TestDF41A3W18TheObligationConsumesTheSettledInvocationsDirectly(t *testing.
 		t.Fatalf("the open operation is not the settled first generation: %+v", settled[1].Operations)
 	}
 }
+
+// C3 (RULING-246): SAME-CYCLE CANDIDATE IDENTITY AT THE RETRY DECISION. An
+// incomplete attempt's candidate is compared with the immediately preceding
+// attempt of the SAME review cycle before retry accounting advances, never with
+// the previous review cycle's candidate. The identity compared is the
+// engine-computed diff digest each account step records; what the implementer
+// says about its candidate is never read.
+
+// c3AnswerF3 cites a check no broker ever executes: f3 stays owed forever.
+const c3AnswerF3 = `{"id":"f3","answered_by":"evidence","evidence":"ls other_test.go"}`
+
+type c3Attempt struct {
+	digest string
+	route  cycleRoute
+}
+
+// c3Attempts pairs each account step's candidate digest with the route the
+// engine selected after it, from the task's stored obligation.
+func c3Attempts(t *testing.T, r *completionRig) (*cycleCompletion, []c3Attempt) {
+	t.Helper()
+	c := r.stored(t)
+	var out []c3Attempt
+	for i, s := range c.Steps {
+		if s.Kind != stepAccount {
+			continue
+		}
+		if s.Evidence == nil || s.Evidence.DiffDigest == "" {
+			t.Fatalf("premise: account step %d carries no candidate identity: %+v", i, s)
+		}
+		a := c3Attempt{digest: s.Evidence.DiffDigest}
+		if i+1 < len(c.Steps) && c.Steps[i+1].Kind == stepRoute {
+			a.route = c.Steps[i+1].Route
+		}
+		out = append(out, a)
+	}
+	return c, out
+}
+
+// c3Identity is the engine's same-cycle classification of one accounted
+// attempt at the retry decision: a counted attempt carries it on its
+// incomplete-attempt record, and an attempt that took the no-progress
+// diagnosis carries it in that diagnosis.
+type c3Identity struct {
+	classification string
+	digest         string
+	stalled        bool
+	// preceding is the same-cycle predecessor compared with, when reported.
+	preceding *string
+}
+
+const c3IdentityMarker = "Same-cycle candidate identity: "
+
+func c3Identities(t *testing.T, r *completionRig, attempts []c3Attempt, terminal error) []c3Identity {
+	t.Helper()
+	var out []c3Identity
+	for _, rep := range r.incompleteReports(t) {
+		class, _ := rep["candidate_identity"].(string)
+		digest, _ := rep["candidate_digest"].(string)
+		stalled, _ := rep["unchanged_since_previous_cycle"].(bool)
+		preceding, _ := rep["preceding_attempt_digest"].(string)
+		out = append(out, c3Identity{classification: class, digest: digest, stalled: stalled, preceding: &preceding})
+	}
+	if n := len(attempts); n != 0 && attempts[n-1].route == routeDiagnosis && terminal != nil {
+		msg := terminal.Error()
+		if i := strings.Index(msg, c3IdentityMarker); i >= 0 {
+			rest := msg[i+len(c3IdentityMarker):]
+			class, tail, _ := strings.Cut(rest, ";")
+			out = append(out, c3Identity{classification: class, digest: attempts[n-1].digest,
+				stalled: strings.Contains(tail, "unchanged since the previous review cycle: true")})
+		}
+	}
+	return out
+}
+
+// c3Classified asserts the engine classified each accounted attempt as want,
+// in order, from the same certified digest the attempt's account step records.
+func c3Classified(t *testing.T, r *completionRig, attempts []c3Attempt, terminal error, want ...string) []c3Identity {
+	t.Helper()
+	got := c3Identities(t, r, attempts, terminal)
+	if len(got) != len(want) || len(attempts) != len(want) {
+		t.Fatalf("classified %d attempts and accounted %d, want %d: %+v", len(got), len(attempts), len(want), got)
+	}
+	for i, id := range got {
+		if id.classification != want[i] {
+			t.Fatalf("attempt %d was classified %q against its same-cycle predecessor, want %q: %+v", i+1, id.classification, want[i], got)
+		}
+		if id.digest == "" || id.digest != attempts[i].digest {
+			t.Fatalf("attempt %d was classified from %q, not its certified candidate %q", i+1, id.digest, attempts[i].digest)
+		}
+		if id.preceding != nil {
+			want := ""
+			if i > 0 {
+				want = attempts[i-1].digest
+			}
+			if *id.preceding != want {
+				t.Fatalf("attempt %d was compared with %q, not its same-cycle predecessor %q", i+1, *id.preceding, want)
+			}
+		}
+	}
+	return got
+}
+
+// producedNothingThisCycle is the no-progress diagnosis for consecutive
+// attempts of one review cycle, distinct from producedNothing between cycles.
+const producedNothingThisCycle = "consecutive attempts of the same review cycle produced an identical candidate"
+
+// c3Rig: "f3 alone" is an undischargeable evidence finding by itself; "r3
+// shape" adds a dischargeable evidence finding (f2, the broker's failing-first
+// witness) beside it. values are the cycle-2 attempts' main.go values.
+func c3Rig(t *testing.T, shape string, values ...int) *completionRig {
+	t.Helper()
+	findings := []string{secondEvidenceFinding}
+	report := accounting(c3AnswerF3)
+	if shape == "r3 shape" {
+		findings = []string{failingFirstFinding, secondEvidenceFinding}
+		report = accounting(answerF2WithTheRun, c3AnswerF3)
+	}
+	var turns []incompleteTurn
+	for _, v := range values {
+		turns = append(turns, incompleteTurn{value: v, report: report})
+	}
+	r := newCompletionRig(t, findings, turns...)
+	if shape == "r3 shape" {
+		r.h.engine.Config.Permissions.RunTests = true
+		r.h.engine.Config.Validation.Test = []config.Command{{Command: "grep", Args: []string{"-c", "main() {}", "main.go"}}}
+	}
+	return r
+}
+
+// W1a THE f3-ONLY SHAPE. Cycle 2 attempt 1 writes a new candidate (value 2);
+// attempt 2 leaves the worktree alone, so its candidate is byte-identical to
+// attempt 1's, its owed set is still [f3] and it retains no evidence. That is
+// recognized as identical before another retry is counted: attempt 2 takes the
+// existing no-progress diagnosis, the obligation holds one counted attempt, and
+// f3 is still owed -- identity is neither acceptance nor discharge.
+//
+// Fails at a8add85 because attempt 2 is compared with cycle 1's candidate,
+// which it differs from, and is counted as a second incomplete retry.
+func TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances(t *testing.T) {
+	r := c3Rig(t, "f3 alone", 2, 0, 0, 0)
+	outcome, err := r.run()
+	c, attempts := c3Attempts(t, r)
+	for i, a := range attempts {
+		t.Logf("cycle-%d attempt %d: candidate %s -> route %s", c.Cycle, i+1, a.digest, a.route)
+	}
+	if len(attempts) < 2 {
+		t.Fatalf("premise: fewer than two accounted cycle-2 attempts (%d): %v", len(attempts), err)
+	}
+	if attempts[0].route != routeIncompleteRetry {
+		t.Fatalf("premise: attempt 1, a changed candidate with f3 owed, was not an incomplete retry: %s", attempts[0].route)
+	}
+	if attempts[1].digest != attempts[0].digest {
+		t.Fatalf("premise: attempt 2's candidate %s is not attempt 1's %s", attempts[1].digest, attempts[0].digest)
+	}
+	if c.counts(attempts[1].route) || c.Attempts != 1 {
+		t.Fatalf("attempt 2 reproduced attempt 1's candidate and was counted (route %s, %d attempts): "+
+			"the identity was not recognized before accounting (not recognized as identical before accounting); terminal %v", attempts[1].route, c.Attempts, err)
+	}
+	if len(attempts) != 2 || attempts[1].route != routeDiagnosis {
+		t.Fatalf("the identical attempt did not take the no-progress diagnosis: %+v", attempts)
+	}
+	c3Classified(t, r, attempts, err, "unknown", "identical")
+	var incomplete *ImplementerIncomplete
+	if err == nil || errors.As(err, &incomplete) || !strings.Contains(err.Error(), producedNothingThisCycle) ||
+		strings.Contains(err.Error(), producedEvidenceNotCode) {
+		t.Fatalf("the identical attempt did not end on the same-cycle produced-nothing diagnosis: %v", err)
+	}
+	// Attempt 1 changed the candidate relative to cycle 1, so the stall is
+	// between consecutive attempts, not between review cycles: the diagnosis
+	// must not claim what its own structured fact denies.
+	if !strings.Contains(err.Error(), "unchanged since the previous review cycle: false") ||
+		strings.Contains(err.Error(), producedNothing) {
+		t.Fatalf("a same-cycle repetition was diagnosed as a stall between review cycles: %v", err)
+	}
+	if outcome.Accepted() || !equalStrings(c.Owed(), "f3") {
+		t.Fatalf("an identical candidate was read as acceptance or discharge: outcome %q owed %v", outcome, c.Owed())
+	}
+	if !equalInts(r.cycles(), 1, 2, 2) {
+		t.Fatalf("an invocation ran after the identity was recognized: %v", r.cycles())
+	}
+}
+
+// W2 CONTROL. Every cycle-2 attempt writes a NEW candidate (values 2, 3, 4):
+// each is recognized as changed, counted, and the third ends
+// IMPLEMENTER_INCOMPLETE -- the landed DF-41A3 behaviour C3 must not change.
+func TestC3W2AChangedCandidateIsRecognizedAsChanged(t *testing.T) {
+	for _, shape := range []string{"f3 alone", "r3 shape"} {
+		t.Run(shape, func(t *testing.T) {
+			r := c3Rig(t, shape, 2, 3, 4, 5)
+			_, err := r.run()
+			_, attempts := c3Attempts(t, r)
+			var incomplete *ImplementerIncomplete
+			if !errors.As(err, &incomplete) || incomplete.Attempts != 3 || !equalStrings(incomplete.Owed, "f3") {
+				t.Fatalf("three changed incomplete candidates did not end IMPLEMENTER_INCOMPLETE owing f3 after 3 attempts: %v", err)
+			}
+			if strings.Contains(err.Error(), producedNothing) {
+				t.Fatalf("a changed candidate was diagnosed as unchanged: %v", err)
+			}
+			if len(attempts) != 3 {
+				t.Fatalf("expected three accounted cycle-2 attempts, got %d", len(attempts))
+			}
+			for i, a := range attempts {
+				if a.route != routeIncompleteRetry {
+					t.Fatalf("changed attempt %d was not counted as an incomplete retry: %s", i+1, a.route)
+				}
+				if i > 0 && a.digest == attempts[i-1].digest {
+					t.Fatalf("premise: attempt %d did not change the candidate", i+1)
+				}
+			}
+			if !equalInts(r.cycles(), 1, 2, 2, 2) {
+				t.Fatalf("a fourth invocation ran or the cycle advanced: %v", r.cycles())
+			}
+			c3Classified(t, r, attempts, err, "unknown", "changed", "changed")
+		})
+	}
+}
+
+// W4 THE BOUNDED RETRY STANDS FOR A CODE FINDING. Every cycle-2 attempt leaves
+// the candidate byte-identical while a blocking code finding stays unresolved:
+// the implementer still owes a change, so identity is not a diagnosis and not a
+// discharge. Each attempt is counted, and the third ends IMPLEMENTER_INCOMPLETE
+// owing f1.
+func TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry(t *testing.T) {
+	report := accounting(answerCode("f1"))
+	r := newCompletionRig(t, []string{codeOn("f1")},
+		incompleteTurn{report: report}, incompleteTurn{report: report},
+		incompleteTurn{report: report}, incompleteTurn{report: report})
+	outcome, err := r.run()
+	c, attempts := c3Attempts(t, r)
+	// Each attempt's route is read before the count: an attempt that is not
+	// an incomplete retry is the failure W4 exists to name.
+	for i, a := range attempts {
+		if a.route != routeIncompleteRetry {
+			t.Fatalf("attempt %d with f1 still owing a change left the bounded retry: route %s; terminal %v", i+1, a.route, err)
+		}
+		if i > 0 && a.digest != attempts[i-1].digest {
+			t.Fatalf("premise: attempt %d changed the candidate", i+1)
+		}
+	}
+	if len(attempts) != 3 {
+		t.Fatalf("f1 left the bounded retry after %d accounted cycle-2 attempts, want 3: %+v: %v", len(attempts), attempts, err)
+	}
+	var incomplete *ImplementerIncomplete
+	if !errors.As(err, &incomplete) || incomplete.Attempts != 3 || !equalStrings(incomplete.Owed, "f1") {
+		t.Fatalf("the open code finding did not end IMPLEMENTER_INCOMPLETE owing f1 after 3 attempts: %v", err)
+	}
+	if strings.Contains(err.Error(), producedNothing) || outcome.Accepted() || !equalStrings(c.Owed(), "f1") {
+		t.Fatalf("an identical candidate discharged or diagnosed an open code finding: outcome %q owed %v err %v", outcome, c.Owed(), err)
+	}
+	if !equalInts(r.cycles(), 1, 2, 2, 2) {
+		t.Fatalf("a fourth invocation ran or the cycle advanced: %v", r.cycles())
+	}
+	c3Classified(t, r, attempts, err, "unknown", "identical", "identical")
+}
+
+// W6L THE COMPARISON IS THREE-VALUED. Two established identities compare equal
+// or changed; when either is absent -- an error-return account carries no
+// digest, a fresh process holds no previous attempt -- the answer is UNKNOWN,
+// never equality.
+func TestC3W6LAnAbsentIdentityIsUnknownNeverEqual(t *testing.T) {
+	const a, b = "sha256:aaaa", "sha256:bbbb"
+	for _, tc := range []struct {
+		previous, current string
+		want              candidateIdentity
+	}{
+		{a, a, candidateIdentical},
+		{a, " " + a + "\n", candidateIdentical},
+		{a, b, candidateChanged},
+		{"", a, candidateIdentityUnknown},
+		{a, "", candidateIdentityUnknown},
+		{"", "", candidateIdentityUnknown},
+		{"  ", "  ", candidateIdentityUnknown},
+	} {
+		if got := compareCandidateIdentity(tc.previous, tc.current); got != tc.want {
+			t.Fatalf("compare(%q, %q) = %v, want %v", tc.previous, tc.current, got, tc.want)
+		}
+	}
+}
+
+// W6L AT THE RETRY DECISION. The first attempt of cycle 2 has no same-cycle
+// predecessor, so its classification is UNKNOWN even though its candidate is
+// byte-identical to cycle 1's: the previous cycle's candidate is never read as
+// the preceding attempt. That cross-cycle identity is still observed, as its
+// own fact, and keeps the existing no-progress diagnosis for a candidate that
+// did not move between cycles.
+func TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor(t *testing.T) {
+	r := c3Rig(t, "f3 alone", 0, 0)
+	_, err := r.run()
+	_, attempts := c3Attempts(t, r)
+	if len(attempts) != 1 || attempts[0].route != routeDiagnosis {
+		t.Fatalf("premise: the unmoved first attempt of cycle 2 did not take the existing stall diagnosis: %+v: %v", attempts, err)
+	}
+	if err == nil || !strings.Contains(err.Error(), producedNothing) {
+		t.Fatalf("premise: the unmoved first attempt did not end produced-nothing: %v", err)
+	}
+	got := c3Classified(t, r, attempts, err, "unknown")
+	if !got[0].stalled {
+		t.Fatalf("the cross-cycle identity was not kept as its own fact: %+v", got[0])
+	}
+}

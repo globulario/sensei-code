@@ -5352,6 +5352,41 @@ func (e *Engine) implementerRemains(taskID string, rest []config.Agent, continui
 // tc is a pointer because the change report is produced here and read by the
 // caller when it offers publication. Taking it by value silently dropped the
 // report, and the pull request body went out with the evidence missing.
+// candidateIdentity is how an attempt's candidate compares with the one before
+// it. It is three-valued on purpose: an identity that is absent on either side
+// is UNKNOWN, and UNKNOWN is never read as equality.
+type candidateIdentity int
+
+const (
+	candidateIdentityUnknown candidateIdentity = iota
+	candidateIdentical
+	candidateChanged
+)
+
+func (c candidateIdentity) String() string {
+	switch c {
+	case candidateIdentical:
+		return "identical"
+	case candidateChanged:
+		return "changed"
+	default:
+		return "unknown"
+	}
+}
+
+// compareCandidateIdentity compares two engine-computed candidate digests.
+func compareCandidateIdentity(previous, current string) candidateIdentity {
+	previous, current = strings.TrimSpace(previous), strings.TrimSpace(current)
+	switch {
+	case previous == "" || current == "":
+		return candidateIdentityUnknown
+	case previous == current:
+		return candidateIdentical
+	default:
+		return candidateChanged
+	}
+}
+
 func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, tc *taskContext, initialPlan string, worker config.Agent, workspace, carried string) (candidateOutcome, string, string, string, error) {
 	task := tc.Task
 	plan := initialPlan
@@ -5361,6 +5396,12 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 	var lastReview, lastAudit string
 	// previousDiffDigest detects a worker that is not responding to feedback.
 	var previousDiffDigest string
+	// previousAttemptCycle and previousAttemptDigest are the immediately
+	// preceding accounted attempt of a review cycle. previousDiffDigest is set
+	// only once a cycle settles, so a same-cycle retry never reaches it: an
+	// attempt that retries its cycle is compared with this instead (C3).
+	var previousAttemptCycle int
+	var previousAttemptDigest string
 	// previousReportRevision is the same guard for a read-only run, where the
 	// artifact is findings rather than a diff. Without it a worker that returns
 	// the same report every cycle spends the whole budget re-asserting it.
@@ -5931,6 +5972,23 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				// The settled invocation's open structured operations, read
 				// from the 70A2 fact and never from the report.
 				unterminated := openOperations(settled)
+				// THE RETRY DECISION'S CANDIDATE IDENTITY, classified before
+				// any route below can count this attempt, from the digest the
+				// engine certified for this attempt's post-validation diff. It
+				// is compared only with the attempt immediately before it in
+				// the SAME cycle; with no same-cycle predecessor it is UNKNOWN.
+				// The previous cycle's candidate is a separate fact, the
+				// existing stall comparison, and never stands in for it.
+				// Identical says only that the tree did not move: it accepts
+				// nothing and discharges nothing.
+				attemptDigest := strings.TrimSpace(evidence.DiffDigest)
+				var preceding string
+				if previousAttemptCycle == cycle {
+					preceding = previousAttemptDigest
+				}
+				identity := compareCandidateIdentity(preceding, attemptDigest)
+				stalledSincePreviousCycle := strings.TrimSpace(verdict.InputDiffDigest) != "" && verdict.InputDiffDigest == previousDiffDigest
+				previousAttemptCycle, previousAttemptDigest = cycle, attemptDigest
 				// incomplete counts one settled, returned implementer
 				// invocation that left this cycle owed, and says whether the
 				// cycle is tried again. The third ends it typed: no fourth
@@ -5949,6 +6007,8 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					e.reportIncompleteAttempt(ctx, taskID, obligation, map[string]any{
 						"route": string(obligation.Route), "restated_findings": restated, "conflicted_findings": conflicted,
 						"lapsed_findings": lapsed, "provider": settled.Provider,
+						"candidate_identity": identity.String(), "candidate_digest": attemptDigest, "preceding_attempt_digest": preceding,
+						"unchanged_since_previous_cycle": stalledSincePreviousCycle,
 					})
 					if obligation.Exhausted() {
 						return false, e.exhaustCycle(ctx, tc, workspace, obligation, unterminated, diagnosis)
@@ -6071,15 +6131,22 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					// keeps the identical-diff diagnosis. A cycle that retained
 					// evidence while a code or scope finding stays open PRODUCED
 					// EVIDENCE, NOT CODE: evidence never discharges a change.
-					unchanged := strings.TrimSpace(verdict.InputDiffDigest) != "" && verdict.InputDiffDigest == previousDiffDigest
+					unchanged := identity == candidateIdentical || stalledSincePreviousCycle
 					switch {
 					case unchanged && len(account.Evidenced) == 0 && !account.OwesChange():
 						if err := leave(routeDiagnosis); err != nil {
 							return candidateNotConverged, plan, lastReview, lastAudit, err
 						}
+						// The wording names the comparison that held: a stall
+						// between review cycles takes precedence; otherwise
+						// the identity is between consecutive attempts.
+						stall := "the candidate did not change between review cycles: %s produced an identical diff after being asked to revise"
+						if !stalledSincePreviousCycle {
+							stall = "consecutive attempts of the same review cycle produced an identical candidate: %s produced an identical diff after being asked to revise"
+						}
 						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
-							"the candidate did not change between review cycles: %s produced an identical diff after being asked to revise. "+
-								"The last review asked for: %s. Nothing durable answers it: %s", config.DisplayName(worker.Name), oneLine(lastReview), diagnosis)
+							stall+". The last review asked for: %s. Nothing durable answers it: %s. Same-cycle candidate identity: %s; unchanged since the previous review cycle: %t",
+							config.DisplayName(worker.Name), oneLine(lastReview), diagnosis, identity, stalledSincePreviousCycle)
 					case len(account.Evidenced) != 0 && account.OnlyChangesOpen():
 						if err := leave(routeDiagnosis); err != nil {
 							return candidateNotConverged, plan, lastReview, lastAudit, err
