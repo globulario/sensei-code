@@ -51101,12 +51101,42 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: behaviourStopped
     kind: const
+  - id: internal/workflow/engine.go:candidateChanged
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: candidateChanged
+    kind: const
   - id: internal/workflow/engine.go:candidateEvidence
     namespace: structural.scip
     language: go
     file: internal/workflow/engine.go
     symbol: candidateEvidence
     kind: function
+  - id: internal/workflow/engine.go:candidateIdentical
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: candidateIdentical
+    kind: const
+  - id: internal/workflow/engine.go:candidateIdentity.String
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: candidateIdentity.String
+    kind: method
+  - id: internal/workflow/engine.go:candidateIdentityUnknown
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: candidateIdentityUnknown
+    kind: const
+  - id: internal/workflow/engine.go:candidateIdentity~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: candidateIdentity
+    kind: type
   - id: internal/workflow/engine.go:canonicalAccountingPosition
     namespace: structural.scip
     language: go
@@ -51203,6 +51233,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: committedRecipesPath
     kind: const
+  - id: internal/workflow/engine.go:compareCandidateIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: compareCandidateIdentity
+    kind: function
   - id: internal/workflow/engine.go:composeAuthorityOptions
     namespace: structural.scip
     language: go
@@ -56507,6 +56543,36 @@ code_symbols:
     file: internal/workflow/implementer_incomplete.go
     symbol: stepRoute
     kind: const
+  - id: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestC3W2AChangedCandidateIsRecognizedAsChanged
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestC3W6LAnAbsentIdentityIsUnknownNeverEqual
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestC3W6LAnAbsentIdentityIsUnknownNeverEqual
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    kind: function
   - id: internal/workflow/implementer_incomplete_test.go:TestDF41A3W10BDiagnosesLeaveNoIncompleteContinuationForTheHandoff
     namespace: structural.scip
     language: go
@@ -56674,6 +56740,90 @@ code_symbols:
     language: go
     file: internal/workflow/implementer_incomplete_test.go
     symbol: architectDouble
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:c3AnswerF3
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3AnswerF3
+    kind: const
+  - id: internal/workflow/implementer_incomplete_test.go:c3Attempt.digest
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3Attempt.digest
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:c3Attempt.route
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3Attempt.route
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3Attempts
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:c3Attempt~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3Attempt
+    kind: type
+  - id: internal/workflow/implementer_incomplete_test.go:c3Classified
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3Classified
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:c3Identities
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3Identities
+    kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:c3Identity.classification
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3Identity.classification
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:c3Identity.digest
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3Identity.digest
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:c3Identity.preceding
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3Identity.preceding
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:c3Identity.stalled
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3Identity.stalled
+    kind: var
+  - id: internal/workflow/implementer_incomplete_test.go:c3IdentityMarker
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3IdentityMarker
+    kind: const
+  - id: internal/workflow/implementer_incomplete_test.go:c3Identity~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3Identity
+    kind: type
+  - id: internal/workflow/implementer_incomplete_test.go:c3Rig
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: c3Rig
     kind: function
   - id: internal/workflow/implementer_incomplete_test.go:codeOn
     namespace: structural.scip
@@ -56861,6 +57011,12 @@ code_symbols:
     file: internal/workflow/implementer_incomplete_test.go
     symbol: plainReturn
     kind: function
+  - id: internal/workflow/implementer_incomplete_test.go:producedNothingThisCycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/implementer_incomplete_test.go
+    symbol: producedNothingThisCycle
+    kind: const
   - id: internal/workflow/implementer_incomplete_test.go:replacePlanAttempt
     namespace: structural.scip
     language: go

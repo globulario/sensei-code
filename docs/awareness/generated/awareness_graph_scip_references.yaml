@@ -4950,11 +4950,11 @@ code_references:
     to_name: Join
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
@@ -6454,15 +6454,15 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
+    to_id: internal/control/server.go:New
+    to_name: New
+    file: cmd/sensei-code/control.go
+  - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/workflow/engine.go:New
-    to_name: New
-    file: cmd/sensei-code/control.go
-  - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6524,11 +6524,11 @@ code_references:
     to_name: SIGTERM
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Close
+    to_id: internal/ghwebhook/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Close
+    to_id: internal/control/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6536,11 +6536,11 @@ code_references:
     to_name: Server.CloseLocal
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6556,11 +6556,11 @@ code_references:
     to_name: Server.ListenRelay
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Serve
+    to_id: internal/ghwebhook/server.go:Server.Serve
     to_name: Server.Serve
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Serve
+    to_id: internal/control/server.go:Server.Serve
     to_name: Server.Serve
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -7312,11 +7312,11 @@ code_references:
     to_name: Reviewer
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/ghbridge/runner.go:Runner~type
+    to_id: internal/agent/agent.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/agent/agent.go:Runner~type
+    to_id: internal/ghbridge/runner.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
@@ -7847,15 +7847,15 @@ code_references:
     to_name: Mint
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/workflow/engine.go:New
-    to_name: New
-    file: cmd/sensei-code/control_test.go
-  - from: cmd/sensei-code/control_test.go:newControlServer
     to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
     to_id: internal/session/store.go:New
+    to_name: New
+    file: cmd/sensei-code/control_test.go
+  - from: cmd/sensei-code/control_test.go:newControlServer
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -8345,11 +8345,11 @@ code_references:
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/tui/model.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/tui/model.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
@@ -14608,11 +14608,11 @@ code_references:
     to_name: Join
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1R193W12ARefusedResumeBindingEndsTheCallerTyped
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1R193W12ARefusedResumeBindingEndsTheCallerTyped
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1R193W12ARefusedResumeBindingEndsTheCallerTyped
@@ -14807,11 +14807,11 @@ code_references:
     to_name: MkdirAll
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1R195RunAppendFailureTerminatesItsCaller
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1R195RunAppendFailureTerminatesItsCaller
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1R195RunAppendFailureTerminatesItsCaller
@@ -14940,11 +14940,11 @@ code_references:
     to_name: Index
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1RF1EveryResumeLaneIsHandedAFreshSession
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1RF1EveryResumeLaneIsHandedAFreshSession
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1RF1EveryResumeLaneIsHandedAFreshSession
@@ -15091,11 +15091,11 @@ code_references:
     to_name: Interrupted.AwaitingAuthority
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a2A2W1CLIResumeDoesNotConsumeAnUnrelatedSameTaskRecord
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a2A2W1CLIResumeDoesNotConsumeAnUnrelatedSameTaskRecord
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a2A2W1CLIResumeDoesNotConsumeAnUnrelatedSameTaskRecord
@@ -19010,11 +19010,11 @@ code_references:
     to_name: ID
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
@@ -21210,11 +21210,11 @@ code_references:
     to_name: testing
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/control/server.go:Endpoint
+    to_id: internal/ghwebhook/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/ghwebhook/server.go:Endpoint
+    to_id: internal/control/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
@@ -31397,17 +31397,17 @@ code_references:
     to_name: Client.http
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_name: Config
-    file: internal/behavioral/behavioral.go
-  - from: internal/behavioral/behavioral.go:New
     to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_id: internal/behavioral/behavioral.go:Config.InsecureSkipVerify
+    to_name: Config
+    file: internal/behavioral/behavioral.go
+  - from: internal/behavioral/behavioral.go:New
     to_name: Config.InsecureSkipVerify
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
+    to_id: internal/behavioral/behavioral.go:Config.InsecureSkipVerify
     to_name: Config.InsecureSkipVerify
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
@@ -34819,11 +34819,11 @@ code_references:
     to_name: Agent.Name
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/behavioral/behavioral.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
@@ -37276,11 +37276,11 @@ code_references:
     to_name: Mint
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
@@ -38948,15 +38948,15 @@ code_references:
     to_name: Minute
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
-    to_id: internal/workflow/engine.go:New
-    to_name: New
-    file: internal/control/control_test.go
-  - from: internal/control/control_test.go:newHarness
     to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
     to_id: internal/session/store.go:New
+    to_name: New
+    file: internal/control/control_test.go
+  - from: internal/control/control_test.go:newHarness
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
@@ -45046,10 +45046,10 @@ code_references:
     to_name: Second
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
+    to_id: internal/control/server.go:Server~type
     to_name: Server
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
-    to_id: internal/control/server.go:Server~type
     to_name: Server
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
@@ -51510,11 +51510,11 @@ code_references:
     to_name: Unknown
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/mcpconfig/mcpconfig.go:Unproven
+    to_id: internal/doctor/doctor.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/doctor/doctor.go:Unproven
+    to_id: internal/mcpconfig/mcpconfig.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
@@ -95977,10 +95977,10 @@ code_references:
     to_name: Event
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
@@ -100942,17 +100942,17 @@ code_references:
     to_name: Second
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_name: Server
-    file: internal/ghwebhook/server.go
-  - from: internal/ghwebhook/server.go:Server.Listen
     to_id: internal/ghwebhook/server.go:Server~type
     to_name: Server
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_id: internal/ghwebhook/server.go:Server.Handler
+    to_name: Server
+    file: internal/ghwebhook/server.go
+  - from: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
@@ -113741,10 +113741,10 @@ code_references:
     to_name: testing
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
+    to_id: internal/processx/runner.go:Environ
     to_name: Environ
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
-    to_id: internal/processx/runner.go:Environ
     to_name: Environ
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
@@ -147667,11 +147667,11 @@ code_references:
     to_name: CheckpointPrepared
     file: internal/session/interrupted_test.go
   - from: internal/session/interrupted_test.go:TestB1W15ACheckpointRecordIsAppendedDurably
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/session/interrupted_test.go
   - from: internal/session/interrupted_test.go:TestB1W15ACheckpointRecordIsAppendedDurably
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/session/interrupted_test.go
   - from: internal/session/interrupted_test.go:TestB1W15ACheckpointRecordIsAppendedDurably
@@ -175810,11 +175810,11 @@ code_references:
     to_name: Model.resumable
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestB2a2R238X2bTUIResumeEligibilityIsDecidedByLineageMembersAlone
-    to_id: internal/tui/model.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestB2a2R238X2bTUIResumeEligibilityIsDecidedByLineageMembersAlone
-    to_id: internal/event/event.go:New
+    to_id: internal/tui/model.go:New
     to_name: New
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestB2a2R238X2bTUIResumeEligibilityIsDecidedByLineageMembersAlone
@@ -176574,11 +176574,11 @@ code_references:
     to_name: KeyPressMsg.String
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/mcpconfig/mcpconfig.go:Label
+    to_id: internal/provider/provider.go:Label
     to_name: Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/provider/provider.go:Label
+    to_id: internal/mcpconfig/mcpconfig.go:Label
     to_name: Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -213054,11 +213054,11 @@ code_references:
     to_name: ErrSessionEventTooLarge
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestB2a1W10AnOversizedDurableEventHaltsItsTask
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestB2a1W10AnOversizedDurableEventHaltsItsTask
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestB2a1W10AnOversizedDurableEventHaltsItsTask
@@ -213191,11 +213191,11 @@ code_references:
     to_name: Event.Kind
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestB2a1W10AppendError
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestB2a1W10AppendError
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestB2a1W10AppendError
@@ -215723,10 +215723,10 @@ code_references:
     to_name: Is
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.askArchitect
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.askArchitect
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.askArchitect
@@ -219363,10 +219363,10 @@ code_references:
     to_name: Load
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
@@ -221324,10 +221324,10 @@ code_references:
     to_name: Errorf
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
@@ -224544,11 +224544,11 @@ code_references:
     to_name: Is
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/behavioral/behavioral.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/event/event.go:New
+    to_id: internal/behavioral/behavioral.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
@@ -225007,10 +225007,10 @@ code_references:
     to_name: Engine.resolveRunner
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
@@ -227956,11 +227956,11 @@ code_references:
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/event/event.go:New
+    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/broker/broker.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -228217,6 +228217,14 @@ code_references:
     to_name: candidateAwaitingIndependentReview
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/workflow/engine.go:candidateIdentical
+    to_name: candidateIdentical
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/workflow/engine.go:candidateIdentity.String
+    to_name: candidateIdentity.String
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/reviewresult.go:candidateNotConverged
     to_name: candidateNotConverged
     file: internal/workflow/engine.go
@@ -228271,6 +228279,10 @@ code_references:
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/engine.go:changedPaths
     to_name: changedPaths
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/workflow/engine.go:compareCandidateIdentity
+    to_name: compareCandidateIdentity
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_name: context
@@ -230803,11 +230815,11 @@ code_references:
     to_name: Evidence
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.AuditDetail
+    to_id: internal/taskstate/state.go:Evidence.AuditDetail
     to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.AuditDetail
+    to_id: internal/candidate/disposition.go:Evidence.AuditDetail
     to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -230823,11 +230835,11 @@ code_references:
     to_name: Evidence.BaseSHA
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.ChangedPaths
+    to_id: internal/candidate/disposition.go:Evidence.ChangedPaths
     to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.ChangedPaths
+    to_id: internal/taskstate/state.go:Evidence.ChangedPaths
     to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -230860,6 +230872,18 @@ code_references:
   - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/workflow/engine.go:taskContext.EvidenceSnapshot
     to_name: taskContext.EvidenceSnapshot
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:candidateIdentity.String
+    to_id: internal/workflow/engine.go:candidateChanged
+    to_name: candidateChanged
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:candidateIdentity.String
+    to_id: internal/workflow/engine.go:candidateIdentical
+    to_name: candidateIdentical
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:candidateIdentity.String
+    to_id: internal/workflow/engine.go:candidateIdentity~type
+    to_name: candidateIdentity
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:canonicalAccountingPosition
     to_name: IndexByte
@@ -231077,6 +231101,28 @@ code_references:
     to_name: github.com/globulario/sensei-code/internal/validation
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:commandLine
+    to_name: strings
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:compareCandidateIdentity
+    to_name: TrimSpace
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:compareCandidateIdentity
+    to_id: internal/workflow/engine.go:candidateChanged
+    to_name: candidateChanged
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:compareCandidateIdentity
+    to_id: internal/workflow/engine.go:candidateIdentical
+    to_name: candidateIdentical
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:compareCandidateIdentity
+    to_id: internal/workflow/engine.go:candidateIdentity~type
+    to_name: candidateIdentity
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:compareCandidateIdentity
+    to_id: internal/workflow/engine.go:candidateIdentityUnknown
+    to_name: candidateIdentityUnknown
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:compareCandidateIdentity
     to_name: strings
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:composeAuthorityOptions
@@ -234115,19 +234161,19 @@ code_references:
     to_name: ToolResult
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/authority/resolution.go:ToolResult.IsError
-    to_name: ToolResult.IsError
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:senseiProposer.CallTool
     to_id: internal/sensei/mcp.go:ToolResult.IsError
     to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/authority/resolution.go:ToolResult.Structured
-    to_name: ToolResult.Structured
+    to_id: internal/authority/resolution.go:ToolResult.IsError
+    to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
     to_id: internal/sensei/mcp.go:ToolResult.Structured
+    to_name: ToolResult.Structured
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:senseiProposer.CallTool
+    to_id: internal/authority/resolution.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
@@ -245521,10 +245567,10 @@ code_references:
     to_name: Is
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
@@ -246794,7 +246840,7 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
@@ -246802,7 +246848,7 @@ code_references:
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
@@ -246944,11 +246990,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
@@ -251812,6 +251858,371 @@ code_references:
   - from: internal/workflow/implementer_incomplete.go:sameResponse
     to_name: strings
     file: internal/workflow/implementer_incomplete.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_name: As
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_name: Contains
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete~type
+    to_name: ImplementerIncomplete
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_name: T
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt.digest
+    to_name: c3Attempt.digest
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt.route
+    to_name: c3Attempt.route
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_name: c3Attempts
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_name: c3Classified
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_name: c3Rig
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/reviewresult.go:candidateOutcome.Accepted
+    to_name: candidateOutcome.Accepted
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_name: common.Fatalf
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_name: common.Logf
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig.cycles
+    to_name: completionRig.cycles
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig.run
+    to_name: completionRig.run
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete.go:cycleCompletion.Attempts
+    to_name: cycleCompletion.Attempts
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete.go:cycleCompletion.Cycle
+    to_name: cycleCompletion.Cycle
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete.go:cycleCompletion.Owed
+    to_name: cycleCompletion.Owed
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete.go:cycleCompletion.counts
+    to_name: cycleCompletion.counts
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete_test.go:equalInts
+    to_name: equalInts
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete_test.go:equalStrings
+    to_name: equalStrings
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_name: errors
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/nonconvergence_test.go:producedEvidenceNotCode
+    to_name: producedEvidenceNotCode
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/nonconvergence_test.go:producedNothing
+    to_name: producedNothing
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete_test.go:producedNothingThisCycle
+    to_name: producedNothingThisCycle
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete.go:routeDiagnosis
+    to_name: routeDiagnosis
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_id: internal/workflow/implementer_incomplete.go:routeIncompleteRetry
+    to_name: routeIncompleteRetry
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_name: strings
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W1aAnIdenticalSameCycleAttemptIsRecognizedBeforeRetryAccountingAdvances
+    to_name: testing
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_name: As
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_name: Contains
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete~type
+    to_name: ImplementerIncomplete
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.Attempts
+    to_name: ImplementerIncomplete.Attempts
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.Owed
+    to_name: ImplementerIncomplete.Owed
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_name: T
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_name: T.Run
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt.digest
+    to_name: c3Attempt.digest
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt.route
+    to_name: c3Attempt.route
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_name: c3Attempts
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_name: c3Classified
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_name: c3Rig
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_name: common.Fatalf
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig.cycles
+    to_name: completionRig.cycles
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig.run
+    to_name: completionRig.run
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/implementer_incomplete_test.go:equalInts
+    to_name: equalInts
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/implementer_incomplete_test.go:equalStrings
+    to_name: equalStrings
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_name: errors
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/nonconvergence_test.go:producedNothing
+    to_name: producedNothing
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_id: internal/workflow/implementer_incomplete.go:routeIncompleteRetry
+    to_name: routeIncompleteRetry
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_name: strings
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W2AChangedCandidateIsRecognizedAsChanged
+    to_name: testing
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_name: As
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_name: Contains
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete~type
+    to_name: ImplementerIncomplete
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.Attempts
+    to_name: ImplementerIncomplete.Attempts
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete.go:ImplementerIncomplete.Owed
+    to_name: ImplementerIncomplete.Owed
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_name: T
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:accounting
+    to_name: accounting
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:answerCode
+    to_name: answerCode
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt.digest
+    to_name: c3Attempt.digest
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt.route
+    to_name: c3Attempt.route
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_name: c3Attempts
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_name: c3Classified
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/reviewresult.go:candidateOutcome.Accepted
+    to_name: candidateOutcome.Accepted
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:codeOn
+    to_name: codeOn
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_name: common.Fatalf
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig.cycles
+    to_name: completionRig.cycles
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig.run
+    to_name: completionRig.run
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete.go:cycleCompletion.Owed
+    to_name: cycleCompletion.Owed
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:equalInts
+    to_name: equalInts
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:equalStrings
+    to_name: equalStrings
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_name: errors
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:incompleteTurn~type
+    to_name: incompleteTurn
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:incompleteTurn.report
+    to_name: incompleteTurn.report
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete_test.go:newCompletionRig
+    to_name: newCompletionRig
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/nonconvergence_test.go:producedNothing
+    to_name: producedNothing
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_id: internal/workflow/implementer_incomplete.go:routeIncompleteRetry
+    to_name: routeIncompleteRetry
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_name: strings
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W4AnUnchangedCandidateWithAnOpenCodeFindingKeepsTheBoundedRetry
+    to_name: testing
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LAnAbsentIdentityIsUnknownNeverEqual
+    to_name: T
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LAnAbsentIdentityIsUnknownNeverEqual
+    to_id: internal/workflow/engine.go:candidateChanged
+    to_name: candidateChanged
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LAnAbsentIdentityIsUnknownNeverEqual
+    to_id: internal/workflow/engine.go:candidateIdentical
+    to_name: candidateIdentical
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LAnAbsentIdentityIsUnknownNeverEqual
+    to_id: internal/workflow/engine.go:candidateIdentity~type
+    to_name: candidateIdentity
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LAnAbsentIdentityIsUnknownNeverEqual
+    to_id: internal/workflow/engine.go:candidateIdentityUnknown
+    to_name: candidateIdentityUnknown
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LAnAbsentIdentityIsUnknownNeverEqual
+    to_name: common.Fatalf
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LAnAbsentIdentityIsUnknownNeverEqual
+    to_id: internal/workflow/engine.go:compareCandidateIdentity
+    to_name: compareCandidateIdentity
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LAnAbsentIdentityIsUnknownNeverEqual
+    to_name: testing
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    to_name: Contains
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    to_name: T
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt.route
+    to_name: c3Attempt.route
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_name: c3Attempts
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_name: c3Classified
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Identity.stalled
+    to_name: c3Identity.stalled
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_name: c3Rig
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    to_name: common.Fatalf
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig.run
+    to_name: completionRig.run
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    to_id: internal/workflow/nonconvergence_test.go:producedNothing
+    to_name: producedNothing
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    to_id: internal/workflow/implementer_incomplete.go:routeDiagnosis
+    to_name: routeDiagnosis
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    to_name: strings
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:TestC3W6LTheFirstAttemptOfACycleHasNoSameCyclePredecessor
+    to_name: testing
+    file: internal/workflow/implementer_incomplete_test.go
   - from: internal/workflow/implementer_incomplete_test.go:TestDF41A3W10BDiagnosesLeaveNoIncompleteContinuationForTheHandoff
     to_id: internal/config/config.go:Agent~type
     to_name: Agent
@@ -254874,6 +255285,275 @@ code_references:
     to_name: os
     file: internal/workflow/implementer_incomplete_test.go
   - from: internal/workflow/implementer_incomplete_test.go:architectDouble
+    to_name: testing
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_id: internal/validation/evidence.go:Bundle.DiffDigest
+    to_name: Bundle.DiffDigest
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_name: T
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt~type
+    to_name: c3Attempt
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt.digest
+    to_name: c3Attempt.digest
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt.route
+    to_name: c3Attempt.route
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_name: common.Fatalf
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_name: common.Helper
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig~type
+    to_name: completionRig
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig.stored
+    to_name: completionRig.stored
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_id: internal/workflow/implementer_incomplete.go:cycleCompletion~type
+    to_name: cycleCompletion
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_id: internal/workflow/implementer_incomplete.go:cycleCompletion.Steps
+    to_name: cycleCompletion.Steps
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_id: internal/workflow/implementer_incomplete.go:replayStep.Evidence
+    to_name: replayStep.Evidence
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_id: internal/workflow/implementer_incomplete.go:replayStep.Kind
+    to_name: replayStep.Kind
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_id: internal/workflow/implementer_incomplete.go:replayStep.Route
+    to_name: replayStep.Route
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_id: internal/workflow/implementer_incomplete.go:stepAccount
+    to_name: stepAccount
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_id: internal/workflow/implementer_incomplete.go:stepRoute
+    to_name: stepRoute
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Attempts
+    to_name: testing
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_name: T
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt~type
+    to_name: c3Attempt
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt.digest
+    to_name: c3Attempt.digest
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_name: c3Identities
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Identity~type
+    to_name: c3Identity
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Identity.classification
+    to_name: c3Identity.classification
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Identity.digest
+    to_name: c3Identity.digest
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Identity.preceding
+    to_name: c3Identity.preceding
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_name: common.Fatalf
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_name: common.Helper
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig~type
+    to_name: completionRig
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Classified
+    to_name: testing
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_name: Contains
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_name: Cut
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_name: Index
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_name: T
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt~type
+    to_name: c3Attempt
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt.digest
+    to_name: c3Attempt.digest
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Attempt.route
+    to_name: c3Attempt.route
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Identity~type
+    to_name: c3Identity
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Identity.classification
+    to_name: c3Identity.classification
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Identity.digest
+    to_name: c3Identity.digest
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Identity.preceding
+    to_name: c3Identity.preceding
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_id: internal/workflow/implementer_incomplete_test.go:c3Identity.stalled
+    to_name: c3Identity.stalled
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_id: internal/workflow/implementer_incomplete_test.go:c3IdentityMarker
+    to_name: c3IdentityMarker
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_name: common.Helper
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig~type
+    to_name: completionRig
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig.incompleteReports
+    to_name: completionRig.incompleteReports
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_id: internal/workflow/implementer_incomplete.go:routeDiagnosis
+    to_name: routeDiagnosis
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_name: strings
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Identities
+    to_name: testing
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/config/config.go:Command~type
+    to_name: Command
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/config/config.go:Command.Args
+    to_name: Command.Args
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/config/config.go:Command.Command
+    to_name: Command.Command
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/config/config.go:Config.Permissions
+    to_name: Config.Permissions
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/config/config.go:Config.Validation
+    to_name: Config.Validation
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/workflow/engine.go:Engine.Config
+    to_name: Engine.Config
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/config/config.go:Permissions.RunTests
+    to_name: Permissions.RunTests
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_name: T
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/config/config.go:Validation.Test
+    to_name: Validation.Test
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/workflow/implementer_incomplete_test.go:accounting
+    to_name: accounting
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/workflow/nonconvergence_test.go:answerF2WithTheRun
+    to_name: answerF2WithTheRun
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/workflow/implementer_incomplete_test.go:c3AnswerF3
+    to_name: c3AnswerF3
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_name: common.Helper
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig~type
+    to_name: completionRig
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/workflow/implementer_incomplete_test.go:completionRig.h
+    to_name: completionRig.h
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/workflow/nonconvergence_test.go:failingFirstFinding
+    to_name: failingFirstFinding
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_name: github.com/globulario/sensei-code/internal/config
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/workflow/implementer_incomplete_test.go:incompleteTurn~type
+    to_name: incompleteTurn
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/workflow/implementer_incomplete_test.go:incompleteTurn.report
+    to_name: incompleteTurn.report
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/workflow/implementer_incomplete_test.go:incompleteTurn.value
+    to_name: incompleteTurn.value
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/workflow/implementer_incomplete_test.go:newCompletionRig
+    to_name: newCompletionRig
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
+    to_id: internal/workflow/nonconvergence_test.go:secondEvidenceFinding
+    to_name: secondEvidenceFinding
+    file: internal/workflow/implementer_incomplete_test.go
+  - from: internal/workflow/implementer_incomplete_test.go:c3Rig
     to_name: testing
     file: internal/workflow/implementer_incomplete_test.go
   - from: internal/workflow/implementer_incomplete_test.go:completionRig.Resolve
@@ -266244,11 +266924,11 @@ code_references:
     to_name: Join
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestB2a2R238X8aANonMemberTaskCreatedCannotEstablishTheObjective
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestB2a2R238X8aANonMemberTaskCreatedCannotEstablishTheObjective
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestB2a2R238X8aANonMemberTaskCreatedCannotEstablishTheObjective
@@ -268281,10 +268961,10 @@ code_references:
     to_name: Interrupted.PlanAttemptRefusals
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
@@ -270233,11 +270913,11 @@ code_references:
     to_name: Join
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:b2a2Holder
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:b2a2Holder
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:b2a2Holder
@@ -288544,11 +289224,11 @@ code_references:
     to_name: Join
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:TestB2a1R7AResumeInAnotherEngineIsRefusedWhileTheTaskIsLive
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:TestB2a1R7AResumeInAnotherEngineIsRefusedWhileTheTaskIsLive
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:TestB2a1R7AResumeInAnotherEngineIsRefusedWhileTheTaskIsLive
@@ -290844,11 +291524,11 @@ code_references:
     to_name: Join
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
