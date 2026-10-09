@@ -3779,8 +3779,10 @@ func TestB2a2A2W10TheRestoredCoverageGateFailsClosedUnderAValidLineage(t *testin
 // refused the plan as test_edit_admission against that incomplete record:
 // the terminal reason named a missing grant and the operative authority
 // question was never asked. Every witness below drives the production entry
-// (resolveSuppliedPlan) over a pinned Git world, a real derivation record and
-// a Sensei MCP stub; nothing depends on a live model's wording.
+// (resolveSuppliedPlan; W6 the whole run, execute) over a pinned Git world, a
+// real derivation record and a Sensei MCP stub; every human answer is bound to
+// the plan attempt its question was asked about; nothing depends on a live
+// model's wording.
 
 const (
 	f4bEngine    = "internal/workflow/engine.go"
@@ -4025,8 +4027,9 @@ type f4bCase struct {
 	region string
 	// authored: verdict.go's per-file probe names an authored invariant.
 	authored bool
-	// answer, when set, is a human answer recorded for the route's condition
-	// and the plan's scope before the plan is routed.
+	// answer, when set, is the human's answer to the question the plan's own
+	// route asked and deferred, bound to that question's plan attempt; the
+	// plan is then routed again under it (route).
 	answer authority.Outcome
 }
 
@@ -4086,34 +4089,72 @@ func f4bWorldFor(t *testing.T, taskID string, c f4bCase) f4bResult {
 	return r
 }
 
-// route records c's answer, if any, and routes c's plan through the supplied
-// plan entry, deferring the question if the run reaches the rendezvous.
+// route routes c's plan through the supplied plan entry, deferring the
+// question if the run reaches the rendezvous. With an answer, the plan is
+// first routed unanswered so its question is asked and deferred; the answer is
+// then recorded as production records one -- bound to the PlanAttemptID the
+// deferred question names -- and the same plan is routed again under it.
 func (r f4bResult) route(t *testing.T, c f4bCase) f4bResult {
 	t.Helper()
-	e, taskID := r.e, r.taskID
-	if c.answer != "" {
-		human := f4bCondition(t, c)
-		if !human.RequiresHuman() {
-			t.Fatalf("premise: an answer is recorded only for a human-owned route: %+v", human)
-		}
-		label := "Authorize the architectural change described above"
-		if c.answer != authority.Authorize {
-			label = "Stop"
-		}
-		answer := authority.Resolution{TaskID: taskID, SessionID: "s1", Question: "May this change proceed?",
-			Condition: human.Condition, OptionID: "1", OptionLabel: label,
-			Scope: c.plan.Files, Outcome: c.answer, State: authority.Unsupported, DecidedAt: time.Now().UTC()}
-		if err := seedAppend(t, e.Store, event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, answer.OptionLabel, answer)); err != nil {
-			t.Fatal(err)
+	if c.answer == "" {
+		return r.routeOnce(t, c.plan)
+	}
+	deferred := r.routeOnce(t, c.plan)
+	if !deferred.asked || !errors.Is(deferred.err, errAuthorityDeferred) {
+		t.Fatalf("premise: an answer is recorded only for a question the plan's own route asked and deferred: asked=%v err=%v", deferred.asked, deferred.err)
+	}
+	deferred.answer(t, f4bQuestion(t, deferred.events), c.answer)
+	return deferred.routeOnce(t, c.plan)
+}
+
+// f4bQuestion is the last question the task deferred.
+func f4bQuestion(t *testing.T, evs []event.Event) DeferredAuthority {
+	t.Helper()
+	var q DeferredAuthority
+	found := false
+	for _, ev := range evs {
+		if ev.Kind == event.WorkflowAwaitingAuthority {
+			q, found = DeferredAuthority{}, true
+			if err := json.Unmarshal(ev.Payload, &q); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
+	if !found || strings.TrimSpace(q.PlanAttemptID) == "" {
+		t.Fatalf("premise: a deferred question naming its plan attempt was recorded: found=%v %+v", found, q)
+	}
+	return q
+}
+
+// answer records the human's answer to q, owned by the attempt q was asked
+// about (resolvedAuthority.PlanAttemptID), never by the legacy epoch reading.
+func (r f4bResult) answer(t *testing.T, q DeferredAuthority, outcome authority.Outcome) {
+	t.Helper()
+	label := "Authorize the architectural change described above"
+	if outcome != authority.Authorize {
+		label = "Stop"
+	}
+	answer := resolvedAuthority{Resolution: authority.Resolution{TaskID: r.taskID, SessionID: "s1", Question: q.Decision.Subject,
+		Condition: q.Condition, OptionID: "1", OptionLabel: label,
+		Scope: q.Scope, Outcome: outcome, State: authority.Unsupported, DecidedAt: time.Now().UTC()},
+		PlanAttemptID: q.PlanAttemptID}
+	if err := seedAppend(t, r.e.Store, event.New("s1", r.taskID, event.SourceUser, event.AuthorityResolved, label, answer)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// routeOnce routes plan through the supplied plan entry, deferring the
+// question if the run reaches the rendezvous.
+func (r f4bResult) routeOnce(t *testing.T, plan architectureDecision) f4bResult {
+	t.Helper()
+	e, taskID := r.e, r.taskID
 	type outcome struct {
 		d   architectureDecision
 		err error
 	}
 	done := make(chan outcome, 1)
 	go func() {
-		d, err := r.resolve(c.plan)
+		d, err := r.resolve(plan)
 		done <- outcome{d, err}
 	}()
 	r.admitted, r.err, r.asked, r.events = architectureDecision{}, nil, false, nil
@@ -4269,7 +4310,11 @@ func TestF4bW3HumanAuthorizationAloneGrantsNoTestEdit(t *testing.T) {
 	if f4bRefusalClass(r.err) != refusalTestEditAdmission || !strings.Contains(r.err.Error(), f4bRolesTest) || r.admitted.Plan != "" {
 		t.Fatalf("an authorization alone admitted an ungoverned test edit: err=%v plan=%q", r.err, r.admitted.Plan)
 	}
-	if _, rec := f4bRecord(r); f4bHolds(rec, f4bRolesTest, evidenceAuthored) || f4bHolds(rec, f4bRolesTest, evidenceDerived) {
+	a, rec := f4bRecord(r)
+	if q := f4bQuestion(t, r.events); a.ID == "" || q.PlanAttemptID != a.ID {
+		t.Fatalf("premise: the consumed answer is owned by the attempt it was asked about: question %q, routed %q", q.PlanAttemptID, a.ID)
+	}
+	if f4bHolds(rec, f4bRolesTest, evidenceAuthored) || f4bHolds(rec, f4bRolesTest, evidenceDerived) {
 		t.Fatalf("a grant was recorded for %s with no governance beside it: %+v", f4bRolesTest, rec.Grants)
 	}
 }
@@ -4285,6 +4330,9 @@ func TestF4bW4AuthoredEvidenceIsRederivedAfterAuthorization(t *testing.T) {
 		t.Fatalf("an authorised plan whose test edits are all governed was not admitted: asked=%v err=%v", r.asked, r.err)
 	}
 	a, rec := f4bRecord(r)
+	if q := f4bQuestion(t, r.events); q.PlanAttemptID != a.ID {
+		t.Fatalf("the authorization consumed was asked about attempt %q, not the admitted %q", q.PlanAttemptID, a.ID)
+	}
 	if rec.PlanAttemptID != a.ID || a.ID == "" || rec.World != r.w.world || a.World != r.w.world {
 		t.Fatalf("the authored grant is not bound to the authorised attempt and pinned world: record %q@%s, attempt %q@%s, world %s",
 			rec.PlanAttemptID, rec.World, a.ID, a.World, r.w.world)
@@ -4341,75 +4389,250 @@ func f4bCases(t *testing.T) map[string]f4bCase {
 	}
 }
 
-// W6 -- NOTHING IS EXECUTED BEFORE COMPLETE ADMISSION (clause 7). On every
-// W1-W5 path no implementer is invoked, no candidate or plan becomes
-// operative, nothing is published, and the pinned world is untouched; a path
-// that ends admitted has every declared test edit answered by its attempt's
-// own record, and every other path ends in an error.
+// f4bExecuteScript is the Sensei MCP an executed F4b run starts: the workspace
+// identity and an unscoped start gate that certify the run, and the scoped
+// region and per-file probes of df30ProductionScript over the case's state.
+const f4bExecuteScript = `
+LC_ALL=C; export LC_ALL
+git remote add origin https://github.com/globulario/sensei-code.git >/dev/null 2>&1
+exclude=$(git rev-parse --git-path info/exclude)
+grep -qx '/.sensei-code/' "$exclude" 2>/dev/null || printf '/.sensei-code/\n' >> "$exclude"
+reply() { printf 'Content-Length: %d\r\n\r\n%s' "${#1}" "$1"; }
+while :; do
+	len=
+	while IFS= read -r line; do
+		line=$(printf %s "$line" | tr -d '\r')
+		[ -z "$line" ] && break
+		case "$line" in Content-Length:*) len=$(printf %s "${line#Content-Length:}" | tr -dc 0-9) ;; esac
+	done
+	[ -n "$len" ] || exit 0
+	body=$(dd bs=1 count="$len" 2>/dev/null)
+	case "$body" in '{"jsonrpc":"2.0","id":'*) ;; *) continue ;; esac
+	rest=${body#'{"jsonrpc":"2.0","id":'}
+	id=${rest%%,*}
+	rest=${rest#*,}
+	case "$rest" in
+	'"method":"initialize"'*)
+		result='{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"f4b-stub","version":"0"}}' ;;
+	*'"name":"sensei_workspace_status"'*)
+		result='{"content":[{"type":"text","text":"composition_state: complete"}],"structuredContent":{"composition_state":"complete","binding":{"repository_domain":"github.com/globulario/sensei-code"}}}' ;;
+	*'"name":"awareness_preflight"'*)
+		case "$body" in
+		*'"files":[]'*)
+			result='{"content":[{"type":"text","text":"start"}],"structuredContent":{"status":"PREFLIGHT_STATUS_OK","risk_class":"LOW_RISK","authority":{"authoritative":true,"graph_freshness_state":"GRAPH_FRESHNESS_STATE_CURRENT","seed_state":"SEED_STATE_CURRENT","graph_build_commit":"fac399f8225f","source_repo_commit":"f56f5a305798"},"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},"coverage":{"direct_anchor_count":2,"file_count":1,"indexed_file_count":1,"sufficient":true}}}' ;;
+		*)
+			result=$(cat 'F4BSTATE/region.json')
+			for kind in examined unexamined; do
+				while IFS= read -r f; do
+					[ -n "$f" ] || continue
+					case "$body" in *"\"files\":[\"$f\"]"*) result=$(cat "F4BSTATE/$kind.json") ;; esac
+				done < "F4BSTATE/$kind"
+			done ;;
+		esac ;;
+	*)
+		result='{"content":[{"type":"text","text":"nothing"}],"structuredContent":{}}' ;;
+	esac
+	reply "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":$result}"
+done
+`
+
+// f4bExecuted is c driven through the production run: execute, from its start
+// gate through admission to implement, with c's plan supplied and every
+// provider turn answered by a counting runner (the supplied plan consults no
+// architect, so every turn is a worker's). With an answer the run is executed
+// twice, as route routes twice: once to ask and defer its own question, then,
+// with the answer recorded for that question's attempt, again.
+type f4bExecuted struct {
+	r       f4bResult
+	runner  *scriptedArchitect
+	runners *fixedResolver
+	events  []event.Event
+}
+
+func f4bExecute(t *testing.T, taskID string, c f4bCase) f4bExecuted {
+	t.Helper()
+	r := f4bWorldFor(t, taskID, c)
+	e := r.e
+	e.Config.Permissions.ReadRepository = true
+	e.Config.Permissions.CreateWorktrees = true
+	e.Config.Permissions.WriteCandidates = true
+	e.Config.Workflow.ReviewCycles = 1
+	e.Config.Sensei.Command = "sh"
+	e.Config.Sensei.Args = []string{"-c", strings.ReplaceAll(f4bExecuteScript, "F4BSTATE", r.w.state)}
+	e.Config.Architect.Name, e.Config.Architect.Command, e.Config.Architect.Graph = "claude", "true", "none"
+	e.Config.Implementors = append(e.Config.Implementors[:0], e.Config.Architect)
+	turns := make([]architectTurn, 64)
+	for i := range turns {
+		turns[i] = architectTurn{text: "nothing was changed"}
+	}
+	x := f4bExecuted{r: r, runner: &scriptedArchitect{turns: turns}}
+	x.runners = &fixedResolver{runner: x.runner, name: "claude"}
+	e.Runners = x.runners
+	e.supplyPlan(taskID, SuppliedPlan{decision: c.plan, Digest: "f4b"})
+	run := func() gapLoopRun {
+		return driveGapLoop(t, e, x.runner, r.w.world, taskID, "", func(ctx context.Context) {
+			runRootedTask(ctx, e, taskID, f4bObjective, SubmittedWithSuppliedPlan)
+		})
+	}
+	first := run()
+	x.events = append(x.events, first.events...)
+	if c.answer != "" {
+		if n := x.implementerTurns(); n != 0 || len(x.runner.prompts) != 0 {
+			t.Fatalf("a deferred run resolved %d implementer(s) and invoked %d provider turn(s) before its question was answered:\n%s", n, len(x.runner.prompts), gapLoopTrace(first.events))
+		}
+		if !hasKind(kindsOf(first.events), event.WorkflowAwaitingAuthority) {
+			t.Fatalf("premise: an answer is recorded only for a question the executed plan asked and deferred:\n%s", gapLoopTrace(first.events))
+		}
+		r.answer(t, f4bQuestion(t, first.events), c.answer)
+		x.events = append(x.events, run().events...)
+	}
+	return x
+}
+
+// implementerTurns is how many implementer invocations the run resolved.
+func (x f4bExecuted) implementerTurns() int {
+	n := 0
+	for _, spec := range x.runners.specs {
+		if string(spec.Role) == "implementer" {
+			n++
+		}
+	}
+	return n
+}
+
+// W6 -- NOTHING IS EXECUTED BEFORE COMPLETE ADMISSION (clause 7). Every W1-W5
+// path is driven through the production run (execute) with an instrumented
+// worker. A path admission refuses or defers resolves no implementer, invokes
+// no provider, cuts no candidate, mutates nothing and publishes nothing. A
+// path admission admits reaches the implementer only after its attempt's
+// recorded test-edit state answers every declared test edit: the first
+// implementer prompt already carries every declared test edit's grant.
 func TestF4bW6NothingExecutesBeforeCompleteAdmission(t *testing.T) {
-	forbidden := []event.Kind{event.AgentStarted, event.AgentFinished, event.RoleAssigned, event.HandoffCreated,
-		event.CandidateChanged, event.CandidateResolved, event.CandidateAudited, event.ChangeReported,
-		event.PullRequestOpened, event.ValidationRun, event.PlanProposed, event.CheckpointCommitted, event.WorkflowCompleted}
+	admits := map[string]bool{"w2-granted-authored": true, "w4-authorized-granted": true}
+	// Each refused or deferred path ends at its own admission outcome, so a
+	// run that stopped earlier -- at the start gate, say -- proves nothing.
+	ends := map[string]struct {
+		kind event.Kind
+		says string
+	}{
+		"w1-specimen":           {event.WorkflowAwaitingAuthority, "authority decision deferred"},
+		"w2-granted-missing":    {event.WorkflowFailed, "existing-test edit admission refused before implementation: test edit refuted: the candidate would mutate the existing test " + f4bRolesTest},
+		"w3-authorized-missing": {event.WorkflowFailed, "existing-test edit admission refused before implementation: test edit refuted: the candidate would mutate the existing test " + f4bRolesTest},
+		"w5-cannot-establish":   {event.WorkflowFailed, "cannot establish authority for this plan: "},
+		"w5-declined":           {event.WorkflowFailed, "the human declined this architectural change and the plan still requires it: "},
+	}
 	for name, c := range f4bCases(t) {
 		t.Run(name, func(t *testing.T) {
-			r := f4bRun(t, "task-f4b-w6-"+name, c)
-			kinds := kindsOf(r.events)
-			for _, k := range forbidden {
-				if hasKind(kinds, k) {
-					t.Fatalf("%s was emitted before the plan left admission: %v", k, kinds)
-				}
-			}
+			x := f4bExecute(t, "task-f4b-w6-"+name, c)
+			r, kinds := x.r, kindsOf(x.events)
 			ctx := t.Context()
 			if head, err := r.e.Repo.Head(ctx); err != nil || head != r.w.world {
 				t.Fatalf("the pinned world moved: %s %v", head, err)
 			}
 			if diff, err := r.e.Repo.Diff(ctx, r.w.world); err != nil || diff != "" {
-				t.Fatalf("a tracked file was mutated before admission: %v\n%s", err, diff)
+				t.Fatalf("a tracked file was mutated: %v\n%s", err, diff)
 			}
-			if cut, err := r.e.Repo.RevList(ctx, r.e.Repo.WorktreeBranch(r.taskID), 1); err == nil || len(cut) != 0 {
-				t.Fatalf("a candidate branch was cut before admission: %v", cut)
+			if hasKind(kinds, event.PullRequestOpened) {
+				t.Fatal("a pull request was opened")
 			}
-			if r.err == nil {
-				a, rec := f4bRecord(r)
-				if err := reconcileTestEditDeclarations(c.plan.TestEdits, c.plan.Files, a, rec); err != nil {
-					t.Fatalf("a plan left admission with a declared test edit unanswered: %v", err)
+			if !admits[name] {
+				if n := x.implementerTurns(); n != 0 || len(x.runner.prompts) != 0 {
+					t.Fatalf("a run admission did not admit resolved %d implementer(s) and invoked %d provider turn(s):\n%s", n, len(x.runner.prompts), gapLoopTrace(x.events))
 				}
-				if c.answer == "" && !f4bCondition(t, c).Granted() {
-					t.Fatal("a plan left admission on a route that was neither granted nor authorised")
+				for _, k := range []event.Kind{event.AgentStarted, event.AgentFinished, event.CandidateChanged, event.CandidateResolved,
+					event.CandidateAudited, event.ChangeReported, event.ValidationRun, event.PlanProposed, event.CheckpointCommitted, event.WorkflowCompleted} {
+					if hasKind(kinds, k) {
+						t.Fatalf("%s was emitted for a plan admission did not admit:\n%s", k, gapLoopTrace(x.events))
+					}
 				}
-			} else if r.admitted.Plan != "" {
-				t.Fatalf("a refused path returned a plan: %q", r.admitted.Plan)
+				if cut, err := r.e.Repo.RevList(ctx, r.e.Repo.WorktreeBranch(r.taskID), 1); err == nil || len(cut) != 0 {
+					t.Fatalf("a candidate branch was cut for a plan admission did not admit: %v", cut)
+				}
+				end, last := ends[name], event.Event{}
+				for _, ev := range x.events {
+					if ev.Kind == event.WorkflowAwaitingAuthority || ev.Kind == event.WorkflowFailed {
+						last = ev
+					}
+				}
+				if !hasKind(kinds, event.PlanAttemptStarted) || last.Kind != end.kind || !strings.Contains(last.Summary, end.says) {
+					t.Fatalf("the run did not end at its admission outcome %s %q:\n%s", end.kind, end.says, gapLoopTrace(x.events))
+				}
+				return
+			}
+			// The admitted control: implementation is reachable, and only
+			// after admission completed.
+			if x.implementerTurns() == 0 || len(x.runner.prompts) == 0 {
+				t.Fatalf("an admitted plan never reached the implementer:\n%s", gapLoopTrace(x.events))
+			}
+			if !hasKind(kinds, event.PlanProposed) {
+				t.Fatal("the implementer ran before the plan became operative")
+			}
+			a := r.e.operativePlanAttempt(r.taskID)
+			_, rec := r.e.recordedGrants(r.taskID, a.ID)
+			if err := reconcileTestEditDeclarations(c.plan.TestEdits, c.plan.Files, a, rec); err != nil || a.ID == "" {
+				t.Fatalf("the implementer ran for attempt %q whose record does not answer every declared test edit: %v", a.ID, err)
+			}
+			if !f4bHolds(rec, f4bRolesTest, evidenceAuthored) || len(rec.Grants) != len(c.plan.TestEdits) {
+				t.Fatalf("premise: the admitted record grants every declared test edit, %s by its authored governance: %+v", f4bRolesTest, rec.Grants)
+			}
+			// The grants the first implementer was handed are that complete
+			// record: it was invoked only once admission had recorded it.
+			if granted := renderTestEditGrants(r.e.testEditGrants(r.taskID)); granted == "" || !strings.Contains(x.runner.prompts[0], granted) {
+				t.Fatalf("the first implementer was not handed the complete test-edit grants:\n%s", granted)
 			}
 		})
 	}
 }
 
 // W7 -- INTERRUPTED RESTORATION PRESERVES THE OPERATIVE PLAN. The specimen's
-// deferred question names its own attempt; the authorization of it admits
-// that same attempt, never a substitute; and a restore refuses a test-edit
-// record from another attempt or another world for exactly that reason.
+// deferred question names its own attempt; the answer to it is owned by that
+// attempt and authorizes no other plan, however alike; the authorization
+// admits that same attempt, never a substitute; and a restore refuses a plan
+// binding that does not reproduce its attempt, and a test-edit record from
+// another attempt or another world, for exactly that reason.
 func TestF4bW7InterruptedRestorationPreservesTheOperativePlan(t *testing.T) {
-	// One task, one pinned world: the question is deferred, then answered, and
-	// the same plan is routed again under the answer.
+	// One task, one pinned world: the question is deferred, then answered for
+	// its own attempt, and plans are routed again under the answer.
 	c := f4bCase{plan: f4bSpecimen(t), region: f4bRegion, authored: true}
 	deferred := f4bWorldFor(t, "task-f4b-w7", c).route(t, c)
 	if !deferred.asked || !errors.Is(deferred.err, errAuthorityDeferred) {
 		t.Fatalf("premise: the specimen's question is deferred: %v", deferred.err)
 	}
-	var q DeferredAuthority
-	payloadOf(t, deferred.events, event.WorkflowAwaitingAuthority, &q)
+	q := f4bQuestion(t, deferred.events)
 	asked, _ := f4bRecord(deferred)
+	if q.PlanAttemptID != asked.ID {
+		t.Fatalf("premise: the question names the attempt it was asked about: %q, pending %q", q.PlanAttemptID, asked.ID)
+	}
+	deferred.answer(t, q, authority.Authorize)
 
-	c.answer = authority.Authorize
-	r := deferred.route(t, c)
-	if r.err != nil {
-		t.Fatalf("premise: the authorised specimen is admitted: %v", r.err)
+	// A materially different plan -- same consequence condition, same file
+	// scope, same test-edit declarations -- is its own attempt, and the answer
+	// owned by the specimen's attempt does not authorize it: it is asked anew.
+	substitute := f4bSpecimen(t)
+	substitute.Plan += " (a different plan under the same condition)"
+	substitute.Steps = append(append([]string(nil), substitute.Steps...), "Also rewrite every remaining fixture before review.")
+	if sub := f4bCondition(t, f4bCase{plan: substitute, region: f4bRegion}); sub.Condition != q.Condition || !sameFiles(substitute.Files, q.Scope) {
+		t.Fatalf("premise: the substitute reaches the same condition over the same scope: %+v", sub)
+	}
+	other := deferred.routeOnce(t, substitute)
+	reasked := f4bQuestion(t, other.events)
+	subAttempt, _ := f4bRecord(other)
+	if !other.asked || !errors.Is(other.err, errAuthorityDeferred) ||
+		subAttempt.ID == q.PlanAttemptID || reasked.PlanAttemptID != subAttempt.ID {
+		t.Fatalf("the specimen's authorization was consumed by a different plan: asked=%v err=%v attempt %q (answered %q)",
+			other.asked, other.err, subAttempt.ID, q.PlanAttemptID)
+	}
+
+	// The specimen itself, routed again, consumes its own answer.
+	r := other.routeOnce(t, c.plan)
+	if r.err != nil || r.asked {
+		t.Fatalf("premise: the authorised specimen is admitted without asking again: asked=%v err=%v", r.asked, r.err)
 	}
 	a, _ := f4bRecord(r)
 	if a.ID != asked.ID || q.PlanAttemptID != a.ID {
 		t.Fatalf("the authorization admitted a different plan attempt than the question was asked about: asked %q, question %q, admitted %q", asked.ID, q.PlanAttemptID, a.ID)
 	}
-	if strings.Join(a.Plan.Steps, "\n") != strings.Join(c.plan.Steps, "\n") || !sameFiles(a.Plan.Files, c.plan.Files) {
+	if strings.Join(a.Plan.Steps, "\n") != strings.Join(c.plan.Steps, "\n") || !sameFiles(a.Plan.Files, c.plan.Files) || a.Plan.Plan != c.plan.Plan {
 		t.Fatal("the admitted attempt is not the specimen plan")
 	}
 	if _, err := r.e.adoptPlanAttempt(fixtureCtx(r.e, r.taskID), r.taskID, f4bObjective, r.admitted); err != nil {
@@ -4428,6 +4651,35 @@ func TestF4bW7InterruptedRestorationPreservesTheOperativePlan(t *testing.T) {
 	if task.PlanAttemptID != a.ID {
 		t.Fatalf("the interrupted record does not name the admitted attempt: %q", task.PlanAttemptID)
 	}
+	// A tampered plan binding is refused, and nothing is installed in its
+	// place: neither a plan record whose plan no longer reproduces its
+	// attempt, nor one renamed to the substitute plan's attempt.
+	unbound := func(name string, task session.Interrupted, mutate func(map[string]any)) {
+		t.Helper()
+		var plan map[string]any
+		if err := json.Unmarshal(task.PlanRecord, &plan); err != nil || plan["plan_attempt_id"] != a.ID {
+			t.Fatalf("premise: the interrupted plan record is the admitted attempt's: %v %v", err, plan["plan_attempt_id"])
+		}
+		mutate(plan)
+		var err error
+		if task.PlanRecord, err = json.Marshal(plan); err != nil {
+			t.Fatal(err)
+		}
+		fresh := &Engine{}
+		err = fresh.restorePlanAttempt(task, r.w.world)
+		var refusal *RestorationRefusal
+		if !errors.As(err, &refusal) || refusal.Binding != RestorationPlanAttemptUnbound {
+			t.Fatalf("%s: restoration was not refused as %s: %v", name, RestorationPlanAttemptUnbound, err)
+		}
+		if op, pending := fresh.operativePlanAttempt(task.TaskID), fresh.pendingPlanAttempt(task.TaskID); op.ID != "" || pending.ID != "" {
+			t.Fatalf("%s: a refused restoration installed attempt %q (pending %q)", name, op.ID, pending.ID)
+		}
+	}
+	unbound("substituted plan", task, func(plan map[string]any) { plan["steps"] = substitute.Steps; plan["plan"] = substitute.Plan })
+	renamed := task
+	renamed.PlanAttemptID = subAttempt.ID
+	unbound("renamed attempt", renamed, func(plan map[string]any) { plan["plan_attempt_id"] = subAttempt.ID })
+
 	refusedAs := func(name string, task session.Interrupted, world, binding string) {
 		t.Helper()
 		fresh := &Engine{}
@@ -4449,16 +4701,16 @@ func TestF4bW7InterruptedRestorationPreservesTheOperativePlan(t *testing.T) {
 	// A record from another world.
 	refusedAs("other world", task, "0000000000000000000000000000000000000000", RestorationWorldMismatch)
 	// A record bound to another plan attempt.
-	other := task
+	stale := task
 	var raw map[string]any
 	if err := json.Unmarshal(task.TestEditRecord, &raw); err != nil || raw["plan_attempt_id"] != a.ID {
 		t.Fatalf("premise: the interrupted test-edit record is the admitted attempt's: %v %v", err, raw["plan_attempt_id"])
 	}
 	raw["plan_attempt_id"] = deferred.taskID + "-another-attempt"
-	if other.TestEditRecord, err = json.Marshal(raw); err != nil {
+	if stale.TestEditRecord, err = json.Marshal(raw); err != nil {
 		t.Fatal(err)
 	}
-	refusedAs("other attempt", other, r.w.world, RestorationPlanAttemptUnbound)
+	refusedAs("other attempt", stale, r.w.world, RestorationPlanAttemptUnbound)
 	// The intact record holds AUTHORED authority this resume cannot verify:
 	// refused as that, never installed as the DERIVED subset.
 	refusedAs("intact", task, r.w.world, RestorationAuthoredUnverifiable)
