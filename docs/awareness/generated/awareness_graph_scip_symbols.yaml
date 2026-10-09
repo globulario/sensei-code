@@ -1433,11 +1433,59 @@ code_symbols:
     file: cmd/sensei-code/mailbox_test.go
     symbol: TestTheMailboxFlagsResolveToOneTarget
     kind: function
+  - id: cmd/sensei-code/main.go:continueConversation
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/main.go
+    symbol: continueConversation
+    kind: function
+  - id: cmd/sensei-code/main.go:errConversationUnavailable
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/main.go
+    symbol: errConversationUnavailable
+    kind: var
   - id: cmd/sensei-code/main.go:fatalIf
     namespace: structural.scip
     language: go
     file: cmd/sensei-code/main.go
     symbol: fatalIf
+    kind: function
+  - id: cmd/sensei-code/main.go:interactiveDiscovery
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/main.go
+    symbol: interactiveDiscovery
+    kind: function
+  - id: cmd/sensei-code/main.go:interactiveStart.discovery
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/main.go
+    symbol: interactiveStart.discovery
+    kind: var
+  - id: cmd/sensei-code/main.go:interactiveStart.history
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/main.go
+    symbol: interactiveStart.history
+    kind: var
+  - id: cmd/sensei-code/main.go:interactiveStart.inventory
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/main.go
+    symbol: interactiveStart.inventory
+    kind: var
+  - id: cmd/sensei-code/main.go:interactiveStart~type
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/main.go
+    symbol: interactiveStart
+    kind: type
+  - id: cmd/sensei-code/main.go:loadConversation
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/main.go
+    symbol: loadConversation
     kind: function
   - id: cmd/sensei-code/main.go:main
     namespace: structural.scip
@@ -1997,6 +2045,12 @@ code_symbols:
     file: cmd/sensei-code/resume.go
     symbol: printBlockedObligation
     kind: function
+  - id: cmd/sensei-code/resume.go:printQuarantinedTasks
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: printQuarantinedTasks
+    kind: function
   - id: cmd/sensei-code/resume.go:printStandingQuestion
     namespace: structural.scip
     language: go
@@ -2057,6 +2111,12 @@ code_symbols:
     file: cmd/sensei-code/resume.go
     symbol: standsAnAnswerableQuestion
     kind: function
+  - id: cmd/sensei-code/resume.go:taskRefusalError
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: taskRefusalError
+    kind: function
   - id: cmd/sensei-code/resume.go:tasksOf
     namespace: structural.scip
     language: go
@@ -2087,6 +2147,18 @@ code_symbols:
     file: cmd/sensei-code/resume_blocked.go
     symbol: errResumeBehindQuestion
     kind: var
+  - id: cmd/sensei-code/resume_blocked.go:errTaskHistoryUnavailable
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_blocked.go
+    symbol: errTaskHistoryUnavailable
+    kind: var
+  - id: cmd/sensei-code/resume_blocked.go:errTaskQuarantined
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_blocked.go
+    symbol: errTaskQuarantined
+    kind: var
   - id: cmd/sensei-code/resume_blocked.go:laneArchitecture
     namespace: structural.scip
     language: go
@@ -2110,6 +2182,12 @@ code_symbols:
     language: go
     file: cmd/sensei-code/resume_blocked.go
     symbol: laneQuestion
+    kind: const
+  - id: cmd/sensei-code/resume_blocked.go:laneRefused
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_blocked.go
+    symbol: laneRefused
     kind: const
   - id: cmd/sensei-code/resume_blocked.go:laneReview
     namespace: structural.scip
@@ -2357,6 +2435,48 @@ code_symbols:
     file: cmd/sensei-code/resume_test.go
     symbol: TestB2a1W1FreshID
     kind: function
+  - id: cmd/sensei-code/resume_test.go:TestB2a2A2W1CLIResumeDoesNotConsumeAnUnrelatedSameTaskRecord
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_test.go
+    symbol: TestB2a2A2W1CLIResumeDoesNotConsumeAnUnrelatedSameTaskRecord
+    kind: function
+  - id: cmd/sensei-code/resume_test.go:TestB2a2C1W1QuarantinedTaskIsNeverReportedAbsent
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_test.go
+    symbol: TestB2a2C1W1QuarantinedTaskIsNeverReportedAbsent
+    kind: function
+  - id: cmd/sensei-code/resume_test.go:TestB2a2C1W6AnInvalidManifestNeverYieldsAnAbsentTask
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_test.go
+    symbol: TestB2a2C1W6AnInvalidManifestNeverYieldsAnAbsentTask
+    kind: function
+  - id: cmd/sensei-code/resume_test.go:TestB2a2R220W1AMalformedTaskIsRefusedFirstAndHidesNoOtherTask
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_test.go
+    symbol: TestB2a2R220W1AMalformedTaskIsRefusedFirstAndHidesNoOtherTask
+    kind: function
+  - id: cmd/sensei-code/resume_test.go:TestB2a2R220W5AFailedConversationLoadIsATypedRefusal
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_test.go
+    symbol: TestB2a2R220W5AFailedConversationLoadIsATypedRefusal
+    kind: function
+  - id: cmd/sensei-code/resume_test.go:TestB2a2R220W6TUIAndCLIAgreeOnMembershipAndRefusal
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_test.go
+    symbol: TestB2a2R220W6TUIAndCLIAgreeOnMembershipAndRefusal
+    kind: function
+  - id: cmd/sensei-code/resume_test.go:TestB2a2R220W6TUIAndCLIRefuseASplitTaskAlike
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_test.go
+    symbol: TestB2a2R220W6TUIAndCLIRefuseASplitTaskAlike
+    kind: function
   - id: cmd/sensei-code/resume_test.go:TestCountStandingCountsOnlyTasksThatAreAsking
     namespace: structural.scip
     language: go
@@ -2429,11 +2549,29 @@ code_symbols:
     file: cmd/sensei-code/resume_test.go
     symbol: answerer
     kind: function
+  - id: cmd/sensei-code/resume_test.go:assertLogUntouched
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_test.go
+    symbol: assertLogUntouched
+    kind: function
   - id: cmd/sensei-code/resume_test.go:authorityRequired
     namespace: structural.scip
     language: go
     file: cmd/sensei-code/resume_test.go
     symbol: authorityRequired
+    kind: function
+  - id: cmd/sensei-code/resume_test.go:b2a2Deferred
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_test.go
+    symbol: b2a2Deferred
+    kind: function
+  - id: cmd/sensei-code/resume_test.go:b2a2Quarantined
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_test.go
+    symbol: b2a2Quarantined
     kind: function
   - id: cmd/sensei-code/resume_test.go:deferOnly.DeferAuthority
     namespace: structural.scip
@@ -2518,6 +2656,12 @@ code_symbols:
     language: go
     file: cmd/sensei-code/resume_test.go
     symbol: standing
+    kind: function
+  - id: cmd/sensei-code/resume_test.go:tuiResumable
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_test.go
+    symbol: tuiResumable
     kind: function
   - id: cmd/sensei-code/resume_test.go:writeRawSession
     namespace: structural.scip
@@ -36053,6 +36197,12 @@ code_symbols:
     file: internal/session/awaitingreview_test.go
     symbol: TestAnUnreadableVerdictDoesNotDischargeTheObligation
     kind: function
+  - id: internal/session/awaitingreview_test.go:TestB2a2A2W7W8W9ContinuationsArePreservedAcrossTheLineage
+    namespace: structural.scip
+    language: go
+    file: internal/session/awaitingreview_test.go
+    symbol: TestB2a2A2W7W8W9ContinuationsArePreservedAcrossTheLineage
+    kind: function
   - id: internal/session/awaitingreview_test.go:TestTheLatestTransitionWinsRatherThanTheFirst
     namespace: structural.scip
     language: go
@@ -38039,6 +38189,54 @@ code_symbols:
     file: internal/session/session_lineage_test.go
     symbol: TestB2a1W9LockRefusesACancelledCallerOnAFreeLock
     kind: function
+  - id: internal/session/session_lineage_test.go:TestB2a2P1W1ForeignAuthorityResolvedCannotClearAStandingQuestion
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestB2a2P1W1ForeignAuthorityResolvedCannotClearAStandingQuestion
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestB2a2P1W2PreRootCompletionCannotSuppressALaterRootedTask
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestB2a2P1W2PreRootCompletionCannotSuppressALaterRootedTask
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestB2a2P1W3ForeignTerminalCannotCompleteTheCanonicalTask
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestB2a2P1W3ForeignTerminalCannotCompleteTheCanonicalTask
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestB2a2P1W4ForeignPlanAndGrantRecordsRestoreNoAuthority
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestB2a2P1W4ForeignPlanAndGrantRecordsRestoreNoAuthority
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestB2a2P1W5ForeignOnlyHistoryIsATypedRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestB2a2P1W5ForeignOnlyHistoryIsATypedRefusal
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestB2a2P1W5MalformedHistoryIsATypedRefusalThatHidesNothingElse
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestB2a2P1W5MalformedHistoryIsATypedRefusalThatHidesNothingElse
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestB2a2P1W6ValidCanonicalHistoryKeepsNormalDiscovery
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestB2a2P1W6ValidCanonicalHistoryKeepsNormalDiscovery
+    kind: function
+  - id: internal/session/session_lineage_test.go:TestB2a2R220W5AnUnreadableRecordIsNeverAnEmptyHistory
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: TestB2a2R220W5AnUnreadableRecordIsNeverAnEmptyHistory
+    kind: function
   - id: internal/session/session_lineage_test.go:TestD5W10ManifestDirectorySyncIsRealAndPrecedesSuccess
     namespace: structural.scip
     language: go
@@ -38135,6 +38333,12 @@ code_symbols:
     file: internal/session/session_lineage_test.go
     symbol: authorized
     kind: function
+  - id: internal/session/session_lineage_test.go:b2a2Repo
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: b2a2Repo
+    kind: function
   - id: internal/session/session_lineage_test.go:bind
     namespace: structural.scip
     language: go
@@ -38183,6 +38387,12 @@ code_symbols:
     file: internal/session/session_lineage_test.go
     symbol: cancelledContext
     kind: type
+  - id: internal/session/session_lineage_test.go:canonicalTaskOf
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: canonicalTaskOf
+    kind: function
   - id: internal/session/session_lineage_test.go:closableContext.Deadline
     namespace: structural.scip
     language: go
@@ -38303,6 +38513,12 @@ code_symbols:
     file: internal/session/session_lineage_test.go
     symbol: d5Unrelated
     kind: const
+  - id: internal/session/session_lineage_test.go:discovered
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: discovered
+    kind: function
   - id: internal/session/session_lineage_test.go:errLineageTestCancelled
     namespace: structural.scip
     language: go
@@ -38416,6 +38632,12 @@ code_symbols:
     language: go
     file: internal/session/session_lineage_test.go
     symbol: rawBinding
+    kind: function
+  - id: internal/session/session_lineage_test.go:rawTaskOf
+    namespace: structural.scip
+    language: go
+    file: internal/session/session_lineage_test.go
+    symbol: rawTaskOf
     kind: function
   - id: internal/session/session_lineage_test.go:recordOf
     namespace: structural.scip
@@ -38531,6 +38753,12 @@ code_symbols:
     file: internal/session/store.go
     symbol: Active
     kind: type
+  - id: internal/session/store.go:CanonicalInterrupted
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: CanonicalInterrupted
+    kind: function
   - id: internal/session/store.go:Checkpoint.CheckpointID
     namespace: structural.scip
     language: go
@@ -38783,11 +39011,29 @@ code_symbols:
     file: internal/session/store.go
     symbol: Discovery.Records
     kind: var
+  - id: internal/session/store.go:Discovery.ResumableIn
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Discovery.ResumableIn
+    kind: method
+  - id: internal/session/store.go:Discovery.ResumableRecord
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Discovery.ResumableRecord
+    kind: method
   - id: internal/session/store.go:Discovery.ScopedTo
     namespace: structural.scip
     language: go
     file: internal/session/store.go
     symbol: Discovery.ScopedTo
+    kind: method
+  - id: internal/session/store.go:Discovery.TaskRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Discovery.TaskRefusal
     kind: method
   - id: internal/session/store.go:Discovery~type
     namespace: structural.scip
@@ -38926,6 +39172,12 @@ code_symbols:
     language: go
     file: internal/session/store.go
     symbol: ErrSessionlessRoot
+    kind: var
+  - id: internal/session/store.go:ErrTaskHistoryUnavailable
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ErrTaskHistoryUnavailable
     kind: var
   - id: internal/session/store.go:ErrTaskInvocationLeased
     namespace: structural.scip
@@ -39137,6 +39389,12 @@ code_symbols:
     file: internal/session/store.go
     symbol: Interrupted.TestEditRecord
     kind: var
+  - id: internal/session/store.go:Interrupted.Unavailable
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Interrupted.Unavailable
+    kind: var
   - id: internal/session/store.go:Interrupted~type
     namespace: structural.scip
     language: go
@@ -39166,6 +39424,12 @@ code_symbols:
     language: go
     file: internal/session/store.go
     symbol: PreparedAt
+    kind: function
+  - id: internal/session/store.go:ProjectTaskHistory
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: ProjectTaskHistory
     kind: function
   - id: internal/session/store.go:QuarantineActive
     namespace: structural.scip
@@ -39611,6 +39875,12 @@ code_symbols:
     file: internal/session/store.go
     symbol: Store.ReadRecord
     kind: method
+  - id: internal/session/store.go:Store.TaskHistory
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Store.TaskHistory
+    kind: method
   - id: internal/session/store.go:Store.TaskSessionLineage
     namespace: structural.scip
     language: go
@@ -39754,6 +40024,150 @@ code_symbols:
     language: go
     file: internal/session/store.go
     symbol: Store
+    kind: type
+  - id: internal/session/store.go:TaskHistory.Foreign
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistory.Foreign
+    kind: var
+  - id: internal/session/store.go:TaskHistory.Lineage
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistory.Lineage
+    kind: var
+  - id: internal/session/store.go:TaskHistory.Members
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistory.Members
+    kind: var
+  - id: internal/session/store.go:TaskHistory.PreRoot
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistory.PreRoot
+    kind: var
+  - id: internal/session/store.go:TaskHistory.Recorded
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistory.Recorded
+    kind: var
+  - id: internal/session/store.go:TaskHistory.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistory.TaskID
+    kind: var
+  - id: internal/session/store.go:TaskHistoryForeignOnly
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryForeignOnly
+    kind: const
+  - id: internal/session/store.go:TaskHistoryMalformed
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryMalformed
+    kind: const
+  - id: internal/session/store.go:TaskHistoryQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryQuarantined
+    kind: const
+  - id: internal/session/store.go:TaskHistoryRefusal.At
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryRefusal.At
+    kind: var
+  - id: internal/session/store.go:TaskHistoryRefusal.Detail
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryRefusal.Detail
+    kind: var
+  - id: internal/session/store.go:TaskHistoryRefusal.Error
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryRefusal.Error
+    kind: method
+  - id: internal/session/store.go:TaskHistoryRefusal.Foreign
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryRefusal.Foreign
+    kind: var
+  - id: internal/session/store.go:TaskHistoryRefusal.Malformed
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryRefusal.Malformed
+    kind: var
+  - id: internal/session/store.go:TaskHistoryRefusal.Members
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryRefusal.Members
+    kind: var
+  - id: internal/session/store.go:TaskHistoryRefusal.PreRoot
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryRefusal.PreRoot
+    kind: var
+  - id: internal/session/store.go:TaskHistoryRefusal.Reason
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryRefusal.Reason
+    kind: var
+  - id: internal/session/store.go:TaskHistoryRefusal.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryRefusal.TaskID
+    kind: var
+  - id: internal/session/store.go:TaskHistoryRefusal.Unwrap
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryRefusal.Unwrap
+    kind: method
+  - id: internal/session/store.go:TaskHistoryRefusal.cause
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryRefusal.cause
+    kind: var
+  - id: internal/session/store.go:TaskHistoryRefusal~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryRefusal
+    kind: type
+  - id: internal/session/store.go:TaskHistoryUnavailableReason~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryUnavailableReason
+    kind: type
+  - id: internal/session/store.go:TaskHistoryUnreadable
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistoryUnreadable
+    kind: const
+  - id: internal/session/store.go:TaskHistory~type
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: TaskHistory
     kind: type
   - id: internal/session/store.go:TaskLease.Release
     namespace: structural.scip
@@ -42323,6 +42737,18 @@ code_symbols:
     file: internal/tui/clipboard_test.go
     symbol: TestB2a1RunAppendHaltEndsTheRunInModelUpdate
     kind: function
+  - id: internal/tui/clipboard_test.go:TestB2a2R220W6TUIResumeHonoursTheCanonicalRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: TestB2a2R220W6TUIResumeHonoursTheCanonicalRefusal
+    kind: function
+  - id: internal/tui/clipboard_test.go:TestB2a2R238X2bTUIResumeEligibilityIsDecidedByLineageMembersAlone
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: TestB2a2R238X2bTUIResumeEligibilityIsDecidedByLineageMembersAlone
+    kind: function
   - id: internal/tui/clipboard_test.go:TestClipboardDoesNotShellOutToAHelperBinary
     namespace: structural.scip
     language: go
@@ -42389,6 +42815,12 @@ code_symbols:
     file: internal/tui/clipboard_test.go
     symbol: ctrlKey
     kind: function
+  - id: internal/tui/clipboard_test.go:emptyInventory
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: emptyInventory
+    kind: var
   - id: internal/tui/clipboard_test.go:fakeHalt.Ended
     namespace: structural.scip
     language: go
@@ -42443,6 +42875,12 @@ code_symbols:
     file: internal/tui/clipboard_test.go
     symbol: haltedRun
     kind: function
+  - id: internal/tui/clipboard_test.go:inventoryParam
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: inventoryParam
+    kind: function
   - id: internal/tui/clipboard_test.go:newTestModel
     namespace: structural.scip
     language: go
@@ -42454,6 +42892,18 @@ code_symbols:
     language: go
     file: internal/tui/clipboard_test.go
     symbol: one
+    kind: function
+  - id: internal/tui/clipboard_test.go:proposed
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: proposed
+    kind: function
+  - id: internal/tui/clipboard_test.go:resumeTyped
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: resumeTyped
     kind: function
   - id: internal/tui/clipboard_test.go:transcriptOf
     namespace: structural.scip
@@ -42526,6 +42976,12 @@ code_symbols:
     language: go
     file: internal/tui/model.go
     symbol: Model.currentTask
+    kind: var
+  - id: internal/tui/model.go:Model.discoveryRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/tui/model.go
+    symbol: Model.discoveryRefusal
     kind: var
   - id: internal/tui/model.go:Model.engine
     namespace: structural.scip
@@ -45647,6 +46103,12 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: taskResolutions.settlements
     kind: var
+  - id: internal/workflow/authority.go:taskResolutions.unavailable
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: taskResolutions.unavailable
+    kind: var
   - id: internal/workflow/authority.go:taskResolutions.view
     namespace: structural.scip
     language: go
@@ -45802,6 +46264,12 @@ code_symbols:
     language: go
     file: internal/workflow/authority_resume_identity_test.go
     symbol: TestAnUnprovenScopeStillAdmitsAHumanStop
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestB2a2A2W10TheRestoredCoverageGateFailsClosedUnderAValidLineage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestB2a2A2W10TheRestoredCoverageGateFailsClosedUnderAValidLineage
     kind: function
   - id: internal/workflow/authority_resume_identity_test.go:TestDF30RestoreBoundaryALegacyCoverageRecordIsRefusedBeforeAnyoneIsAsked
     namespace: structural.scip
@@ -49001,6 +49469,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.bindLineage
     kind: method
+  - id: internal/workflow/engine.go:Engine.canonicalTask
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.canonicalTask
+    kind: method
   - id: internal/workflow/engine.go:Engine.checkpointAttempt
     namespace: structural.scip
     language: go
@@ -49205,6 +49679,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.halted
     kind: method
+  - id: internal/workflow/engine.go:Engine.historyUnavailable
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.historyUnavailable
+    kind: method
   - id: internal/workflow/engine.go:Engine.implement
     namespace: structural.scip
     language: go
@@ -49246,6 +49726,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.markObserving
+    kind: method
+  - id: internal/workflow/engine.go:Engine.memberHistory
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.memberHistory
     kind: method
   - id: internal/workflow/engine.go:Engine.mu
     namespace: structural.scip
@@ -49294,6 +49780,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.noteScopedPreflight
+    kind: method
+  - id: internal/workflow/engine.go:Engine.noteTaskHistoryUnavailable
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.noteTaskHistoryUnavailable
     kind: method
   - id: internal/workflow/engine.go:Engine.noteUnprovenAuthorityScope
     namespace: structural.scip
@@ -49924,6 +50416,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.takeRestoredRefusals
+    kind: method
+  - id: internal/workflow/engine.go:Engine.taskHistoryRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.taskHistoryRefusal
     kind: method
   - id: internal/workflow/engine.go:Engine.taskState
     namespace: structural.scip
@@ -50813,6 +51311,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: deferred
     kind: const
+  - id: internal/workflow/engine.go:deferredAuthorityRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: deferredAuthorityRefusal
+    kind: function
   - id: internal/workflow/engine.go:diffSections
     namespace: structural.scip
     language: go
@@ -52253,17 +52757,41 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: restorationSubjectCoverageEpisode
     kind: const
+  - id: internal/workflow/engine.go:restorationSubjectDeferredAuthority
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: restorationSubjectDeferredAuthority
+    kind: const
   - id: internal/workflow/engine.go:restorationSubjectPlanAdmissionRefusal
     namespace: structural.scip
     language: go
     file: internal/workflow/engine.go
     symbol: restorationSubjectPlanAdmissionRefusal
     kind: const
+  - id: internal/workflow/engine.go:restorationSubjectResumeLane
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: restorationSubjectResumeLane
+    kind: const
+  - id: internal/workflow/engine.go:restorationSubjectTaskHistory
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: restorationSubjectTaskHistory
+    kind: const
   - id: internal/workflow/engine.go:restoredRefusalsPrompt
     namespace: structural.scip
     language: go
     file: internal/workflow/engine.go
     symbol: restoredRefusalsPrompt
+    kind: function
+  - id: internal/workflow/engine.go:resumeLaneRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: resumeLaneRefusal
     kind: function
   - id: internal/workflow/engine.go:retainedCandidate
     namespace: structural.scip
@@ -52798,6 +53326,36 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: taskContext
+    kind: type
+  - id: internal/workflow/engine.go:taskHistoryRestorationRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: taskHistoryRestorationRefusal
+    kind: function
+  - id: internal/workflow/engine.go:taskHistoryUnavailable.RestorationRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: taskHistoryUnavailable.RestorationRefusal
+    kind: var
+  - id: internal/workflow/engine.go:taskHistoryUnavailable.Unwrap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: taskHistoryUnavailable.Unwrap
+    kind: method
+  - id: internal/workflow/engine.go:taskHistoryUnavailable.cause
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: taskHistoryUnavailable.cause
+    kind: var
+  - id: internal/workflow/engine.go:taskHistoryUnavailable~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: taskHistoryUnavailable
     kind: type
   - id: internal/workflow/engine.go:taskPlanAttempts.operative
     namespace: structural.scip
@@ -56663,6 +57221,12 @@ code_symbols:
     file: internal/workflow/mode_test.go
     symbol: TestAuthorityDecisionsAreReadFromTheRecordNotReinvented
     kind: function
+  - id: internal/workflow/mode_test.go:TestB2a2R220W8EveryAuthorityBearingReaderReachesTheCanonicalProjection
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/mode_test.go
+    symbol: TestB2a2R220W8EveryAuthorityBearingReaderReachesTheCanonicalProjection
+    kind: function
   - id: internal/workflow/mode_test.go:TestGovernedEntryRequiresTheCanonicalPrerequisites
     namespace: structural.scip
     language: go
@@ -56716,6 +57280,12 @@ code_symbols:
     language: go
     file: internal/workflow/mode_test.go
     symbol: TestWorkerSwitchCarriesSemanticStateNotJustProse
+    kind: function
+  - id: internal/workflow/mode_test.go:canonicalSource
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/mode_test.go
+    symbol: canonicalSource
     kind: function
   - id: internal/workflow/mode_test.go:exprPath
     namespace: structural.scip
@@ -57785,6 +58355,42 @@ code_symbols:
     file: internal/workflow/planattempt_test.go
     symbol: TestAnAdmissionRefusalThatCannotBeRecordedIsNotSuppressed
     kind: function
+  - id: internal/workflow/planattempt_test.go:TestB2a2A2W6TheGapLedgerKeepsAncestorsAndIgnoresForeignRecords
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestB2a2A2W6TheGapLedgerKeepsAncestorsAndIgnoresForeignRecords
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestB2a2R220W5AFailedHistoryReadIsNeverEmptyAuthoritativeState
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestB2a2R220W5AFailedHistoryReadIsNeverEmptyAuthoritativeState
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestB2a2R220W5AnAbsentOrVanishedRecordIsNeverEmptyAuthority
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestB2a2R220W5AnAbsentOrVanishedRecordIsNeverEmptyAuthority
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestB2a2R220W7ResumeRefusesWhatTheCanonicalHistoryDoesNotHold
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestB2a2R220W7ResumeRefusesWhatTheCanonicalHistoryDoesNotHold
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestB2a2R220W7ResumeTaskConsumesOnlyThePostBindCanonicalProjection
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestB2a2R220W7ResumeTaskConsumesOnlyThePostBindCanonicalProjection
+    kind: function
+  - id: internal/workflow/planattempt_test.go:TestB2a2R238X8aANonMemberTaskCreatedCannotEstablishTheObjective
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: TestB2a2R238X8aANonMemberTaskCreatedCannotEstablishTheObjective
+    kind: function
   - id: internal/workflow/planattempt_test.go:TestEveryAdmissionRefusalIsRecordedAgainstItsAttempt
     namespace: structural.scip
     language: go
@@ -57965,6 +58571,54 @@ code_symbols:
     file: internal/workflow/planattempt_test.go
     symbol: attemptPlan
     kind: function
+  - id: internal/workflow/planattempt_test.go:b2a2Answer
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: b2a2Answer
+    kind: function
+  - id: internal/workflow/planattempt_test.go:b2a2Holder
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: b2a2Holder
+    kind: function
+  - id: internal/workflow/planattempt_test.go:b2a2Projected
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: b2a2Projected
+    kind: function
+  - id: internal/workflow/planattempt_test.go:b2a2Question
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: b2a2Question
+    kind: function
+  - id: internal/workflow/planattempt_test.go:b2a2Raw
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: b2a2Raw
+    kind: function
+  - id: internal/workflow/planattempt_test.go:b2a2RefusedAs
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: b2a2RefusedAs
+    kind: function
+  - id: internal/workflow/planattempt_test.go:b2a2Resume
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: b2a2Resume
+    kind: function
+  - id: internal/workflow/planattempt_test.go:b2a2Task
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/planattempt_test.go
+    symbol: b2a2Task
+    kind: const
   - id: internal/workflow/planattempt_test.go:beforeStartRefusal
     namespace: structural.scip
     language: go
