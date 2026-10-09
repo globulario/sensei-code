@@ -172,15 +172,15 @@ func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event
 	if discovery != nil {
 		m.lines = append(m.lines, errorStyle.Render("✗ RESUME"),
 			"  the interrupted tasks of this session could not be established: "+discovery.Error(), "")
-	} else if n := len(m.resumable); n > 0 && m.resumable[n-1].Unavailable != nil {
+	} else if n := len(resumable); n > 0 && resumable[n-1].Unavailable != nil {
 		m.lines = append(m.lines,
 			authorityStyle.Render("⚑ UNAVAILABLE"),
-			"  task "+m.resumable[n-1].TaskID+": "+m.resumable[n-1].Unavailable.Error(),
+			"  task "+resumable[n-1].TaskID+": "+resumable[n-1].Unavailable.Error(),
 			dimStyle.Render("  it is shown and is not continued"), "")
 	} else if n > 0 {
 		m.lines = append(m.lines,
 			authorityStyle.Render("⚑ INTERRUPTED"),
-			"  "+m.resumable[n-1].Task,
+			"  "+resumable[n-1].Task,
 			dimStyle.Render("  its candidate is still on disk · /resume to continue it"), "")
 	}
 	return m
