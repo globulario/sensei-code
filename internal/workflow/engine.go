@@ -7009,7 +7009,7 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 	// the answer exactly as it would be refused before a gate existed. The one
 	// post-authorization continuation decides it, from the refreshed action.
 	unexaminedAfterAnswer := func() error {
-		gap, _, _, err := e.afterHumanAuthorization(sc, start, taskID, task, routing, action, scoped, d)
+		gap, _, _, err := e.afterHumanAuthorization(ctx, sc, start, taskID, task, routing, action, scoped, d)
 		if err != nil {
 			return err
 		}
@@ -7519,7 +7519,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 					// before another decision is taken about it, and the
 					// reconciled routing alone decides whether the plan
 					// continues.
-					gap, probed, gapResolution, err := e.afterHumanAuthorization(sc, start, taskID, task, routing, action, scoped, d)
+					gap, probed, gapResolution, err := e.afterHumanAuthorization(ctx, sc, start, taskID, task, routing, action, scoped, d)
 					if err != nil {
 						return architectureDecision{}, err
 					}
@@ -7556,6 +7556,12 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 								}
 								e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 									"proceeding on the human's earlier authorization for: "+stillOpen.Condition, nil))
+								// afterHumanAuthorization returned this gap before
+								// reconciling: the test edits are admitted here,
+								// before the plan can reach a worker.
+								if err := e.admitTestEdits(taskID, d); err != nil {
+									return architectureDecision{}, err
+								}
 								return d, nil
 							}
 							e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(stillOpen), nil))
@@ -8847,7 +8853,8 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// it, the caller that consumes the recorded answer asks
 	// afterHumanAuthorization, which probes then. Nothing about the answer
 	// is read in this function.
-	if probeNeeded(routeAuthorityForAction(scoped, claims, action), false) {
+	probed := probeNeeded(routeAuthorityForAction(scoped, claims, action), false)
+	if probed {
 		unexamined, docs, prod, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
 		if err != nil {
 			return Routing{}, sensei.PreflightDecision{}, Action{}, err
@@ -8899,13 +8906,25 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// plan is refused here. Before this, a declared path with no grant was
 	// projected nothing and was found only by candidate inspection, after an
 	// implementer had spent a cycle on it (DF-37b; objective 61, run 3).
-	if err := e.reconcileTestEditGrants(taskID, d); err != nil {
-		return Routing{}, sensei.PreflightDecision{}, Action{}, err
-	}
-	if err := projectTestEditRefusals(d.TestEdits, e.testEditGrants(taskID)); err != nil {
-		// A refusal of this attempt, decided by its own recorded grants.
-		err = refusePlanAdmission(refusalTestEditAdmission, d.TestEdits, err)
-		return Routing{}, sensei.PreflightDecision{}, Action{}, err
+	//
+	// ONLY WHERE THE AUTHORED INSTRUMENT WAS CONSULTED (F4b, RULING-258). On a
+	// route that did not probe -- human-owned, refused, a gap -- the authored
+	// grants were deliberately never computed (#115), so a missing grant here
+	// would describe evidence nobody collected, and the refusal it produced
+	// named the grant instead of the route that stopped the probe (plan attempt
+	// e3d912a97f5d). That route is returned as it is: a refusal keeps its own
+	// type, and a human-owned route is asked about its own condition. A
+	// human-owned route reaches a worker only through afterHumanAuthorization,
+	// which probes, derives the authored grants and reconciles before returning.
+	if probed {
+		if err := e.reconcileTestEditGrants(taskID, d); err != nil {
+			return Routing{}, sensei.PreflightDecision{}, Action{}, err
+		}
+		if err := projectTestEditRefusals(d.TestEdits, e.testEditGrants(taskID)); err != nil {
+			// A refusal of this attempt, decided by its own recorded grants.
+			err = refusePlanAdmission(refusalTestEditAdmission, d.TestEdits, err)
+			return Routing{}, sensei.PreflightDecision{}, Action{}, err
+		}
 	}
 	// Read again: the AUTHORED grants recorded above belong to this attempt too.
 	claims, contradicted := e.premisesUnderRecordedAuthority(taskID, d)
@@ -9192,16 +9211,24 @@ func (e *Engine) unexaminedPlannedFiles(sc *sensei.Client, start certifiedStart,
 // at all; the region's coverage question is asked again here, after the
 // answer, by the same disposition (afterAuthorization). The action returned
 // carries the refreshed facts.
-func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart, taskID, task string, routing Routing, action Action, scoped sensei.PreflightDecision, d architectureDecision) (Routing, Action, AuthorityResolution, error) {
+func (e *Engine) afterHumanAuthorization(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, routing Routing, action Action, scoped sensei.PreflightDecision, d architectureDecision) (Routing, Action, AuthorityResolution, error) {
 	after := routing
 	if probeNeeded(routing, true) {
-		unexamined, docs, _, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
+		unexamined, docs, prod, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
 		if err != nil {
 			return Routing{}, action, AuthorityResolution{}, err
 		}
 		action.Unexamined = unexamined
 		action.Examined = examinedOf(action, unexamined)
 		action.DocumentEvidence = docs
+		// The authored instrument routePlan did not consult on this route, now
+		// that the probe has run: grants derived by the same predicate, for the
+		// same pending plan attempt, at the world its coverage was computed in.
+		// The answer itself grants nothing -- a test edit is granted here only
+		// where the probe establishes authored governance beside it.
+		if err := e.recordAuthoredTestEditGrants(ctx, taskID, d, prod, &action); err != nil {
+			return Routing{}, action, AuthorityResolution{}, err
+		}
 		after = afterAuthorization(routing, true, action, scoped)
 	}
 	// The same gap identity routePlan would have built: completed with the
@@ -9212,7 +9239,74 @@ func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart
 		after.Gap.World = world
 	}
 	after, resolution := e.registerAuthorizedRouting(taskID, world, after, action, scoped, d)
+	// A re-evaluated route that does not continue is returned as it is: the gap
+	// it closes is the operative question, and a missing grant must not mask it
+	// as test_edit_admission (F4b). A caller that later proceeds with that gap
+	// open reconciles the test edits itself, before a worker runs.
+	if after.ClosesGap() {
+		return after, action, resolution, nil
+	}
+	// Every declared test edit is reconciled against the attempt's complete
+	// recorded grant state before this continuation can lead to a worker.
+	if err := e.admitTestEdits(taskID, d); err != nil {
+		return Routing{}, action, AuthorityResolution{}, err
+	}
 	return after, action, resolution, nil
+}
+
+// recordAuthoredTestEditGrants is routePlan's authored-grant block, for the
+// post-authorization continuation: it derives the AUTHORED test-edit grants
+// from the per-file probe's production governance map and records the pending
+// attempt's complete grant state with them, installing it on the engine and
+// on action only once that record is written. Nothing is recorded when the
+// authored instrument adds no grant.
+func (e *Engine) recordAuthoredTestEditGrants(ctx context.Context, taskID string, d architectureDecision, prod map[string][]string, action *Action) error {
+	// The world stamp is the world this run's coverage was computed in, applied at the
+	// point of use: the map is graph knowledge about paths, and what must not drift is
+	// which world a grant built from it is bound to.
+	authored := authoredEvidence{World: e.coverageWorld(taskID), ByFile: prod}
+	// AUTHORED PRODUCTION GOVERNANCE arrives only after the per-file probe, because the
+	// probe is deliberately gated on the router wanting to grant (or on a human having
+	// authorised the route) -- probing a plan that will refuse anyway adds only a way
+	// for a transient failure to abort it. So the derived grants are computed before
+	// this point and the authored ones after, additively: the same predicate, the
+	// other legitimate instrument.
+	//
+	// At the world the coverage computation used, never a freshly resolved one: two
+	// worlds would authorize an edit against bytes neither answer describes.
+	extra := e.authoredTestEditGrants(ctx, taskID, d.Files, authored)
+	if len(extra) == 0 {
+		return nil
+	}
+	merged := append(e.testEditGrants(taskID), extra...)
+	// The attempt's COMPLETE grant state, derived and authored together:
+	// the newest record for an attempt is the whole of it. Installed
+	// only once that record is written.
+	if err := e.recordTestEditGrants(ctx, taskID,
+		"existing-test edit authority recorded from AUTHORED production governance: "+
+			strings.Join(operationalFiles(extra), ", "),
+		testEditRecord{PlanAttemptID: e.pendingPlanAttempt(taskID).ID, World: extra[0].World, Grants: merged}); err != nil {
+		return err
+	}
+	e.setTestEditGrants(taskID, merged)
+	action.OperationalAuthority = operationalFiles(merged)
+	return nil
+}
+
+// admitTestEdits is routePlan's test-edit door, for the post-authorization
+// continuation: every declared existing-test edit must hold exactly one grant
+// in the pending attempt's complete recorded state, and the refusals the plan
+// and the pinned world already determine are decided now, before any
+// implementer runs.
+func (e *Engine) admitTestEdits(taskID string, d architectureDecision) error {
+	if err := e.reconcileTestEditGrants(taskID, d); err != nil {
+		return err
+	}
+	if err := projectTestEditRefusals(d.TestEdits, e.testEditGrants(taskID)); err != nil {
+		// A refusal of this attempt, decided by its own recorded grants.
+		return refusePlanAdmission(refusalTestEditAdmission, d.TestEdits, err)
+	}
+	return nil
 }
 
 // examinedOf are the probed production files the per-file preflight did not
