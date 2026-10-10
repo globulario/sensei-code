@@ -672,7 +672,67 @@ func (c clause) asserted(at, end int) bool {
 	if first < 0 {
 		return true
 	}
-	return !c.negatedPredicate(first) && !c.negativeSubject(first) && !c.frontedNegativeAdverbial(first) && !c.postposed(first, last) && !c.mentioned(at, end)
+	return !c.negatedPredicate(first) && !c.negativeSubject(first) && !c.frontedNegativeAdverbial(first) && !c.postposed(first, last) && !c.mentioned(at, end) && !c.productionStandard(at, end, last)
+}
+
+// qualityStandards are the nouns that name a STANDARD something is brought up
+// to, rather than a place it is sent: "production evidence SHAPE", "production
+// GRADE".
+var qualityStandards = []string{"shape", "quality", "grade", "standard", "form", "fidelity", "parity"}
+
+// standardEnds may follow a quality-standard noun and show that the noun is
+// where its phrase ends: "to production evidence shape FIRST", "to production
+// evidence shape BY supplying". Short and closed on purpose -- any other word
+// may be the real head ("production grade SERVERS"), and leaves the occurrence
+// asserted.
+var standardEnds = []string{"first", "by", "before"}
+
+// standardModifiers may stand before a quality-standard noun inside its noun
+// phrase: "production EVIDENCE shape". Closed on purpose: any word outside it,
+// or outside qualityStandards, is not shown to belong to that noun phrase --
+// "and check parity", "for quality" -- and leaves the occurrence asserted.
+var standardModifiers = []string{"evidence"}
+
+// productionStandard reports a "to production" that names a production-quality
+// STANDARD rather than a destination.
+//
+// Two governed runs planning an in-worktree fixture repair wrote "bring the
+// ... fixtures to production evidence shape", "to production" was their only
+// outward match, and each was parked at a human question about a deployment
+// nobody proposed. The phrase stays in outwardPhrases all the same: it is the
+// ONLY match for "ship the binary to production", "take the new parser to
+// production" and "move the fixtures to production servers".
+//
+// So nothing about the verb before it, or the mere presence of a noun after
+// it, is read. The positive evidence is about this occurrence alone: the words
+// directly after "production", at most three, form one noun phrase -- each a
+// standardModifiers or qualityStandards word, none in an outward operation --
+// whose last word is a quality-standard noun where the phrase ENDS, at the
+// clause's end or before a standardEnds word. A quality noun that does not end
+// the phrase is not its head and the reading goes on past it: in
+// "production-quality standard by" the head is "standard", and in "production
+// grade servers" it is "servers", which is a destination. Any other word ends
+// the reading unproven -- a conjunction, a preposition, a verb, an unknown
+// noun -- so "to production and check parity" and "to production for quality"
+// stay asserted.
+func (c clause) productionStandard(at, end, last int) bool {
+	if c.text[at:end] != "to production" || c.words[last].end != end {
+		return false
+	}
+	for i := last + 1; i < len(c.words) && i <= last+3; i++ {
+		if c.inOp[i] {
+			return false
+		}
+		switch w := c.words[i].text; {
+		case listed(qualityStandards, w):
+			if i+1 == len(c.words) || listed(standardEnds, c.words[i+1].text) {
+				return true
+			}
+		case !listed(standardModifiers, w):
+			return false
+		}
+	}
+	return false
 }
 
 // mentioned reports a quoted operation that the clause explicitly characterizes
