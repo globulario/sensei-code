@@ -3788,8 +3788,9 @@ const (
 	f4bEngine    = "internal/workflow/engine.go"
 	f4bVerdict   = "internal/roles/verdict.go"
 	f4bRolesTest = "internal/roles/roles_test.go"
-	// f4bOutward is the consequence condition the specimen's step 0 produces
-	// (tool-debt-prep/F4-router-remeasurement.md, chain step 2).
+	// f4bOutward is the consequence condition the specimen's step 0 produced
+	// before F4a (tool-debt-prep/F4-router-remeasurement.md, chain step 2), and
+	// f4bHumanOwned's asserted outward step produces now.
 	f4bOutward = "the plan states it will act outside the worktree"
 )
 
@@ -3989,6 +3990,20 @@ func f4bBounded(t *testing.T) architectureDecision {
 	d.Steps = append([]string(nil), d.Steps...)
 	d.Steps[0] = strings.Replace(d.Steps[0], "to production evidence shape", "to the evidence shape", 1)
 	d.Plan += " (bounded wording)"
+	return d
+}
+
+// f4bOutwardStep is a genuinely outward step: it says it will deploy.
+const f4bOutwardStep = "Then deploy the binary to production."
+
+// f4bHumanOwned is the specimen with f4bOutwardStep appended and nothing else
+// changed. The F4b witnesses need a route the plan's own consequences make
+// human-owned; that route used to come from step 0's wording, which was the
+// F4a defect (step 0 brings fixtures to a production-quality STANDARD), and now
+// comes from an outward action the plan actually asserts.
+func f4bHumanOwned(t *testing.T) architectureDecision {
+	d := f4bSpecimen(t)
+	d.Steps = append(append([]string(nil), d.Steps...), f4bOutwardStep)
 	return d
 }
 
@@ -4227,10 +4242,10 @@ func f4bStatusContains(evs []event.Event, text string) bool {
 // W1 -- THE SPECIMEN. The exact attempt-1 plan reaches the consequence-
 // authority boundary with its own condition, not test_edit_admission.
 func TestF4bW1SpecimenReachesTheConsequenceAuthorityBoundary(t *testing.T) {
-	c := f4bCase{plan: f4bSpecimen(t), region: f4bRegion}
+	c := f4bCase{plan: f4bHumanOwned(t), region: f4bRegion}
 	human := f4bCondition(t, c)
 	if !human.RequiresHuman() || human.Granted() || !strings.Contains(human.Condition, f4bOutward) {
-		t.Fatalf("premise: the specimen's route is human-owned by its outward-action consequence (F4a still fires): %+v", human)
+		t.Fatalf("premise: the specimen's route is human-owned by its outward-action consequence (its asserted outward step): %+v", human)
 	}
 	r := f4bRun(t, "task-f4b-w1", c)
 	if class := f4bRefusalClass(r.err); class == refusalTestEditAdmission {
@@ -4309,7 +4324,7 @@ func f4bHolds(rec testEditRecord, path, evidence string) bool {
 // governance beside roles_test.go, and the plan is refused as
 // test_edit_admission after -- not instead of -- the authority answer.
 func TestF4bW3HumanAuthorizationAloneGrantsNoTestEdit(t *testing.T) {
-	r := f4bRun(t, "task-f4b-w3", f4bCase{plan: f4bSpecimen(t), region: f4bRegion, answer: authority.Authorize})
+	r := f4bRun(t, "task-f4b-w3", f4bCase{plan: f4bHumanOwned(t), region: f4bRegion, answer: authority.Authorize})
 	if r.asked {
 		t.Fatal("an answered question was asked again")
 	}
@@ -4333,7 +4348,7 @@ func TestF4bW3HumanAuthorizationAloneGrantsNoTestEdit(t *testing.T) {
 // authored-governed test edit is granted. Closes the discarded map in
 // afterHumanAuthorization.
 func TestF4bW4AuthoredEvidenceIsRederivedAfterAuthorization(t *testing.T) {
-	c := f4bCase{plan: f4bSpecimen(t), region: f4bRegion, answer: authority.Authorize, authored: true}
+	c := f4bCase{plan: f4bHumanOwned(t), region: f4bRegion, answer: authority.Authorize, authored: true}
 	r := f4bRun(t, "task-f4b-w4", c)
 	if r.err != nil || r.admitted.Plan != c.plan.Plan || r.asked {
 		t.Fatalf("an authorised plan whose test edits are all governed was not admitted: asked=%v err=%v", r.asked, r.err)
@@ -4366,7 +4381,7 @@ func TestF4bW4AuthoredEvidenceIsRederivedAfterAuthorization(t *testing.T) {
 // no grant. The plan stops at the gap the re-evaluated route closes, never at
 // test_edit_admission.
 func TestF4bW1AfterAuthorizationACoverageGapIsNotMaskedByAMissingGrant(t *testing.T) {
-	c := f4bCase{plan: f4bSpecimen(t), region: f4bRegion, answer: authority.Authorize, gap: true}
+	c := f4bCase{plan: f4bHumanOwned(t), region: f4bRegion, answer: authority.Authorize, gap: true}
 	r := f4bRun(t, "task-f4b-w1-gap", c)
 	if r.asked {
 		t.Fatal("an answered question was asked again")
@@ -4396,7 +4411,7 @@ func TestF4bW1AfterAuthorizationACoverageGapIsNotMaskedByAMissingGrant(t *testin
 // never relabelled as a missing test-edit grant.
 func TestF4bW5ARefusedRouteKeepsItsOriginalTypedRefusal(t *testing.T) {
 	stale := strings.Replace(f4bRegion, "GRAPH_FRESHNESS_STATE_CURRENT", "GRAPH_FRESHNESS_STATE_STALE", 1)
-	c := f4bCase{plan: f4bSpecimen(t), region: stale}
+	c := f4bCase{plan: f4bHumanOwned(t), region: stale}
 	pre := f4bCondition(t, c)
 	if pre.Route != RouteCannotEstablish {
 		t.Fatalf("premise: the stale region cannot establish authority: %+v", pre)
@@ -4405,7 +4420,7 @@ func TestF4bW5ARefusedRouteKeepsItsOriginalTypedRefusal(t *testing.T) {
 	if f4bRefusalClass(r.err) != "" || r.err == nil || !strings.Contains(r.err.Error(), "cannot establish authority for this plan: "+pre.Condition) || r.asked {
 		t.Fatalf("the cannot-establish route was not refused as itself: asked=%v err=%v", r.asked, r.err)
 	}
-	declined := f4bRun(t, "task-f4b-w5-declined", f4bCase{plan: f4bSpecimen(t), region: f4bRegion, answer: authority.Decline})
+	declined := f4bRun(t, "task-f4b-w5-declined", f4bCase{plan: f4bHumanOwned(t), region: f4bRegion, answer: authority.Decline})
 	if f4bRefusalClass(declined.err) != refusalAuthorityDeclined || !strings.Contains(declined.err.Error(), f4bOutward) || declined.asked {
 		t.Fatalf("the declined route was not refused as %s: asked=%v err=%v", refusalAuthorityDeclined, declined.asked, declined.err)
 	}
@@ -4420,15 +4435,15 @@ func TestF4bW5ARefusedRouteKeepsItsOriginalTypedRefusal(t *testing.T) {
 func f4bCases(t *testing.T) map[string]f4bCase {
 	stale := strings.Replace(f4bRegion, "GRAPH_FRESHNESS_STATE_CURRENT", "GRAPH_FRESHNESS_STATE_STALE", 1)
 	return map[string]f4bCase{
-		"w1-specimen":           {plan: f4bSpecimen(t), region: f4bRegion},
+		"w1-specimen":           {plan: f4bHumanOwned(t), region: f4bRegion},
 		"w2-granted-missing":    {plan: f4bBounded(t), region: f4bRegion},
 		"w2-granted-authored":   {plan: f4bBounded(t), region: f4bRegion, authored: true},
-		"w3-authorized-missing": {plan: f4bSpecimen(t), region: f4bRegion, answer: authority.Authorize},
-		"w4-authorized-granted": {plan: f4bSpecimen(t), region: f4bRegion, answer: authority.Authorize, authored: true},
-		"w5-cannot-establish":   {plan: f4bSpecimen(t), region: stale},
-		"w5-declined":           {plan: f4bSpecimen(t), region: f4bRegion, answer: authority.Decline},
-		"w1-authorized-gap":     {plan: f4bSpecimen(t), region: f4bRegion, answer: authority.Authorize, gap: true},
-		"w1-architect-gap":      {plan: f4bSpecimen(t), region: f4bRegion, gap: true, architect: true},
+		"w3-authorized-missing": {plan: f4bHumanOwned(t), region: f4bRegion, answer: authority.Authorize},
+		"w4-authorized-granted": {plan: f4bHumanOwned(t), region: f4bRegion, answer: authority.Authorize, authored: true},
+		"w5-cannot-establish":   {plan: f4bHumanOwned(t), region: stale},
+		"w5-declined":           {plan: f4bHumanOwned(t), region: f4bRegion, answer: authority.Decline},
+		"w1-authorized-gap":     {plan: f4bHumanOwned(t), region: f4bRegion, answer: authority.Authorize, gap: true},
+		"w1-architect-gap":      {plan: f4bHumanOwned(t), region: f4bRegion, gap: true, architect: true},
 	}
 }
 
@@ -4654,7 +4669,7 @@ func TestF4bW6NothingExecutesBeforeCompleteAdmission(t *testing.T) {
 func TestF4bW7InterruptedRestorationPreservesTheOperativePlan(t *testing.T) {
 	// One task, one pinned world: the question is deferred, then answered for
 	// its own attempt, and plans are routed again under the answer.
-	c := f4bCase{plan: f4bSpecimen(t), region: f4bRegion, authored: true}
+	c := f4bCase{plan: f4bHumanOwned(t), region: f4bRegion, authored: true}
 	deferred := f4bWorldFor(t, "task-f4b-w7", c).route(t, c)
 	if !deferred.asked || !errors.Is(deferred.err, errAuthorityDeferred) {
 		t.Fatalf("premise: the specimen's question is deferred: %v", deferred.err)
@@ -4669,7 +4684,7 @@ func TestF4bW7InterruptedRestorationPreservesTheOperativePlan(t *testing.T) {
 	// A materially different plan -- same consequence condition, same file
 	// scope, same test-edit declarations -- is its own attempt, and the answer
 	// owned by the specimen's attempt does not authorize it: it is asked anew.
-	substitute := f4bSpecimen(t)
+	substitute := f4bHumanOwned(t)
 	substitute.Plan += " (a different plan under the same condition)"
 	substitute.Steps = append(append([]string(nil), substitute.Steps...), "Also rewrite every remaining fixture before review.")
 	if sub := f4bCondition(t, f4bCase{plan: substitute, region: f4bRegion}); sub.Condition != q.Condition || !sameFiles(substitute.Files, q.Scope) {
@@ -4784,10 +4799,10 @@ func TestF4bW7InterruptedRestorationPreservesTheOperativePlan(t *testing.T) {
 // architect to revise it, and terminates.
 
 // f4bRevised is the specimen revised the way an architect answering the
-// refusal might: a different plan, still human-owned by the same step 0, over
+// refusal might: a different plan, still human-owned by the same outward step, over
 // the same files and test-edit declarations. It is its own plan attempt.
 func f4bRevised(t *testing.T) architectureDecision {
-	d := f4bSpecimen(t)
+	d := f4bHumanOwned(t)
 	d.Plan += " (revised after the test-edit refusal)"
 	d.Steps = append(append([]string(nil), d.Steps...), "Keep roles_test.go unchanged unless a grant is recorded for it.")
 	return d
@@ -4916,7 +4931,7 @@ func f4bDescribe(refusals ...planAttemptRefusal) string {
 // about at all.
 func TestF4bW8APostAuthorizationRefusalReturnsToTheArchitectOnce(t *testing.T) {
 	const task = "task-f4b-w8"
-	x, prompts := f4bContinuation(t, task, f4bSpecimen(t), f4bSpecimen(t), f4bRevised(t))
+	x, prompts := f4bContinuation(t, task, f4bHumanOwned(t), f4bHumanOwned(t), f4bRevised(t))
 	kinds := kindsOf(x.events)
 	attempts := startedAttempts(t, x.events)
 	authorized := f4bAuthorized(t, x.events)
@@ -4972,7 +4987,7 @@ func TestF4bW8APostAuthorizationRefusalReturnsToTheArchitectOnce(t *testing.T) {
 // implementer -- and is never handed back for a further revision.
 func TestF4bW8bARecurringPostAuthorizationRefusalParks(t *testing.T) {
 	const task = "task-f4b-w8b"
-	x, prompts := f4bContinuation(t, task, f4bSpecimen(t))
+	x, prompts := f4bContinuation(t, task, f4bHumanOwned(t))
 	kinds := kindsOf(x.events)
 	refusals := refusalsIn(t, x.events)
 	if len(refusals) != 1 || refusals[0].Class != refusalTestEditAdmission || refusals[0].Continuation != session.PlanAdmissionContinuationArchitectTurn {
@@ -5002,7 +5017,7 @@ func TestF4bW8bARecurringPostAuthorizationRefusalParks(t *testing.T) {
 // edit on a SUPPLIED plan terminates with its typed test_edit_admission
 // refusal: no architect turn, no continuation recorded, no widened bound.
 func TestF4bW8cASuppliedPlanRefusalAfterAuthorizationTerminates(t *testing.T) {
-	c := f4bCase{plan: f4bSpecimen(t), region: f4bRegion, answer: authority.Authorize}
+	c := f4bCase{plan: f4bHumanOwned(t), region: f4bRegion, answer: authority.Authorize}
 	x := f4bExecute(t, "task-f4b-w8c", c)
 	kinds := kindsOf(x.events)
 	refusals := refusalsIn(t, x.events)
@@ -5051,7 +5066,7 @@ const f4bBlindRegion = `{"status":"PREFLIGHT_STATUS_OK",` +
 const f4bGapOpenProceed = "proceeding on the human's earlier authorization for: a bounded knowledge gap was not closed by investigation: "
 
 func f4bGapOpen(t *testing.T) architectureDecision {
-	d := f4bSpecimen(t)
+	d := f4bHumanOwned(t)
 	d.Files = nil
 	if c := f4bCondition(t, f4bCase{plan: d, region: f4bBlindRegion}); !c.RequiresHuman() || c.ClosesGap() {
 		t.Fatalf("premise: the plan naming no file is human-owned by its consequence before coverage is asked: %+v", c)
