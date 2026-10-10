@@ -7009,7 +7009,7 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 	// the answer exactly as it would be refused before a gate existed. The one
 	// post-authorization continuation decides it, from the refreshed action.
 	unexaminedAfterAnswer := func() error {
-		gap, _, _, err := e.afterHumanAuthorization(sc, start, taskID, task, routing, action, scoped, d)
+		gap, _, _, err := e.afterHumanAuthorization(ctx, sc, start, taskID, task, routing, action, scoped, d)
 		if err != nil {
 			return err
 		}
@@ -7417,186 +7417,213 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			if err := e.guardProposal(taskID, d); err != nil {
 				return architectureDecision{}, err
 			}
-			routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
-			if err != nil {
-				// A typed refusal of THIS plan returns to the architect once,
-				// as bounded evidence; nothing else continues from here.
-				refusal, err := e.continueAfterAdmissionRefusal(ctx, taskID, err)
+			// Every typed refusal of THIS plan on the proceed route -- routePlan's,
+			// and the two after a human authorization -- leaves this block for the
+			// one continuation below; nothing else continues from a refusal.
+			var refused error
+			{
+				routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
 				if err != nil {
-					return architectureDecision{}, err
+					// A typed refusal of THIS plan returns to the architect once,
+					// as bounded evidence; nothing else continues from here.
+					refused = err
+					goto admissionRefused
 				}
-				if err := newRound("a plan-admission refusal"); err != nil {
-					return architectureDecision{}, err
+				// How expensive this change is decides how adversarially it is
+				// judged later, and whether it is routine at all. Recording both
+				// here binds them to the moment the plan was authorised, rather
+				// than to a preflight taken again further down the loop.
+				e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
+				e.applyPremiseResolutions(taskID, d.PremiseResolutions)
+				// P9 FIRST. A gap this plan reports is registered -- or reopened --
+				// in the task's one AuthorityResolution before any closure budget is
+				// spent or any answered-condition history is read, and a settlement
+				// already given about exactly this identity is consumed here. A gap
+				// this modifying plan re-evaluated and no longer reports becomes
+				// inactive, never settled.
+				//
+				// The ORDER is the DF-30 lifecycle (ruling 177): a prior coverage gap
+				// of this task is re-evaluated, as the same identity, from this
+				// routing's facts BEFORE absence projection may deactivate anything
+				// -- see registerRouting.
+				routing, resolution := e.registerRouting(taskID, strings.TrimSpace(e.governedBase(taskID)), routing, action, scoped, d, true)
+				var receipt *premiseReceipt
+				if routing.ClosesGap() {
+					receipt = e.premiseReceiptFor(taskID, routing, routing.ClaimGap)
 				}
-				prompt = planAdmissionRefusalPrompt(prompt, d, refusal)
-				attempt = 0
-				continue
-			}
-			// How expensive this change is decides how adversarially it is
-			// judged later, and whether it is routine at all. Recording both
-			// here binds them to the moment the plan was authorised, rather
-			// than to a preflight taken again further down the loop.
-			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
-			e.applyPremiseResolutions(taskID, d.PremiseResolutions)
-			// P9 FIRST. A gap this plan reports is registered -- or reopened --
-			// in the task's one AuthorityResolution before any closure budget is
-			// spent or any answered-condition history is read, and a settlement
-			// already given about exactly this identity is consumed here. A gap
-			// this modifying plan re-evaluated and no longer reports becomes
-			// inactive, never settled.
-			//
-			// The ORDER is the DF-30 lifecycle (ruling 177): a prior coverage gap
-			// of this task is re-evaluated, as the same identity, from this
-			// routing's facts BEFORE absence projection may deactivate anything
-			// -- see registerRouting.
-			routing, resolution := e.registerRouting(taskID, strings.TrimSpace(e.governedBase(taskID)), routing, action, scoped, d, true)
-			var receipt *premiseReceipt
-			if routing.ClosesGap() {
-				receipt = e.premiseReceiptFor(taskID, routing, routing.ClaimGap)
-			}
-			switch {
-			case routing.Route == RouteCannotEstablish:
-				return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
-			case routing.ClosesGap() && !resolution.Settled && e.spendClosure(taskID, receipt.ID):
-				// Bounded epistemic work, not an owner for the decision.
-				// Nothing is granted here: the round establishes what is
-				// knowable and the router runs again over what the graph then
-				// holds. If the gap did not close, the budget is spent and the
-				// next pass falls through to the human branch below with the
-				// condition intact.
-				e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-					"bounded knowledge gap; closing it before governance runs again: "+routing.Condition, map[string]any{"gap": receipt.ID, "gap_identity": routing.Gap}))
-				if err := newRound("a bounded knowledge gap"); err != nil {
-					return architectureDecision{}, err
-				}
-				prompt = gapClosurePrompt(prompt, d, routing.Condition+"\n\n"+premiseReceiptNote(receipt.ID))
-				attempt = 0
-				continue
-			case routing.ClosesGap():
-				// The budget is spent and the router still reports the same
-				// gap. What happens NEXT depends on who could close it, which is
-				// disposeUnclosedGap's decision and not this switch's. A gap an
-				// explicit answer already settled is not re-escalated: its
-				// settlement is consumed below.
-				if !resolution.Settled {
+				switch {
+				case routing.Route == RouteCannotEstablish:
+					return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
+				case routing.ClosesGap() && !resolution.Settled && e.spendClosure(taskID, receipt.ID):
+					// Bounded epistemic work, not an owner for the decision.
+					// Nothing is granted here: the round establishes what is
+					// knowable and the router runs again over what the graph then
+					// holds. If the gap did not close, the budget is spent and the
+					// next pass falls through to the human branch below with the
+					// condition intact.
 					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-						"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
-					e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds.count(), ctx)
-				}
-				var limited error
-				if routing, limited = e.disposeUnclosedGap(taskID, start.Domain(), routing, action); limited != nil {
-					e.reportKnowledgeLimit(ctx, taskID, routing, limited)
-					return architectureDecision{}, limited
-				}
-				fallthrough
-			case routing.RequiresHuman():
-				// Authorizing does not change the graph, so the router will
-				// reach this same condition on the next plan. Ask once per
-				// condition per task and then honour the answer, or the human
-				// is interrogated in a loop and the run never starts. A gap's
-				// answer is P9's, keyed by identity; condition text is read
-				// only for a question that carries none.
-				authorized, asked := e.gapSettlement(taskID, routing)
-				if !asked {
-					authorized, asked = e.applyAnsweredCondition(taskID, routing.Condition, d.Files...)
-				}
-				if err := e.historyUnavailable(taskID); err != nil {
-					return architectureDecision{}, err
-				}
-				if asked {
-					if !authorized {
-						return architectureDecision{}, refusePlanAdmission(refusalAuthorityDeclined, nil, fmt.Errorf(
-							"the human declined this architectural change and the plan still requires it: %s", routing.Condition))
-					}
-					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
-						"proceeding on the human's earlier authorization for: "+routing.Condition, nil))
-					// The answer was about the consequence. Files the graph
-					// never examined are asked about now, and an open gap
-					// takes the same closure round any coverage gap takes.
-					// The same P9 sequence every routing site runs, over the
-					// examination facts the answer's probes just refreshed: a
-					// prior coverage gap is re-evaluated as the same identity
-					// before another decision is taken about it, and the
-					// reconciled routing alone decides whether the plan
-					// continues.
-					gap, probed, gapResolution, err := e.afterHumanAuthorization(sc, start, taskID, task, routing, action, scoped, d)
-					if err != nil {
+						"bounded knowledge gap; closing it before governance runs again: "+routing.Condition, map[string]any{"gap": receipt.ID, "gap_identity": routing.Gap}))
+					if err := newRound("a bounded knowledge gap"); err != nil {
 						return architectureDecision{}, err
 					}
-					if gap.ClosesGap() {
-						receipt := e.premiseReceiptFor(taskID, gap, gap.ClaimGap)
-						if gapResolution.Settled || !e.spendClosure(taskID, receipt.ID) {
-							// The budget is spent and the gap the answer did not
-							// cover is still open. The same human-owned boundary
-							// every exhausted gap reaches: whether to proceed with
-							// it open is the human's, asked once and honoured.
-							if !gapResolution.Settled {
-								e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-									"the knowledge gap did not close; escalating with it open: "+gap.Condition, nil))
-								e.recordClosureQuestion(taskID, gap.Condition, d, start, architect.Label, rounds.count(), ctx)
-							}
-							// The one typed disposal of an exhausted gap, as on the
-							// proceed and escalate routes: never a manual conversion.
-							stillOpen, limited := e.disposeExhaustedGap(taskID, start.Domain(), gap, probed)
-							if limited != nil {
-								e.reportKnowledgeLimit(ctx, taskID, stillOpen, limited)
-								return architectureDecision{}, limited
-							}
-							authorized, asked := e.gapSettlement(taskID, stillOpen)
-							if !asked {
-								authorized, asked = e.applyAnsweredCondition(taskID, stillOpen.Condition, d.Files...)
-							}
-							if err := e.historyUnavailable(taskID); err != nil {
-								return architectureDecision{}, err
-							}
-							if asked {
-								if !authorized {
-									return architectureDecision{}, refusePlanAdmission(refusalAuthorityDeclined, nil, fmt.Errorf(
-										"the human declined to proceed with the gap open and the plan still requires it: %s", stillOpen.Condition))
+					prompt = gapClosurePrompt(prompt, d, routing.Condition+"\n\n"+premiseReceiptNote(receipt.ID))
+					attempt = 0
+					continue
+				case routing.ClosesGap():
+					// The budget is spent and the router still reports the same
+					// gap. What happens NEXT depends on who could close it, which is
+					// disposeUnclosedGap's decision and not this switch's. A gap an
+					// explicit answer already settled is not re-escalated: its
+					// settlement is consumed below.
+					if !resolution.Settled {
+						e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+							"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
+						e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds.count(), ctx)
+					}
+					var limited error
+					if routing, limited = e.disposeUnclosedGap(taskID, start.Domain(), routing, action); limited != nil {
+						e.reportKnowledgeLimit(ctx, taskID, routing, limited)
+						return architectureDecision{}, limited
+					}
+					fallthrough
+				case routing.RequiresHuman():
+					// Authorizing does not change the graph, so the router will
+					// reach this same condition on the next plan. Ask once per
+					// condition per task and then honour the answer, or the human
+					// is interrogated in a loop and the run never starts. A gap's
+					// answer is P9's, keyed by identity; condition text is read
+					// only for a question that carries none.
+					authorized, asked := e.gapSettlement(taskID, routing)
+					if !asked {
+						authorized, asked = e.applyAnsweredCondition(taskID, routing.Condition, d.Files...)
+					}
+					if err := e.historyUnavailable(taskID); err != nil {
+						return architectureDecision{}, err
+					}
+					if asked {
+						if !authorized {
+							return architectureDecision{}, refusePlanAdmission(refusalAuthorityDeclined, nil, fmt.Errorf(
+								"the human declined this architectural change and the plan still requires it: %s", routing.Condition))
+						}
+						e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+							"proceeding on the human's earlier authorization for: "+routing.Condition, nil))
+						// The answer was about the consequence. Files the graph
+						// never examined are asked about now, and an open gap
+						// takes the same closure round any coverage gap takes.
+						// The same P9 sequence every routing site runs, over the
+						// examination facts the answer's probes just refreshed: a
+						// prior coverage gap is re-evaluated as the same identity
+						// before another decision is taken about it, and the
+						// reconciled routing alone decides whether the plan
+						// continues.
+						gap, probed, gapResolution, err := e.afterHumanAuthorization(ctx, sc, start, taskID, task, routing, action, scoped, d)
+						if err != nil {
+							// A typed refusal of THIS plan after the answer takes the
+							// same bounded continuation a routePlan refusal takes:
+							// returned to the architect once, parked on recurrence.
+							// The revision is a new attempt, routed and asked anew.
+							refused = err
+							goto admissionRefused
+						}
+						if gap.ClosesGap() {
+							receipt := e.premiseReceiptFor(taskID, gap, gap.ClaimGap)
+							if gapResolution.Settled || !e.spendClosure(taskID, receipt.ID) {
+								// The budget is spent and the gap the answer did not
+								// cover is still open. The same human-owned boundary
+								// every exhausted gap reaches: whether to proceed with
+								// it open is the human's, asked once and honoured.
+								if !gapResolution.Settled {
+									e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+										"the knowledge gap did not close; escalating with it open: "+gap.Condition, nil))
+									e.recordClosureQuestion(taskID, gap.Condition, d, start, architect.Label, rounds.count(), ctx)
 								}
-								e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
-									"proceeding on the human's earlier authorization for: "+stillOpen.Condition, nil))
-								return d, nil
+								// The one typed disposal of an exhausted gap, as on the
+								// proceed and escalate routes: never a manual conversion.
+								stillOpen, limited := e.disposeExhaustedGap(taskID, start.Domain(), gap, probed)
+								if limited != nil {
+									e.reportKnowledgeLimit(ctx, taskID, stillOpen, limited)
+									return architectureDecision{}, limited
+								}
+								authorized, asked := e.gapSettlement(taskID, stillOpen)
+								if !asked {
+									authorized, asked = e.applyAnsweredCondition(taskID, stillOpen.Condition, d.Files...)
+								}
+								if err := e.historyUnavailable(taskID); err != nil {
+									return architectureDecision{}, err
+								}
+								if asked {
+									if !authorized {
+										return architectureDecision{}, refusePlanAdmission(refusalAuthorityDeclined, nil, fmt.Errorf(
+											"the human declined to proceed with the gap open and the plan still requires it: %s", stillOpen.Condition))
+									}
+									e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+										"proceeding on the human's earlier authorization for: "+stillOpen.Condition, nil))
+									// afterHumanAuthorization returned this gap before
+									// admitting the test edits: they are admitted here,
+									// before the plan can reach a worker, and a refusal
+									// takes the same bounded continuation.
+									if err := e.admitTestEdits(taskID, d); err != nil {
+										refused = err
+										goto admissionRefused
+									}
+									return d, nil
+								}
+								e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(stillOpen), nil))
+								choice, err := e.awaitHuman(ctx, sc, start, taskID, d, stillOpen.Condition, stillOpen.Gap)
+								if err != nil {
+									return architectureDecision{}, err
+								}
+								if err := newRound("a human authority answer"); err != nil {
+									return architectureDecision{}, err
+								}
+								prompt = humanResolutionPrompt(prompt, d, choice)
+								attempt = 0
+								continue
 							}
-							e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(stillOpen), nil))
-							choice, err := e.awaitHuman(ctx, sc, start, taskID, d, stillOpen.Condition, stillOpen.Gap)
-							if err != nil {
+							e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+								"authorised, and a bounded knowledge gap the answer did not cover remains; closing it before governance runs again: "+gap.Condition, map[string]any{"gap": receipt.ID, "gap_identity": gap.Gap}))
+							if err := newRound("a bounded knowledge gap"); err != nil {
 								return architectureDecision{}, err
 							}
-							if err := newRound("a human authority answer"); err != nil {
-								return architectureDecision{}, err
-							}
-							prompt = humanResolutionPrompt(prompt, d, choice)
+							prompt = gapClosurePrompt(prompt, d, gap.Condition+"\n\n"+premiseReceiptNote(receipt.ID))
 							attempt = 0
 							continue
 						}
-						e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-							"authorised, and a bounded knowledge gap the answer did not cover remains; closing it before governance runs again: "+gap.Condition, map[string]any{"gap": receipt.ID, "gap_identity": gap.Gap}))
-						if err := newRound("a bounded knowledge gap"); err != nil {
-							return architectureDecision{}, err
-						}
-						prompt = gapClosurePrompt(prompt, d, gap.Condition+"\n\n"+premiseReceiptNote(receipt.ID))
-						attempt = 0
-						continue
+						return d, nil
 					}
-					return d, nil
+					e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
+					choice, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition, routing.Gap)
+					if err != nil {
+						return architectureDecision{}, err
+					}
+					if err := newRound("a human authority answer"); err != nil {
+						return architectureDecision{}, err
+					}
+					prompt = humanResolutionPrompt(prompt, d, choice)
+					attempt = 0
+					continue
 				}
-				e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
-				choice, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition, routing.Gap)
-				if err != nil {
-					return architectureDecision{}, err
-				}
-				if err := newRound("a human authority answer"); err != nil {
-					return architectureDecision{}, err
-				}
-				prompt = humanResolutionPrompt(prompt, d, choice)
-				attempt = 0
-				continue
+				// No status line here: the caller renders this decision, either as a
+				// plan awaiting approval or as a revised plan during review. Emitting
+				// the summary as well printed it twice.
+				return d, nil
 			}
-			// No status line here: the caller renders this decision, either as a
-			// plan awaiting approval or as a revised plan during review. Emitting
-			// the summary as well printed it twice.
-			return d, nil
+		admissionRefused:
+			// The one proceed-route continuation: the typed refusal returns to the
+			// architect once, as bounded evidence, and parks on recurrence. A
+			// revision is a new attempt, routed and asked anew; an authorization
+			// given for this attempt does not carry to it.
+			err := refused
+			refusal, err := e.continueAfterAdmissionRefusal(ctx, taskID, err)
+			if err != nil {
+				return architectureDecision{}, err
+			}
+			if err := newRound("a plan-admission refusal"); err != nil {
+				return architectureDecision{}, err
+			}
+			prompt = planAdmissionRefusalPrompt(prompt, d, refusal)
+			attempt = 0
+			continue
 		case "escalate":
 			// A model asking to escalate is asking for more investigation. It
 			// does not by itself create a human interruption: if Sensei can
@@ -8847,7 +8874,12 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// it, the caller that consumes the recorded answer asks
 	// afterHumanAuthorization, which probes then. Nothing about the answer
 	// is read in this function.
-	if probeNeeded(routeAuthorityForAction(scoped, claims, action), false) {
+	//
+	// The canonical route is computed here, before any test edit is reconciled,
+	// and whether it probed is kept: it decides below whether the authored
+	// instrument was consulted at all (F4b, RULING-258).
+	probed := probeNeeded(routeAuthorityForAction(scoped, claims, action), false)
+	if probed {
 		unexamined, docs, prod, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
 		if err != nil {
 			return Routing{}, sensei.PreflightDecision{}, Action{}, err
@@ -8899,13 +8931,25 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// plan is refused here. Before this, a declared path with no grant was
 	// projected nothing and was found only by candidate inspection, after an
 	// implementer had spent a cycle on it (DF-37b; objective 61, run 3).
-	if err := e.reconcileTestEditGrants(taskID, d); err != nil {
-		return Routing{}, sensei.PreflightDecision{}, Action{}, err
-	}
-	if err := projectTestEditRefusals(d.TestEdits, e.testEditGrants(taskID)); err != nil {
-		// A refusal of this attempt, decided by its own recorded grants.
-		err = refusePlanAdmission(refusalTestEditAdmission, d.TestEdits, err)
-		return Routing{}, sensei.PreflightDecision{}, Action{}, err
+	//
+	// ONLY WHERE THE AUTHORED INSTRUMENT WAS CONSULTED (F4b, RULING-258). On a
+	// route that did not probe -- human-owned, refused, a gap -- the authored
+	// grants were deliberately never computed (#115), so a missing grant here
+	// would describe evidence nobody collected, and the refusal it produced
+	// named the grant instead of the route that stopped the probe (plan attempt
+	// e3d912a97f5d). That route is returned as it is: a refusal keeps its own
+	// type, and a human-owned route is asked about its own condition. A
+	// human-owned route reaches a worker only through afterHumanAuthorization,
+	// which probes, derives the authored grants and reconciles before returning.
+	if probed {
+		if err := e.reconcileTestEditGrants(taskID, d); err != nil {
+			return Routing{}, sensei.PreflightDecision{}, Action{}, err
+		}
+		if err := projectTestEditRefusals(d.TestEdits, e.testEditGrants(taskID)); err != nil {
+			// A refusal of this attempt, decided by its own recorded grants.
+			err = refusePlanAdmission(refusalTestEditAdmission, d.TestEdits, err)
+			return Routing{}, sensei.PreflightDecision{}, Action{}, err
+		}
 	}
 	// Read again: the AUTHORED grants recorded above belong to this attempt too.
 	claims, contradicted := e.premisesUnderRecordedAuthority(taskID, d)
@@ -9192,16 +9236,30 @@ func (e *Engine) unexaminedPlannedFiles(sc *sensei.Client, start certifiedStart,
 // at all; the region's coverage question is asked again here, after the
 // answer, by the same disposition (afterAuthorization). The action returned
 // carries the refreshed facts.
-func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart, taskID, task string, routing Routing, action Action, scoped sensei.PreflightDecision, d architectureDecision) (Routing, Action, AuthorityResolution, error) {
+//
+// Its test-edit door is routePlan's, opened only now: the authored grants the
+// probe establishes are recorded for the same pending plan attempt at the
+// world its coverage was computed in, and every declared test edit is
+// reconciled only when the re-evaluated route can continue (F4b). A refusal
+// there is a typed test_edit_admission refusal; whether it returns to an
+// architect is the caller's to decide.
+func (e *Engine) afterHumanAuthorization(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, routing Routing, action Action, scoped sensei.PreflightDecision, d architectureDecision) (Routing, Action, AuthorityResolution, error) {
 	after := routing
 	if probeNeeded(routing, true) {
-		unexamined, docs, _, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
+		unexamined, docs, prod, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
 		if err != nil {
 			return Routing{}, action, AuthorityResolution{}, err
 		}
 		action.Unexamined = unexamined
 		action.Examined = examinedOf(action, unexamined)
 		action.DocumentEvidence = docs
+		// The authored instrument routePlan did not consult on this route, now
+		// that the probe has run. The answer itself grants nothing: a test edit
+		// is granted here only where the probe establishes authored governance
+		// beside it.
+		if err := e.recordAuthoredTestEditGrants(ctx, taskID, d, prod, &action); err != nil {
+			return Routing{}, action, AuthorityResolution{}, err
+		}
 		after = afterAuthorization(routing, true, action, scoped)
 	}
 	// The same gap identity routePlan would have built: completed with the
@@ -9212,7 +9270,72 @@ func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart
 		after.Gap.World = world
 	}
 	after, resolution := e.registerAuthorizedRouting(taskID, world, after, action, scoped, d)
+	// A re-evaluated route that does not continue is returned as it is: the gap
+	// it closes is the operative question, and a missing grant must not mask it
+	// as test_edit_admission. A caller that later proceeds with that gap open
+	// admits the test edits itself, before a worker runs.
+	if after.ClosesGap() {
+		return after, action, resolution, nil
+	}
+	if err := e.admitTestEdits(taskID, d); err != nil {
+		return Routing{}, action, AuthorityResolution{}, err
+	}
 	return after, action, resolution, nil
+}
+
+// recordAuthoredTestEditGrants is routePlan's authored-grant block, for the
+// post-authorization continuation: it derives the AUTHORED test-edit grants
+// from the per-file probe's production governance map and records the pending
+// attempt's complete grant state with them, installing it on the engine and on
+// action only once that record is written. Nothing is recorded when the
+// authored instrument adds no grant.
+func (e *Engine) recordAuthoredTestEditGrants(ctx context.Context, taskID string, d architectureDecision, prod map[string][]string, action *Action) error {
+	// The world stamp is the world this run's coverage was computed in, applied at the
+	// point of use: the map is graph knowledge about paths, and what must not drift is
+	// which world a grant built from it is bound to.
+	authored := authoredEvidence{World: e.coverageWorld(taskID), ByFile: prod}
+	// AUTHORED PRODUCTION GOVERNANCE arrives only after the per-file probe, because the
+	// probe is deliberately gated on the router wanting to grant (or on a human having
+	// authorised the route) -- probing a plan that will refuse anyway adds only a way
+	// for a transient failure to abort it. So the derived grants are computed before
+	// this point and the authored ones after, additively: the same predicate, the
+	// other legitimate instrument.
+	//
+	// At the world the coverage computation used, never a freshly resolved one: two
+	// worlds would authorize an edit against bytes neither answer describes.
+	extra := e.authoredTestEditGrants(ctx, taskID, d.Files, authored)
+	if len(extra) == 0 {
+		return nil
+	}
+	merged := append(e.testEditGrants(taskID), extra...)
+	// The attempt's COMPLETE grant state, derived and authored together:
+	// the newest record for an attempt is the whole of it. Installed
+	// only once that record is written.
+	if err := e.recordTestEditGrants(ctx, taskID,
+		"existing-test edit authority recorded from AUTHORED production governance: "+
+			strings.Join(operationalFiles(extra), ", "),
+		testEditRecord{PlanAttemptID: e.pendingPlanAttempt(taskID).ID, World: extra[0].World, Grants: merged}); err != nil {
+		return err
+	}
+	e.setTestEditGrants(taskID, merged)
+	action.OperationalAuthority = operationalFiles(merged)
+	return nil
+}
+
+// admitTestEdits is routePlan's test-edit door, for the post-authorization
+// continuation: every declared existing-test edit must hold exactly one grant
+// in the pending attempt's complete recorded state, and the refusals the plan
+// and the pinned world already determine are decided now, before any
+// implementer runs.
+func (e *Engine) admitTestEdits(taskID string, d architectureDecision) error {
+	if err := e.reconcileTestEditGrants(taskID, d); err != nil {
+		return err
+	}
+	if err := projectTestEditRefusals(d.TestEdits, e.testEditGrants(taskID)); err != nil {
+		// A refusal of this attempt, decided by its own recorded grants.
+		return refusePlanAdmission(refusalTestEditAdmission, d.TestEdits, err)
+	}
+	return nil
 }
 
 // examinedOf are the probed production files the per-file preflight did not
