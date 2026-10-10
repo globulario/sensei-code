@@ -46367,6 +46367,84 @@ code_symbols:
     file: internal/workflow/authority_resume_identity_test.go
     symbol: TestDF30W5AnOverlappingOrWiderReplanContinuesTheEpisode
     kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestF4bW1AfterAuthorizationACoverageGapIsNotMaskedByAMissingGrant
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestF4bW1AfterAuthorizationACoverageGapIsNotMaskedByAMissingGrant
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestF4bW1SpecimenReachesTheConsequenceAuthorityBoundary
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestF4bW1SpecimenReachesTheConsequenceAuthorityBoundary
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestF4bW2AGrantedRouteWithAMissingGrantStillRefuses
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestF4bW2AGrantedRouteWithAMissingGrantStillRefuses
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestF4bW3HumanAuthorizationAloneGrantsNoTestEdit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestF4bW3HumanAuthorizationAloneGrantsNoTestEdit
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestF4bW4AuthoredEvidenceIsRederivedAfterAuthorization
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestF4bW4AuthoredEvidenceIsRederivedAfterAuthorization
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestF4bW5ARefusedRouteKeepsItsOriginalTypedRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestF4bW5ARefusedRouteKeepsItsOriginalTypedRefusal
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestF4bW6NothingExecutesBeforeCompleteAdmission
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestF4bW6NothingExecutesBeforeCompleteAdmission
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestF4bW7InterruptedRestorationPreservesTheOperativePlan
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestF4bW7InterruptedRestorationPreservesTheOperativePlan
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestF4bW8APostAuthorizationRefusalReturnsToTheArchitectOnce
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestF4bW8APostAuthorizationRefusalReturnsToTheArchitectOnce
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestF4bW8AnExhaustedGapRefusalReturnsToTheArchitectOnce
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestF4bW8AnExhaustedGapRefusalReturnsToTheArchitectOnce
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestF4bW8bARecurringExhaustedGapRefusalParks
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestF4bW8bARecurringExhaustedGapRefusalParks
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestF4bW8bARecurringPostAuthorizationRefusalParks
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestF4bW8bARecurringPostAuthorizationRefusalParks
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:TestF4bW8cASuppliedPlanRefusalAfterAuthorizationTerminates
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: TestF4bW8cASuppliedPlanRefusalAfterAuthorizationTerminates
+    kind: function
   - id: internal/workflow/authority_resume_identity_test.go:TestNeitherAuthorityPathKeepsItsOwnTerminalDecision
     namespace: structural.scip
     language: go
@@ -46666,6 +46744,348 @@ code_symbols:
     language: go
     file: internal/workflow/authority_resume_identity_test.go
     symbol: driveGapLoop
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bAsked
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bAsked
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bAuthoredProbe
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bAuthoredProbe
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:f4bAuthorized
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bAuthorized
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bBlindRegion
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bBlindRegion
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:f4bBounded
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bBounded
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bCase.answer
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bCase.answer
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bCase.architect
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bCase.architect
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bCase.authored
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bCase.authored
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bCase.gap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bCase.gap
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bCase.plan
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bCase.plan
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bCase.region
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bCase.region
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bCases
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bCases
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bCase~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bCase
+    kind: type
+  - id: internal/workflow/authority_resume_identity_test.go:f4bCondition
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bCondition
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bContinuation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bContinuation
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bContinuationIn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bContinuationIn
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bDescribe
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bDescribe
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bEngine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bEngine
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:f4bExecute
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bExecute
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bExecuteScript
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bExecuteScript
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:f4bExecuted.events
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bExecuted.events
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bExecuted.implementerTurns
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bExecuted.implementerTurns
+    kind: method
+  - id: internal/workflow/authority_resume_identity_test.go:f4bExecuted.r
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bExecuted.r
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bExecuted.runner
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bExecuted.runner
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bExecuted.runners
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bExecuted.runners
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bExecuted~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bExecuted
+    kind: type
+  - id: internal/workflow/authority_resume_identity_test.go:f4bGapOpen
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bGapOpen
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bGapOpenProceed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bGapOpenProceed
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:f4bGapOpenRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bGapOpenRefusal
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bHolds
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bHolds
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bObjective
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bObjective
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:f4bOutward
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bOutward
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:f4bQuestion
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bQuestion
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bRecord
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bRecord
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bRefusalClass
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bRefusalClass
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bRegion
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bRegion
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:f4bResult.admitted
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bResult.admitted
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bResult.answer
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bResult.answer
+    kind: method
+  - id: internal/workflow/authority_resume_identity_test.go:f4bResult.asked
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bResult.asked
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bResult.e
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bResult.e
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bResult.err
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bResult.err
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bResult.events
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bResult.events
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bResult.resolve
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bResult.resolve
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bResult.route
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bResult.route
+    kind: method
+  - id: internal/workflow/authority_resume_identity_test.go:f4bResult.routeOnce
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bResult.routeOnce
+    kind: method
+  - id: internal/workflow/authority_resume_identity_test.go:f4bResult.taskID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bResult.taskID
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bResult.w
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bResult.w
+    kind: var
+  - id: internal/workflow/authority_resume_identity_test.go:f4bResult~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bResult
+    kind: type
+  - id: internal/workflow/authority_resume_identity_test.go:f4bRevised
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bRevised
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bRolesTest
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bRolesTest
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:f4bRun
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bRun
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bSpecimen
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bSpecimen
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bSpecimenJSON
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bSpecimenJSON
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:f4bStatusContains
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bStatusContains
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bVerdict
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bVerdict
+    kind: const
+  - id: internal/workflow/authority_resume_identity_test.go:f4bWorld
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bWorld
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:f4bWorldFor
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: f4bWorldFor
     kind: function
   - id: internal/workflow/authority_resume_identity_test.go:gapEscalate
     namespace: structural.scip
@@ -49331,6 +49751,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.admitInvocation
     kind: method
+  - id: internal/workflow/engine.go:Engine.admitTestEdits
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.admitTestEdits
+    kind: method
   - id: internal/workflow/engine.go:Engine.admitted
     namespace: structural.scip
     language: go
@@ -49990,6 +50416,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.record
+    kind: method
+  - id: internal/workflow/engine.go:Engine.recordAuthoredTestEditGrants
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.recordAuthoredTestEditGrants
     kind: method
   - id: internal/workflow/engine.go:Engine.recordClosureQuestion
     namespace: structural.scip
