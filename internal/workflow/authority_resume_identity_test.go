@@ -4800,7 +4800,14 @@ func f4bRevised(t *testing.T) architectureDecision {
 // ends at any run terminal, a plan-admission park included.
 func f4bContinuation(t *testing.T, taskID string, script ...architectureDecision) (f4bExecuted, []string) {
 	t.Helper()
-	r := f4bWorldFor(t, taskID, f4bCase{plan: script[0], region: f4bRegion})
+	return f4bContinuationIn(t, taskID, f4bRegion, 1, script...)
+}
+
+// f4bContinuationIn is f4bContinuation over region, with the first authorize
+// human questions answered Authorize live and every later one deferred.
+func f4bContinuationIn(t *testing.T, taskID, region string, authorize int, script ...architectureDecision) (f4bExecuted, []string) {
+	t.Helper()
+	r := f4bWorldFor(t, taskID, f4bCase{plan: script[0], region: region})
 	e := r.e
 	e.Config.Permissions.ReadRepository = true
 	e.Config.Permissions.CreateWorktrees = true
@@ -4837,7 +4844,7 @@ func f4bContinuation(t *testing.T, taskID string, script ...architectureDecision
 			if ev.Kind == event.AuthorityRequired {
 				asked++
 				waitForPending(t, e, taskID)
-				if asked == 1 {
+				if asked <= authorize {
 					e.ResolveHuman(taskID, "1")
 				} else {
 					e.DeferAuthority(taskID)
@@ -5024,5 +5031,134 @@ func TestF4bW8cASuppliedPlanRefusalAfterAuthorizationTerminates(t *testing.T) {
 		if id != refusals[0].PlanAttemptID {
 			t.Fatalf("the supplied bound was revised: attempt %q beside the refused %q", id, refusals[0].PlanAttemptID)
 		}
+	}
+}
+
+// THE EXHAUSTED-GAP SITE (RULING-261: both sites are covered). The second
+// post-authorization refusal site is reached only when the gap the answer left
+// open has spent its closure budget and its disposal is a question about
+// proceeding with it open, not a knowledge limit: every post-authorization gap
+// with an unresolved member disposes as a limit, so the one route there is a
+// region blind spot over a plan that names no file, whose gap has no member.
+// f4bBlindRegion is that region; f4bGapOpen is the specimen naming no file,
+// with its test-edit declarations unchanged.
+const f4bBlindRegion = `{"status":"PREFLIGHT_STATUS_OK",` +
+	`"coverage":{"sufficient":true,"direct_anchor_count":24,"file_count":7,"indexed_file_count":7},` +
+	`"blind_spots":["coverage_insufficient: no direct anchors"],` +
+	`"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},` +
+	identifiedAuthority + `}`
+
+const f4bGapOpenProceed = "proceeding on the human's earlier authorization for: a bounded knowledge gap was not closed by investigation: "
+
+func f4bGapOpen(t *testing.T) architectureDecision {
+	d := f4bSpecimen(t)
+	d.Files = nil
+	if c := f4bCondition(t, f4bCase{plan: d, region: f4bBlindRegion}); !c.RequiresHuman() || c.ClosesGap() {
+		t.Fatalf("premise: the plan naming no file is human-owned by its consequence before coverage is asked: %+v", c)
+	}
+	return d
+}
+
+// f4bGapOpenRefusal requires the run's one refusal to be the test-edit refusal
+// of the plan the human authorised to proceed with its gap open, decided at
+// that site: after both authorizations were consumed, and returned to the
+// architect.
+func f4bGapOpenRefusal(t *testing.T, x f4bExecuted) planAttemptRefusal {
+	t.Helper()
+	refusals := refusalsIn(t, x.events)
+	if len(refusals) != 1 {
+		t.Fatalf("want exactly one recorded refusal, got %s\n%s", f4bDescribe(refusals...), gapLoopTrace(x.events))
+	}
+	ref := refusals[0]
+	authorized := f4bAuthorized(t, x.events)
+	if len(authorized) != 2 || authorized[0] != ref.PlanAttemptID || authorized[1] != ref.PlanAttemptID {
+		t.Fatalf("premise: the consequence and the open gap were both authorised for the refused attempt %q: %v\n%s",
+			short12(ref.PlanAttemptID), authorized, gapLoopTrace(x.events))
+	}
+	proceeded, refusedAt := -1, -1
+	for i, ev := range x.events {
+		if ev.Kind == event.Status && strings.Contains(ev.Summary, f4bGapOpenProceed) && proceeded < 0 {
+			proceeded = i
+		}
+		if ev.Kind == event.PlanAttemptRefused && refusedAt < 0 {
+			refusedAt = i
+		}
+	}
+	if proceeded < 0 || refusedAt < proceeded {
+		t.Fatalf("the refusal was not decided at the exhausted-gap site, after proceeding with the gap open:\n%s", gapLoopTrace(x.events))
+	}
+	if ref.Class != refusalTestEditAdmission || !strings.Contains(ref.Reason, f4bRolesTest) ||
+		ref.Continuation != session.PlanAdmissionContinuationArchitectTurn {
+		t.Fatalf("the exhausted-gap refusal is not a typed test_edit_admission refusal returned to the architect: %s", f4bDescribe(ref))
+	}
+	return ref
+}
+
+// W8 AT THE EXHAUSTED-GAP SITE. The human authorises the consequence, the gap
+// the answer left open spends its closure round, and the human authorises
+// proceeding with it open; the test edit is still ungranted. The refusal is
+// typed test_edit_admission and returned to the architect once, verbatim; the
+// revision is a new attempt asked about anew -- neither authorization is
+// inherited -- and nothing is implemented. On the r1 shape (the refusal
+// returned directly) the run fails with no architect revision.
+func TestF4bW8AnExhaustedGapRefusalReturnsToTheArchitectOnce(t *testing.T) {
+	const task = "task-f4b-w8-gap"
+	revised := f4bRevised(t)
+	revised.Files = nil
+	x, prompts := f4bContinuationIn(t, task, f4bBlindRegion, 2, f4bGapOpen(t), f4bGapOpen(t), f4bGapOpen(t), f4bGapOpen(t), revised)
+	kinds := kindsOf(x.events)
+	ref := f4bGapOpenRefusal(t, x)
+	// Exactly one bounded revision: the refusal reached the fifth turn, verbatim,
+	// and no earlier one.
+	if len(prompts) != 5 || !strings.Contains(prompts[4], planAdmissionRefusedMarker) || !strings.Contains(prompts[4], ref.RefusalID) {
+		t.Fatalf("the refusal was not returned to the architect as its one revision (%d prompts):\n%s", len(prompts), gapLoopTrace(x.events))
+	}
+	for i, p := range prompts[:4] {
+		if strings.Contains(p, planAdmissionRefusedMarker) {
+			t.Fatalf("a refusal reached architect turn %d, before the authorised plan was admitted", i+1)
+		}
+	}
+	attempts := startedAttempts(t, x.events)
+	if len(attempts) < 2 || attempts[len(attempts)-1] == ref.PlanAttemptID {
+		t.Fatalf("the revision did not receive a new plan attempt: %v", attempts)
+	}
+	fresh := attempts[len(attempts)-1]
+	if f4bAsked(x.events) != 3 || !hasKind(kinds, event.WorkflowAwaitingAuthority) || f4bQuestion(t, x.events).PlanAttemptID != fresh {
+		t.Fatalf("the revised plan inherited an authorization of the refused attempt, or was not asked about as itself (revised %q):\n%s", fresh, gapLoopTrace(x.events))
+	}
+	if hasKind(kinds, event.WorkflowFailed) || hasKind(kinds, event.WorkflowPlanAdmissionRefused) {
+		t.Fatalf("the run did not end at the revised plan's own authority question:\n%s", gapLoopTrace(x.events))
+	}
+	if n := x.implementerTurns(); n != 0 || hasKind(kinds, event.PlanProposed) || implementerStartedBefore(x.events, len(x.events)) {
+		t.Fatalf("implementation was reached before a new admission (%d implementer(s)):\n%s", n, gapLoopTrace(x.events))
+	}
+}
+
+// W8b AT THE EXHAUSTED-GAP SITE -- THE BUDGET IS ONE REVISION. The architect
+// answers the refusal with the same plan: the same attempt, refused again, parks
+// as PlanAdmissionRefused -- resumable, no implementer -- and is never handed
+// back for a further revision.
+func TestF4bW8bARecurringExhaustedGapRefusalParks(t *testing.T) {
+	const task = "task-f4b-w8b-gap"
+	x, prompts := f4bContinuationIn(t, task, f4bBlindRegion, 2, f4bGapOpen(t))
+	kinds := kindsOf(x.events)
+	ref := f4bGapOpenRefusal(t, x)
+	if len(prompts) != 5 {
+		t.Fatalf("the recurring refusal was not bounded to one revision: %d architect turn(s)\n%s", len(prompts), gapLoopTrace(x.events))
+	}
+	at := indexOfKind(x.events, event.WorkflowPlanAdmissionRefused)
+	if at < 0 || hasKind(kinds, event.WorkflowFailed) {
+		t.Fatalf("the recurring refusal did not park as PlanAdmissionRefused:\n%s", gapLoopTrace(x.events))
+	}
+	var parked PlanAdmissionRefused
+	if err := json.Unmarshal(x.events[at].Payload, &parked.planAttemptRefusal); err != nil ||
+		parked.RefusalID != ref.RefusalID || parked.PlanAttemptID != ref.PlanAttemptID {
+		t.Fatalf("the park does not name the recurring refusal: %+v (%v)", parked.planAttemptRefusal, err)
+	}
+	if n := f4bAsked(x.events); n != 2 {
+		t.Fatalf("the human was asked %d times about one attempt's consequence and its open gap", n)
+	}
+	if n := x.implementerTurns(); n != 0 || hasKind(kinds, event.PlanProposed) || implementerStartedBefore(x.events, len(x.events)) {
+		t.Fatalf("an implementer was reached under a parked refusal (%d):\n%s", n, gapLoopTrace(x.events))
 	}
 }
