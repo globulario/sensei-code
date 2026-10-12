@@ -30,3 +30,15 @@ func TestConfinementIsRefusedOffLinuxBeforeTheCheckRuns(t *testing.T) {
 		t.Fatalf("confinement off Linux was not refused before the check: %+v", e)
 	}
 }
+
+// Unconfined is unchanged off Linux too: the default runner still runs the
+// check on the host broker, the workflow as requester. (The Linux twin,
+// TestAnUnconfinedRunnerIsUnchanged, needs sh; go is present wherever this
+// test runs.)
+func TestAnUnconfinedRunnerIsUnchangedOffLinux(t *testing.T) {
+	e := Runner{Workspace: t.TempDir()}.Run(context.Background(), "task-1", "sha256:abc",
+		[]Check{{Kind: Test, Command: "go", Args: []string{"env", "GOOS"}}}).Checks[0]
+	if e.Outcome != Passed || e.RequestedBy != "sensei-code workflow" || e.ExecutedBy != "sensei-code execution broker" {
+		t.Fatalf("the default runner changed: %+v", e)
+	}
+}
