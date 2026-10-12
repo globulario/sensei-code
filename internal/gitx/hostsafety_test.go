@@ -243,56 +243,75 @@ func TestExecutableRepositoryConfigurationIsRefusedBeforeGitRuns(t *testing.T) {
 	}
 }
 
-// The caller's environment and global configuration cannot reach git: hostile
-// GIT_* variables and a HOME whose .gitconfig names a program are ignored, and
-// the capture is the ordinary one.
+// The caller's environment cannot reach git, and the owner's or the
+// environment's configuration cannot either: hostile GIT_* variables that are
+// not configuration are ignored and the capture is the ordinary one; hostile
+// configuration -- in HOME, in GIT_CONFIG_COUNT/KEY/VALUE or in
+// GIT_CONFIG_PARAMETERS -- is refused by membership before git runs
+// (RULING-322).
 func TestTheCallersEnvironmentDoesNotReachGit(t *testing.T) {
 	ctx := context.Background()
-	r, base := hsRepo(t)
-	wt, err := r.CreateWorktreeAt(ctx, "env", base)
-	if err != nil {
-		t.Fatal(err)
-	}
-	hsWrite(t, filepath.Join(wt, "a.txt"), "two\n")
-	// diff=evil: a textconv driver named by the hostile environment. (A
-	// filter attribute is refused outright now -- RULING-319 -- and has its
-	// own witnesses.)
-	hsWrite(t, filepath.Join(wt, ".gitattributes"), "*.txt diff=evil\n")
-	marker := filepath.Join(t.TempDir(), "ran")
-	evil := hsProgram(t, marker)
-	home := t.TempDir()
-	hsWrite(t, filepath.Join(home, ".gitconfig"), "[core]\n\tfsmonitor = "+evil+"\n[filter \"evil\"]\n\tclean = "+evil+"\n")
-	hsWrite(t, filepath.Join(home, "xdg", "git", "config"), "[core]\n\tfsmonitor = "+evil+"\n")
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
-	t.Setenv("GIT_CONFIG_PARAMETERS", "'diff.evil.textconv'='"+evil+"'")
-	t.Setenv("GIT_CONFIG_COUNT", "1")
-	t.Setenv("GIT_CONFIG_KEY_0", "core.fsmonitor")
-	t.Setenv("GIT_CONFIG_VALUE_0", evil)
-	t.Setenv("GIT_DIR", filepath.Join(home, "elsewhere"))
-	t.Setenv("GIT_EXTERNAL_DIFF", evil)
-	t.Setenv("GIT_EXEC_PATH", home)
-
-	cap, err := (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if hsRan(marker) {
-		t.Fatal("a program from the caller's environment or global configuration ran")
-	}
-	if !strings.Contains(cap.Diff, "+two") || len(cap.Paths) != 2 {
-		t.Fatalf("the capture is not the ordinary one: paths %q\n%s", cap.Paths, cap.Diff)
-	}
-	// Control: plain git with the same HOME (GIT_DIR and GIT_EXEC_PATH dropped,
-	// or it would fail before reading any configuration) runs the program.
-	control := exec.Command("git", "-C", wt, "status", "--porcelain")
-	for _, e := range os.Environ() {
-		if !strings.HasPrefix(e, "GIT_DIR=") && !strings.HasPrefix(e, "GIT_EXEC_PATH=") {
-			control.Env = append(control.Env, e)
+	setup := func(t *testing.T) (Repo, string, string, string) {
+		r, base := hsRepo(t)
+		wt, err := r.CreateWorktreeAt(ctx, "env", base)
+		if err != nil {
+			t.Fatal(err)
 		}
+		hsWrite(t, filepath.Join(wt, "a.txt"), "two\n")
+		// diff=evil: a textconv driver hostile configuration would name.
+		hsWrite(t, filepath.Join(wt, ".gitattributes"), "*.txt diff=evil\n")
+		marker := filepath.Join(t.TempDir(), "ran")
+		return r, base, wt, marker
 	}
-	if out, _ := control.CombinedOutput(); !hsRan(marker) {
-		t.Fatalf("premise: plain git with this environment does not run the program\n%s", out)
+	t.Run("hostile variables that are not configuration", func(t *testing.T) {
+		_, base, wt, marker := setup(t)
+		evil := hsProgram(t, marker)
+		home := t.TempDir()
+		t.Setenv("GIT_DIR", filepath.Join(home, "elsewhere"))
+		t.Setenv("GIT_EXTERNAL_DIFF", evil)
+		t.Setenv("GIT_EXEC_PATH", home)
+		cap, err := (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if hsRan(marker) {
+			t.Fatal("a program from the caller's environment ran")
+		}
+		if !strings.Contains(cap.Diff, "+two") || len(cap.Paths) != 2 {
+			t.Fatalf("the capture is not the ordinary one: paths %q\n%s", cap.Paths, cap.Diff)
+		}
+	})
+	for name, plant := range map[string]func(t *testing.T, evil string){
+		"global configuration naming a program": func(t *testing.T, evil string) {
+			hsOwner(t, "[core]\n\tfsmonitor = "+evil+"\n", "")
+		},
+		"GIT_CONFIG_COUNT naming a program": func(t *testing.T, evil string) {
+			hsOwner(t, "", "")
+			t.Setenv("GIT_CONFIG_COUNT", "1")
+			t.Setenv("GIT_CONFIG_KEY_0", "core.fsmonitor")
+			t.Setenv("GIT_CONFIG_VALUE_0", evil)
+		},
+		"GIT_CONFIG_PARAMETERS naming a program": func(t *testing.T, evil string) {
+			hsOwner(t, "", "")
+			t.Setenv("GIT_CONFIG_PARAMETERS", "'diff.evil.textconv'='"+evil+"'")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, base, wt, marker := setup(t)
+			evil := hsProgram(t, marker)
+			plant(t, evil)
+			_, err := (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+			hsRefused(t, "CandidateCapture", err)
+			if hsRan(marker) {
+				t.Fatal("the hostile configuration's program ran")
+			}
+			// Control: ordinary git with the same environment runs it.
+			if out, _ := hsOwnerGit(wt, "", "status", "--porcelain"); !hsRan(marker) {
+				if out2, _ := hsOwnerGit(wt, "", "diff", "HEAD"); !hsRan(marker) {
+					t.Fatalf("premise: ordinary git with this environment does not run the program\n%s\n%s", out, out2)
+				}
+			}
+		})
 	}
 }
 
@@ -1048,9 +1067,6 @@ func TestASelectedContentFilterIsRefused(t *testing.T) {
 			if after, _ := hsOwnerGit(wt, "", "ls-files", "--stage", "-z"); strings.TrimSpace(after) != before {
 				t.Fatalf("the refused capture changed the index first:\nbefore %q\nafter  %q", before, after)
 			}
-			if !strings.Contains(err.Error(), "content filter") {
-				t.Fatalf("refused, but not for the selected filter: %v", err)
-			}
 			if hsRan(marker) {
 				t.Fatal("the filter driver ran through the trusted profile")
 			}
@@ -1184,7 +1200,7 @@ func TestNeutralOwnerConfigurationCapturesNormally(t *testing.T) {
 	}
 	hsWrite(t, filepath.Join(wt, "a.txt"), "two\n")
 	marker := filepath.Join(t.TempDir(), "ran")
-	hsOwner(t, "[core]\n\tautocrlf = false\n[filter \"unused\"]\n\tclean = "+hsProgram(t, marker)+"\n", "# no rules\n")
+	hsOwner(t, "[core]\n\tautocrlf = false\n[user]\n\tname = Owner\n\temail = owner@example.invalid\n[init]\n\tdefaultBranch = main\n", "# no rules\n")
 	cap, err := (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
 	if err != nil {
 		t.Fatalf("a neutral owner configuration was refused: %v", err)
@@ -1670,4 +1686,180 @@ func TestOwnerIndirectionsGitResolvesAreRefused(t *testing.T) {
 			t.Fatal("premise: the excludes path is lexically inside the worktree")
 		}
 	})
+}
+
+// A filter attribute is refused before add -N even when no driver is
+// configured anywhere: the trusted profile never supplies an empty driver in
+// place of a missing one (RULING-319), and the index is left untouched.
+func TestAFilterAttributeIsRefusedBeforeStaging(t *testing.T) {
+	ctx := context.Background()
+	r, base := hsRepo(t)
+	wt, err := r.CreateWorktreeAt(ctx, "nodriver", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hsWrite(t, filepath.Join(wt, ".gitattributes"), "*.dat filter=nowhere\n")
+	hsWrite(t, filepath.Join(wt, "new.dat"), "new\n")
+	before := hsGit(t, wt, "ls-files", "--stage", "-z")
+	_, err = (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+	if err == nil || !strings.Contains(err.Error(), "content filter") {
+		t.Fatalf("a filter attribute was not refused as one: %v", err)
+	}
+	if after := hsGit(t, wt, "ls-files", "--stage", "-z"); after != before {
+		t.Fatalf("the refused capture changed the index first:\nbefore %q\nafter  %q", before, after)
+	}
+}
+
+// The owner's configuration is read by membership: an unknown key of any
+// shape, a repeated assignment that turns unsafe, an invalid value for an
+// admitted key, an escaped file reference, an environment-supplied unknown
+// key and a symlink setting the repository does not establish are all
+// refused before git runs (RULING-322).
+func TestOwnerConfigurationIsReadByMembership(t *testing.T) {
+	ctx := context.Background()
+	for name, c := range map[string]struct {
+		gitconfig string
+		env       map[string]string
+		repo      []string // repository config to set first
+	}{
+		"an unknown core key":                 {gitconfig: "[core]\n\tpager = less\n"},
+		"an unknown non-core key":             {gitconfig: "[merge]\n\tconflictStyle = diff3\n"},
+		"an unknown subsection key":           {gitconfig: "[remote \"origin\"]\n\tprune = true\n"},
+		"safe then unsafe autocrlf":           {gitconfig: "[core]\n\tautocrlf = false\n\tautocrlf = true\n"},
+		"an invalid admitted value":           {gitconfig: "[core]\n\tignoreCase = maybe\n", repo: []string{"core.ignoreCase", "false"}},
+		"an escaped excludes path":            {gitconfig: "[core]\n\texcludesFile = /tmp/a\\\\b\n"},
+		"an include":                          {gitconfig: "[include]\n\tpath = /tmp/x\n"},
+		"an includeIf":                        {gitconfig: "[includeIf \"gitdir:/\"]\n\tpath = /tmp/x\n"},
+		"an environment unknown key":          {env: map[string]string{"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "merge.tool", "GIT_CONFIG_VALUE_0": "x"}},
+		"a URL-qualified credential helper":   {gitconfig: "[credential \"https://example.invalid\"]\n\thelper = store\n"},
+		"credential.username":                 {gitconfig: "[credential]\n\tusername = someone\n"},
+		"credential.useHttpPath":              {gitconfig: "[credential]\n\tuseHttpPath = true\n"},
+		"an arbitrary safe key":               {gitconfig: "[safe]\n\tbareRepository = all\n"},
+		"core.symlinks the repo does not set": {gitconfig: "[core]\n\tsymlinks = false\n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, _ := hsRepo(t)
+			for i := 0; i+1 < len(c.repo); i += 2 {
+				hsGit(t, r.Root, "config", c.repo[i], c.repo[i+1])
+			}
+			hsOwner(t, c.gitconfig, "")
+			for k, v := range c.env {
+				t.Setenv(k, v)
+			}
+			_, err := r.Head(ctx)
+			hsRefused(t, "Head", err)
+		})
+	}
+	// The escaped reference is one git decodes: ordinary git reads a
+	// different path than the raw text names (Codex r4251107439).
+	r, _ := hsRepo(t)
+	hsOwner(t, "[core]\n\texcludesFile = /tmp/a\\\\b\n", "")
+	if out, _ := hsOwnerGit(r.Root, "", "config", "--global", "--get", "core.excludesFile"); strings.TrimSpace(out) != `/tmp/a\b` {
+		t.Fatalf("premise: git does not decode the escape: %q", out)
+	}
+}
+
+// Repository precedence for the path keys: the owner's value is admitted only
+// when the repository sets its own, which both sides then apply (J1, Codex
+// r4251107452). Without it, a symlink ordinary git would check out as a file
+// is refused rather than checked out as a symlink.
+func TestOwnerPathKeysFollowRepositoryPrecedence(t *testing.T) {
+	ctx := context.Background()
+	// Positive: the repository establishes each key; owner values agree or
+	// conflict, and the repository's wins on both sides.
+	for _, k := range []string{"core.fileMode", "core.symlinks"} {
+		for _, owner := range []string{"true", "false"} {
+			r, _ := hsRepo(t)
+			hsGit(t, r.Root, "config", k, "true")
+			hsOwner(t, "[core]\n\t"+strings.TrimPrefix(k, "core.")+" = "+owner+"\n", "")
+			if _, err := r.Head(ctx); err != nil {
+				t.Errorf("owner %s=%s with the repository's own value was refused: %v", k, owner, err)
+			}
+		}
+	}
+	// Negative with control: a symlink blob, owner core.symlinks=false, no
+	// repository value.
+	r, _ := hsRepo(t)
+	if err := os.Symlink("/etc/passwd", filepath.Join(r.Root, "link")); err != nil {
+		t.Fatal(err)
+	}
+	hsGit(t, r.Root, "add", "link")
+	hsGit(t, r.Root, "commit", "-q", "-m", "link")
+	base := hsGit(t, r.Root, "rev-parse", "HEAD")
+	hsOwner(t, "[core]\n\tsymlinks = false\n", "")
+	_, err := r.CreateWorktreeAt(ctx, "symlink", base)
+	hsRefused(t, "CreateWorktreeAt", err)
+	control := filepath.Join(t.TempDir(), "control")
+	if out, err := hsOwnerGit(r.Root, "", "worktree", "add", "-q", "--detach", control, base); err != nil {
+		t.Fatalf("control: %v\n%s", err, out)
+	}
+	if fi, err := os.Lstat(filepath.Join(control, "link")); err != nil || fi.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("premise: ordinary git under owner symlinks=false did not check the link out as a regular file (%v)", err)
+	}
+}
+
+// safe.directory and credential.helper are observed, never used (RULING-323):
+// with them present -- several entries, a helper that would leave a marker --
+// every supported operation works, nothing runs, the capture is identical to
+// one without them, and neither value reaches the executed git; ownership is
+// still ownedByUs's.
+func TestObservedOwnerKeysNeverReachGit(t *testing.T) {
+	ctx := context.Background()
+	capture := func(t *testing.T, gitconfig string) (Capture, Repo, string) {
+		t.Helper()
+		r, base := hsRepo(t)
+		hsOwner(t, gitconfig, "")
+		wt, err := r.CreateWorktreeAt(ctx, "observed", base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hsWrite(t, filepath.Join(wt, "a.txt"), "two\n")
+		hsWrite(t, filepath.Join(wt, "b.txt"), "new\n")
+		cap, err := (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+		if err != nil {
+			t.Fatalf("capture with observed owner keys: %v", err)
+		}
+		return cap, r, wt
+	}
+	marker := filepath.Join(t.TempDir(), "helper-ran")
+	helper := hsProgram(t, marker)
+	with, r, wt := capture(t, "[safe]\n\tdirectory = *\n\tdirectory = /somewhere\n[credential]\n\thelper = "+helper+"\n\thelper = store\n")
+	without, _, _ := capture(t, "")
+	if with.Tree != without.Tree || with.Diff != without.Diff || strings.Join(with.Paths, "\x00") != strings.Join(without.Paths, "\x00") {
+		t.Fatalf("the observed keys changed the capture:\n%+v\n%+v", with, without)
+	}
+	hsOwner(t, "[safe]\n\tdirectory = *\n[credential]\n\thelper = "+helper+"\n", "")
+	if _, err := r.Head(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := r.WorktreeIsClean(ctx, wt); err != nil {
+		t.Fatal(err)
+	}
+	if u := r.OriginURL(ctx); u != "" {
+		t.Fatalf("unexpected origin %q", u)
+	}
+	if err := r.RemoveWorktree(ctx, wt); err != nil {
+		t.Fatal(err)
+	}
+	if hsRan(marker) {
+		t.Fatal("the owner's credential helper ran")
+	}
+	// Neither value is handed to git.
+	cmd, err := r.gitCommand(ctx, r.Root, nil, true, "rev-parse", "HEAD")
+	if err != nil {
+		t.Fatal(err)
+	}
+	all := strings.Join(append(append([]string{}, cmd.Args...), cmd.Env...), "\n")
+	if strings.Contains(all, helper) || strings.Contains(strings.ToLower(all), "safe.directory") || strings.Contains(strings.ToLower(all), "credential") {
+		t.Fatalf("an observed owner key reached the executed git:\n%s", all)
+	}
+	// safe.directory does not relax ownership.
+	if os.Getuid() > 0 {
+		hsRefused(t, "ownedByUs(/) under safe.directory=*", ownedByUs("/"))
+	}
+	// A candidate's own helper never enters the trusted environment: the
+	// repository allowlist refuses it.
+	hsGit(t, r.Root, "config", "credential.helper", helper)
+	_, err = r.Head(ctx)
+	hsRefused(t, "a repository credential helper", err)
 }

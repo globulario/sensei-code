@@ -578,43 +578,48 @@ func (p *hostProfile) locateOwnerFiles() error {
 	return nil
 }
 
-// checkOwnerContent refuses when the owner's ordinary git would treat content
-// or paths in a way this profile does not reproduce (RULING-319, RULING-320):
-//   - core.autocrlf other than false, core.eol, core.attributesFile;
-//   - core.bigFileThreshold, core.safecrlf, core.checkRoundtripEncoding, which
-//     change how content is rendered or whether git rejects it;
-//   - core.precomposeUnicode or core.ignoreCase the repository does not set
-//     itself (repo keys win in git's precedence);
-//   - any active rule in an owner attributes file: a candidate can define a
-//     macro of any attribute name, so no bare attribute is harmless;
-//   - more than one excludes file, which is ambiguous.
-//
-// The files are read as data, includes followed as data, and refusals name
-// the source and key, never a value. It also returns the owner's excludes file
-// (the default global ignore when none is set), for the excludes snapshot.
+// checkOwnerContent reads the owner's global and system configuration -- and
+// any configuration the environment supplies -- by MEMBERSHIP (RULING-322).
+// Every key must be one ownerKeyClass admits; anything else refuses before
+// git runs. A denylist over git's open vocabulary failed open on every key it
+// did not list (thirteen were found one at a time); membership refuses the
+// unknown instead. It returns the owner's excludes file (git's default global
+// ignore when none is set), for the excludes snapshot. Refusals name the
+// source and key, never a value.
 func (p hostProfile) checkOwnerContent(repoKeys map[string][]configValue) (string, error) {
-	for _, e := range os.Environ() {
-		k, v, _ := strings.Cut(e, "=")
-		if k == "GIT_CONFIG_PARAMETERS" || strings.HasPrefix(k, "GIT_CONFIG_KEY_") {
-			low := strings.ToLower(v)
-			for key := range ownerRefusedKeys {
-				if strings.Contains(low, key) {
-					return "", refuseProfile("the environment (%s) sets %s for ordinary git, which the trusted profile does not reproduce", k, key)
-				}
+	o := ownerScan{repo: repoKeys, home: p.ownerHome}
+	if v, ok := os.LookupEnv("GIT_CONFIG_PARAMETERS"); ok && strings.TrimSpace(v) != "" {
+		return "", refuseProfile("the environment supplies GIT_CONFIG_PARAMETERS, whose settings the trusted profile does not read exactly as git does")
+	}
+	if n := os.Getenv("GIT_CONFIG_COUNT"); n != "" {
+		count, err := strconv.Atoi(n)
+		if err != nil || count < 0 || count > 100 {
+			return "", refuseProfile("the environment's GIT_CONFIG_COUNT is not a supported count")
+		}
+		for i := 0; i < count; i++ {
+			key, ok := os.LookupEnv("GIT_CONFIG_KEY_" + strconv.Itoa(i))
+			if !ok {
+				return "", refuseProfile("the environment's GIT_CONFIG_KEY_%d is missing", i)
 			}
-			// include and includeIf pull in a file ordinary git reads and this
-			// scan would not see (Codex r4250927600).
-			for _, key := range []string{"core.autocrlf", "core.precomposeunicode", "core.ignorecase", "core.excludesfile", "include"} {
-				if strings.Contains(low, key) {
-					return "", refuseProfile("the environment (%s) sets %s for ordinary git, which the trusted profile does not reproduce", k, key)
-				}
+			k, ok := envConfigKey(key)
+			if !ok {
+				return "", refuseProfile("the environment's GIT_CONFIG_KEY_%d is not a configuration key git would read exactly so", i)
+			}
+			value := configValue{raw: os.Getenv("GIT_CONFIG_VALUE_" + strconv.Itoa(i)), assigned: true}
+			if err := o.admit("the environment", k, []configValue{value}); err != nil {
+				return "", err
 			}
 		}
 	}
-	o := ownerScan{p: p, repo: repoKeys, seen: map[string]bool{}}
 	for _, f := range p.ownerConfig {
-		if err := o.file(f, 0, false); err != nil {
+		keys, err := configKeys(f, true)
+		if err != nil {
 			return "", err
+		}
+		for k, vs := range keys {
+			if err := o.admit(f, k, vs); err != nil {
+				return "", err
+			}
 		}
 	}
 	for _, f := range p.ownerAttrs {
@@ -633,108 +638,107 @@ func (p hostProfile) checkOwnerContent(repoKeys map[string][]configValue) (strin
 	return "", refuseProfile("the owner's configuration names %d different excludes files; which one ordinary git uses is not established", len(o.excludes))
 }
 
-// ownerRefusedKeys change content, its rendering, or whether git rejects it,
-// in ways the trusted profile does not reproduce.
-var ownerRefusedKeys = setOf("core.eol", "core.attributesfile", "core.bigfilethreshold", "core.safecrlf", "core.checkroundtripencoding")
+// envConfigKey normalises a GIT_CONFIG_KEY_n value the way configKeys spells
+// keys: section and name lower-cased, a subsection kept as written.
+func envConfigKey(key string) (string, bool) {
+	first := strings.Index(key, ".")
+	last := strings.LastIndex(key, ".")
+	if first <= 0 || last == len(key)-1 {
+		return "", false
+	}
+	name := key[last+1:]
+	if !isConfigName(name) {
+		return "", false
+	}
+	section := strings.ToLower(key[:first])
+	if first == last {
+		return section + "." + strings.ToLower(name), true
+	}
+	return section + "." + key[first+1:last] + "." + strings.ToLower(name), true
+}
+
+// The owner-configuration vocabulary (RULING-322): ADMITTED_INERT keys change
+// no operation gitx runs and no fact it certifies; ADMITTED_SPECIAL keys are
+// admitted only for the values, and under the repository precedence, that
+// keep ordinary git and the trusted profile in agreement; every other key --
+// unknown keys, include and includeIf, whole families such as credential.*,
+// http.*, alias.*, remote.*, push.*, pull.*, fetch.*, gpg.* -- is REFUSED.
+// Exact keys only: no section is admitted by prefix.
+//
+// safe.directory and credential.helper are admitted by exact name (RULING-323)
+// because the trusted profile never reads the owner's configuration: their
+// values are observed here and nowhere used -- never copied into git's
+// configuration or environment, never executed. Ownership stays ownedByUs's,
+// and gitx runs no network operation a helper could serve.
+var ownerInertKeys = setOf("user.name", "user.email", "init.defaultbranch", "safe.directory", "credential.helper")
+
+// ownerRepoPrecedenceKeys are admitted only when the repository sets the key
+// itself: repository configuration wins in git's precedence and the trusted
+// profile reads it too, so only then do both sides apply the same value.
+var ownerRepoPrecedenceKeys = setOf("core.filemode", "core.ignorecase", "core.precomposeunicode", "core.symlinks")
 
 type ownerScan struct {
-	p        hostProfile
 	repo     map[string][]configValue
-	seen     map[string]bool
+	home     string
 	excludes map[string]bool
 }
 
-// file scans one owner configuration file. conditional says it was reached
-// through an includeIf, whose condition this scan does not evaluate: following
-// it only makes a refusal stricter, so it is never used to CHOOSE a value.
-func (o *ownerScan) file(f string, depth int, conditional bool) error {
-	if depth > 10 {
-		return refuseProfile("the owner's git configuration includes files more than 10 deep at %s", f)
-	}
-	if o.seen[f] {
+// admit classifies one owner key, from source, with every value it holds.
+func (o *ownerScan) admit(source, k string, vs []configValue) error {
+	switch {
+	case ownerInertKeys[k]:
+		return nil
+	case k == "core.autocrlf":
+		for _, v := range vs {
+			if !v.isFalse() {
+				return refuseProfile("%s sets core.autocrlf to a value other than false; ordinary git converts line endings the trusted profile does not", source)
+			}
+		}
+		return nil
+	case ownerRepoPrecedenceKeys[k]:
+		for _, v := range vs {
+			if !v.isBool() {
+				return refuseProfile("%s sets %s to a value that is not a git boolean", source, k)
+			}
+		}
+		if _, ok := o.repo[k]; !ok {
+			return refuseProfile("%s sets %s and the repository does not set it itself; ordinary git would check out or compare paths differently", source, k)
+		}
+		return nil
+	case k == "core.excludesfile":
+		for _, v := range vs {
+			path, err := ownerFilePath(v.raw, o.home, source)
+			if err != nil {
+				return err
+			}
+			if o.excludes == nil {
+				o.excludes = map[string]bool{}
+			}
+			o.excludes[path] = true
+		}
 		return nil
 	}
-	o.seen[f] = true
-	keys, err := configKeys(f, true)
-	if err != nil {
-		return err
-	}
-	for k, vs := range keys {
-		switch {
-		case k == "core.autocrlf":
-			for _, v := range vs {
-				if !v.isFalse() {
-					return refuseProfile("%s sets core.autocrlf to a value other than false; ordinary git converts line endings the trusted profile does not", f)
-				}
-			}
-		case ownerRefusedKeys[k]:
-			return refuseProfile("%s sets %s; ordinary git treats content in a way the trusted profile does not", f, k)
-		case k == "core.precomposeunicode", k == "core.ignorecase", k == "core.filemode":
-			// The repository's own setting wins in git's precedence and is read
-			// by the profile too; only an unestablished one diverges.
-			if _, ok := o.repo[k]; !ok {
-				return refuseProfile("%s sets %s and the repository does not set it itself; pathname identity would differ from ordinary git", f, k)
-			}
-		case k == "core.excludesfile":
-			// Which file ordinary git uses must be established, not guessed: a
-			// value behind an unevaluated includeIf may not apply, and a
-			// relative one is resolved by git against the worktree, where the
-			// candidate writes (independent review H1, H2).
-			if conditional {
-				return refuseProfile("%s sets core.excludesFile behind an includeIf; whether ordinary git uses it is not established", f)
-			}
-			for _, v := range vs {
-				if !strings.HasPrefix(v.raw, "~/") && !filepath.IsAbs(v.raw) {
-					return refuseProfile("%s sets a relative core.excludesFile, which ordinary git resolves inside the repository", f)
-				}
-			}
-			for _, v := range vs {
-				if o.excludes == nil {
-					o.excludes = map[string]bool{}
-				}
-				path, err := o.p.ownerPath(v.raw, f)
-				if err != nil {
-					return err
-				}
-				o.excludes[path] = true
-			}
-		case k == "include.path" || strings.HasPrefix(k, "includeif.") && strings.HasSuffix(k, ".path"):
-			// Followed as data only, whatever its condition: a file that might
-			// apply is a file whose settings might matter.
-			cond := conditional || strings.HasPrefix(k, "includeif.")
-			for _, v := range vs {
-				inc, err := o.p.ownerPath(v.raw, f)
-				if err != nil {
-					return err
-				}
-				if err := o.file(inc, depth+1, cond); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
+	return refuseProfile("%s sets %s, which the trusted git profile does not admit from the owner's configuration", source, k)
 }
 
-// ownerPath resolves a path named in the owner's configuration file f: "~/"
-// is the owner's home, a relative path is relative to f.
-//
-// Git also expands "~user/" and "%(prefix)/"; this resolver does not
-// reproduce them, so such a value is refused rather than misread as a
-// relative path and silently skipped (Codex r4250927611).
-func (p hostProfile) ownerPath(v, f string) (string, error) {
+// ownerFilePath resolves an owner file reference exactly as git does, or
+// refuses: "~/" is the owner's HOME and an absolute path is itself; a git
+// escape, a relative path (git resolves it inside the repository), "~user/"
+// and "%(prefix)/" are refused rather than misread (Codex r4250927611,
+// r4251107439).
+func ownerFilePath(v, home, source string) (string, error) {
 	switch {
+	case strings.ContainsAny(v, "\\\""):
+		return "", refuseProfile("%s names a file with git escapes or quotes, which the trusted profile does not decode", source)
 	case strings.HasPrefix(v, "~/"):
-		if !filepath.IsAbs(p.ownerHome) {
-			return "", refuseProfile("%s names a ~/ path and the owner's HOME is not an absolute path", f)
+		if !filepath.IsAbs(home) {
+			return "", refuseProfile("%s names a ~/ path and the owner's HOME is not an absolute path", source)
 		}
-		return filepath.Join(p.ownerHome, v[2:]), nil
-	case strings.HasPrefix(v, "~"), strings.HasPrefix(v, "%("):
-		return "", refuseProfile("%s names a path in a form the trusted profile does not resolve exactly as git does", f)
+		return filepath.Join(home, v[2:]), nil
 	case filepath.IsAbs(v):
 		return filepath.Clean(v), nil
 	}
-	return filepath.Join(filepath.Dir(f), v), nil
+	return "", refuseProfile("%s names a file in a form ordinary git resolves differently (relative, ~user/ or %%(prefix)/)", source)
 }
 
 // checkOwnerAttributes refuses an owner attributes file with any active rule.
@@ -1276,6 +1280,19 @@ func (v configValue) isFalse() bool {
 	}
 	switch strings.ToLower(v.raw) {
 	case "", "false", "no", "off", "0":
+		return true
+	}
+	return false
+}
+
+// isBool is a git boolean, strictly: a bare key (true), or true/yes/on/1 or
+// false/no/off/0/empty.
+func (v configValue) isBool() bool {
+	if !v.assigned {
+		return true
+	}
+	switch strings.ToLower(v.raw) {
+	case "", "true", "yes", "on", "1", "false", "no", "off", "0":
 		return true
 	}
 	return false
