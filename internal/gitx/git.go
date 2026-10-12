@@ -379,7 +379,7 @@ func (r Repo) readOnlyOutput(ctx context.Context, args ...string) (string, error
 // A failure says nothing about whether the path exists; TreeEntryAt answers
 // that.
 func (r Repo) ShowAt(ctx context.Context, rev, path string) ([]byte, error) {
-	if err := checkObjectRead(rev, path); err != nil {
+	if err := r.checkObjectRead(ctx, rev, path); err != nil {
 		return nil, err
 	}
 	return r.readObject(ctx, "cat-file", "blob", rev+":"+path)
@@ -390,7 +390,7 @@ func (r Repo) ShowAt(ctx context.Context, rev, path string) ([]byte, error) {
 // tree was read and listed nothing at the path. Every failure, and any
 // listing that is not exactly one record for exactly that path, is an error.
 func (r Repo) TreeEntryAt(ctx context.Context, rev, path string) (bool, error) {
-	if err := checkObjectRead(rev, path); err != nil {
+	if err := r.checkObjectRead(ctx, rev, path); err != nil {
 		return false, err
 	}
 	out, err := r.readObject(ctx, "ls-tree", "-z", "--full-tree", rev, "--", path)
@@ -421,21 +421,34 @@ func entryListed(out []byte, path string) (bool, error) {
 }
 
 // checkObjectRead refuses a read that could select something other than the
-// named object and path: a revision that is not a full object id (an empty
-// one reads the index; a name resolves through refs) or a path git would
-// resolve relative to the working directory or widen to other entries.
-func checkObjectRead(rev, p string) error {
-	if !fullObjectID(rev) {
-		return fmt.Errorf("%q is not a full object id", rev)
-	}
+// named object and path: a revision that is not a full object id in this
+// repository's object format (an empty one reads the index; a name resolves
+// through refs; in a SHA-256 repository 40 hex digits are an abbreviation, and
+// in a SHA-1 repository 64 are a ref name) or a path git would resolve
+// relative to the working directory or widen to other entries.
+func (r Repo) checkObjectRead(ctx context.Context, rev, p string) error {
 	if p == "" || p != path.Clean(p) || p == "." || p == ".." || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "../") {
 		return fmt.Errorf("%q is not an exact repository path", p)
+	}
+	if !hexDigits(rev) {
+		return fmt.Errorf("%q is not a full object id", rev)
+	}
+	format, err := r.readObject(ctx, "rev-parse", "--show-object-format")
+	if err != nil {
+		return err
+	}
+	want := map[string]int{"sha1\n": 40, "sha256\n": 64}[string(format)]
+	if want == 0 {
+		return fmt.Errorf("unrecognised object format %q", format)
+	}
+	if len(rev) != want {
+		return fmt.Errorf("%q is not a full %s object id", rev, strings.TrimSpace(string(format)))
 	}
 	return nil
 }
 
-func fullObjectID(s string) bool {
-	if len(s) != 40 && len(s) != 64 {
+func hexDigits(s string) bool {
+	if s == "" {
 		return false
 	}
 	for _, c := range s {

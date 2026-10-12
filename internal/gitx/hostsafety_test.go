@@ -2281,3 +2281,59 @@ func TestObjectReadsRefuseWhatTheProfileRefuses(t *testing.T) {
 		hsRefused(t, "TreeEntryAt", err)
 	})
 }
+
+// An object id is full only in the repository's own object format (Codex P1
+// on #298): in a SHA-1 repository 64 hex digits can name a ref, and in a
+// SHA-256 repository 40 are an abbreviation. Plain git resolves both.
+func TestAnObjectIDIsFullInTheRepositorysFormat(t *testing.T) {
+	ctx := context.Background()
+	t.Run("sha1: 64 hex digits that name a ref", func(t *testing.T) {
+		r, base := hsRepo(t)
+		ref := strings.Repeat("f", 64)
+		hsGit(t, r.Root, "update-ref", "refs/heads/"+ref, base)
+		if out, err := hsPlain(r.Root, "cat-file", "blob", ref+":a.txt"); err != nil || out != "one\n" {
+			t.Fatalf("premise: plain git resolves the 64-digit name through the ref: %q, %v", out, err)
+		}
+		if b, err := r.ShowAt(ctx, ref, "a.txt"); err == nil {
+			t.Errorf("ShowAt read through a ref named like an id: %q", b)
+		}
+		if _, err := r.TreeEntryAt(ctx, ref, "a.txt"); err == nil {
+			t.Error("TreeEntryAt answered through a ref named like an id")
+		}
+		if b, err := r.ShowAt(ctx, base, "a.txt"); err != nil || string(b) != "one\n" {
+			t.Errorf("control: the full SHA-1 id reads: %q, %v", b, err)
+		}
+	})
+	t.Run("sha256: 40 hex digits are an abbreviation", func(t *testing.T) {
+		root := filepath.Join(t.TempDir(), "repo")
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		hsGit(t, root, "init", "-q", "--object-format=sha256", "-b", "main")
+		hsGit(t, root, "config", "user.email", "t@example.invalid")
+		hsGit(t, root, "config", "user.name", "T")
+		hsWrite(t, filepath.Join(root, "a.txt"), "two\n")
+		hsGit(t, root, "add", "a.txt")
+		hsGit(t, root, "commit", "-q", "-m", "base")
+		base := hsGit(t, root, "rev-parse", "HEAD")
+		if len(base) != 64 {
+			t.Fatalf("premise: a SHA-256 repository: %q", base)
+		}
+		r := Repo{Root: root}
+		if out, err := hsPlain(root, "cat-file", "blob", base[:40]+":a.txt"); err != nil || out != "two\n" {
+			t.Fatalf("premise: plain git resolves the 40-digit prefix: %q, %v", out, err)
+		}
+		if b, err := r.ShowAt(ctx, base[:40], "a.txt"); err == nil {
+			t.Errorf("ShowAt read an abbreviated id: %q", b)
+		}
+		if _, err := r.TreeEntryAt(ctx, base[:40], "a.txt"); err == nil {
+			t.Error("TreeEntryAt answered for an abbreviated id")
+		}
+		if b, err := r.ShowAt(ctx, base, "a.txt"); err != nil || string(b) != "two\n" {
+			t.Errorf("control: the full SHA-256 id reads: %q, %v", b, err)
+		}
+		if present, err := r.TreeEntryAt(ctx, base, "missing.txt"); err != nil || present {
+			t.Errorf("control: absence in a SHA-256 tree: %v, %v", present, err)
+		}
+	})
+}
