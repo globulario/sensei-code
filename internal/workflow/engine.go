@@ -165,6 +165,10 @@ type Engine struct {
 	// attempts is, per task, the plan attempt routing most recently began and
 	// the one that is operative. See planAttemptID.
 	attempts map[string]*taskPlanAttempts
+	// authorityGates is, per task, the boundary an execution-service effect
+	// and the authority it was revalidated against share (authorityGate,
+	// execservice.go). Created on first use and never replaced.
+	authorityGates map[string]*sync.RWMutex
 	// openReviews is, per task, the unanswered part of the last non-accepting
 	// verdict, bound to the candidate digest and evidence it was raised on.
 	// It survives a worker handoff, which is the moment the reviewer changes.
@@ -3771,9 +3775,12 @@ func (e *Engine) recordProspectiveGrants(ctx context.Context, taskID, summary st
 		e.noteGrantRecordFailure(taskID, rec.PlanAttemptID, err)
 		return err
 	}
+	gate := e.authorityGate(taskID)
+	gate.Lock()
 	e.mu.Lock()
 	e.planAttemptsOf(taskID).recordedProspective[rec.PlanAttemptID] = rec
 	e.mu.Unlock()
+	gate.Unlock()
 	return nil
 }
 
@@ -3782,9 +3789,12 @@ func (e *Engine) recordTestEditGrants(ctx context.Context, taskID, summary strin
 		e.noteGrantRecordFailure(taskID, rec.PlanAttemptID, err)
 		return err
 	}
+	gate := e.authorityGate(taskID)
+	gate.Lock()
 	e.mu.Lock()
 	e.planAttemptsOf(taskID).recordedEdits[rec.PlanAttemptID] = rec
 	e.mu.Unlock()
+	gate.Unlock()
 	return nil
 }
 
@@ -4335,6 +4345,11 @@ func (e *Engine) adoptPlanAttempt(ctx context.Context, taskID, task string, d ar
 // Its routing record is already keyed by its identity (setRouting), so it
 // becomes the one routingFor reads in the same step.
 func (e *Engine) installOperativePlanAttempt(taskID string, a planAttempt) {
+	// Exclusive against every execution-service effect of the task, so no
+	// effect revalidated against the attempt being replaced is still running.
+	gate := e.authorityGate(taskID)
+	gate.Lock()
+	defer gate.Unlock()
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	t := e.planAttemptsOf(taskID)
@@ -4403,12 +4418,15 @@ func (e *Engine) restorePlanAttempt(task session.Interrupted, world string) erro
 		return &RestorationRefusal{TaskID: task.TaskID, Subject: restorationSubjectPlanAttempt,
 			Instrument: RestorationInstrumentRecord, Binding: RestorationPlanAttemptUnbound, Detail: detail}
 	}
+	gate := e.authorityGate(task.TaskID)
+	gate.Lock()
 	e.mu.Lock()
 	// Operative now, so the grant restorers can check their records against
 	// it; it owns grant state only once they have verified that state.
 	t := e.planAttemptsOf(task.TaskID)
 	t.pending, t.operative = a, a
 	e.mu.Unlock()
+	gate.Unlock()
 	return nil
 }
 
@@ -5499,7 +5517,23 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// The worker's own text is the artifact of a read-only plan.
 			// Discarding it left an inspection with nothing to show but a
 			// transcript nobody had judged.
-			result, err := impl.Runner.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt, Graph: e.graphFor(taskID)}, e.emitterFor(ctx))
+			//
+			// Under the execution profile (N3) the invocation gets its own
+			// task-bound execution service, started here and stopped the
+			// moment the invocation returns, before anything reads what it
+			// returned. Off, execSvc is nil and the request is unchanged.
+			execSvc, err := e.startImplementerExec(ctx, taskID, workspace, impl.Runner)
+			if err != nil {
+				// No invocation occurred, exactly as for a runner that could
+				// not be resolved.
+				e.routeCycle(taskID, cycle, routeProviderRebound)
+				if cerr := e.checkpointBlocked(ctx, tc, workspace, taskID, cycle); cerr != nil {
+					return candidateNotConverged, plan, lastReview, lastAudit, cerr
+				}
+				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: the execution service could not be bound: %w", cycle, err)
+			}
+			result, err := impl.Runner.Run(ctx, execSvc.bind(agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt, Graph: e.graphFor(taskID)}), e.emitterFor(ctx))
+			execSvc.stop()
 			// Settled BEFORE any route reads the invocation, so neither an
 			// error nor a role unavailability can discard what it returned.
 			settled = settleInvocation(impl.Name, cycle, result, err)

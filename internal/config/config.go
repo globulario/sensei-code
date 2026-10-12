@@ -130,6 +130,11 @@ type Config struct {
 	Behavioral   behavioral.Config `json:"behavioral"`
 	Permissions  Permissions       `json:"permissions"`
 	Validation   Validation        `json:"validation"`
+	// ExecBinding selects the N3 execution profile for implementers. Zero
+	// value is off, which is every existing installation: the implementer is
+	// launched exactly as before, and saved exactly as before: omitzero,
+	// because omitempty never omits a struct.
+	ExecBinding ExecBinding `json:"exec_binding,omitzero"`
 
 	// Source records where this configuration came from. It is not persisted:
 	// it is a fact about THIS load, not about the file.
@@ -262,6 +267,48 @@ func (c Config) ArchitectRoster() []Agent {
 	}
 	return []Agent{c.Architect}
 }
+
+// ExecBinding is the N3 execution profile: an implementer reaches the
+// candidate only through the engine's task-bound read_file, apply_patch and
+// run_check service, and no built-in tool.
+//
+// It is configuration in the canonical checkout, never in the candidate: the
+// candidate cannot change the client configuration, the server command, the
+// socket it reaches or the confinement its checks run under.
+type ExecBinding struct {
+	Enabled bool `json:"enabled,omitempty"`
+	// RuntimeDir is where each invocation's private 0700 directory -- socket
+	// and generated client configuration -- is created. Empty is the system
+	// temporary directory. It must lie outside every candidate worktree.
+	RuntimeDir string `json:"runtime_dir,omitempty"`
+	// ShimCommand is the sensei-code binary the client launches as its MCP
+	// server. Empty is this process's own executable.
+	ShimCommand string `json:"shim_command,omitempty"`
+	// Confinement is the mandatory pinned D2 profile run_check executes
+	// under. Unset refuses every check; it never means unconfined.
+	Confinement Confinement `json:"confinement,omitzero"`
+	// DisabledPlugins are client plugins the trusted client settings turn
+	// off, so the client's startup inventory carries none.
+	DisabledPlugins []string `json:"disabled_plugins,omitempty"`
+}
+
+// Confinement is a pinned execution wrapper, invoked as
+// `command args... -- check-command check-args...`.
+type Confinement struct {
+	Profile string   `json:"profile,omitempty"`
+	Command string   `json:"command,omitempty"`
+	Args    []string `json:"args,omitempty"`
+	// SHA256 is the digest the wrapper binary must have.
+	SHA256 string `json:"sha256,omitempty"`
+	// FailureExit is the wrapper's own failure status; zero means 125.
+	FailureExit int `json:"failure_exit,omitempty"`
+}
+
+// DefaultDisabledPlugins are the claude builtin plugins RULING-302 Q5
+// requires disabled in the trusted client settings. claude keys
+// enabledPlugins by the canonical "<name>@builtin" identifier; a bare name
+// disables nothing (RULING-307: measured with the real 2.1.296 client).
+var DefaultDisabledPlugins = []string{"cc-plugin-agents-md@builtin", "cc-plugin-plugin-authoring@builtin", "cc-plugin-telemetry@builtin"}
 
 // Command is one executable check.
 type Command struct {

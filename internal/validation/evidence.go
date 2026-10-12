@@ -34,8 +34,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -147,9 +151,11 @@ func (b Bundle) Unactionable() []Evidence {
 }
 
 // Certifies reports whether this evidence speaks about the given candidate
-// content. Anything else is evidence about different bytes.
+// content. Anything else is evidence about different bytes. A worker's own
+// tool-time check certifies nothing, even about the bytes it ran against.
 func (e Evidence) Certifies(candidateID, diffDigest string) bool {
-	return e.CandidateID == candidateID &&
+	return e.RequestedBy != ToolTimeRequester &&
+		e.CandidateID == candidateID &&
 		e.DiffDigest != "" &&
 		e.DiffDigest == diffDigest
 }
@@ -159,6 +165,23 @@ type Bundle struct {
 	CandidateID string     `json:"candidate_id"`
 	DiffDigest  string     `json:"diff_digest"`
 	Checks      []Evidence `json:"checks"`
+}
+
+// ToolTimeRequester is the requesting party of every check an implementer
+// asked for through its execution tools (N3). Such evidence is advisory: it
+// never certifies, whatever it says, because the engine validates the
+// captured candidate itself. The marker is a field every ValidationRun record
+// already carries, so it survives the record exactly.
+const ToolTimeRequester = "implementer via sensei_exec"
+
+// ToolTime reports whether any check in the bundle was a worker's own.
+func (b Bundle) ToolTime() bool {
+	for _, c := range b.Checks {
+		if c.RequestedBy == ToolTimeRequester {
+			return true
+		}
+	}
+	return false
 }
 
 // Digest hashes a diff into the identity every piece of evidence is bound to.
@@ -222,7 +245,11 @@ func (b Bundle) Render() string {
 	}
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "VALIDATION EVIDENCE for candidate %s at diff %s\n", b.CandidateID, short(b.DiffDigest))
-	sb.WriteString("Produced by executing these commands, not reported by the worker.\n\n")
+	sb.WriteString("Produced by executing these commands, not reported by the worker.\n")
+	if b.ToolTime() {
+		sb.WriteString("ADVISORY: requested by the implementer through its execution tools; it certifies nothing.\n")
+	}
+	sb.WriteString("\n")
 	for _, c := range b.Checks {
 		fmt.Fprintf(&sb, "  %-13s %s %s\n", string(c.Outcome), c.Command, strings.Join(c.Args, " "))
 		fmt.Fprintf(&sb, "                exit %d · %s\n", c.ExitStatus, c.FinishedAt.Sub(c.StartedAt).Round(time.Millisecond))
@@ -297,6 +324,121 @@ type Runner struct {
 	// When nil, failures are reported as unattributed rather than assumed to be
 	// the candidate's fault.
 	Baseline func() (string, error)
+	// Confine, when set, is the pinned confinement every command must run
+	// under. It is never optional once set: a wrapper that is missing, does
+	// not match its pinned digest, or reports its own failure yields Errored
+	// with SandboxUnavailable, and the check is never run on the host instead.
+	// Nil is the unconfined broker every existing caller uses.
+	Confine *Confinement
+	// RequestedBy overrides the requesting party recorded on evidence. Empty
+	// is the workflow.
+	RequestedBy string
+}
+
+// SandboxUnavailable prefixes the Detail of a check refused because its
+// confinement could not be established. Nothing ran.
+const SandboxUnavailable = "REFUSED_SANDBOX_UNAVAILABLE"
+
+// Confinement is one pinned execution profile: a wrapper that runs
+// `Command Args... -- check.Command check.Args...` inside a confined
+// executor.
+//
+// The digest is the pin. A wrapper path alone names whatever happens to be
+// installed there, and a confinement nobody can identify is not one.
+type Confinement struct {
+	Profile string
+	Command string
+	Args    []string
+	// SHA256 is the hex digest the wrapper binary must have.
+	SHA256 string
+	// FailureExit is the exit status by which the wrapper reports that IT
+	// failed rather than the confined command. Zero means 125, the
+	// convention env, podman and docker use for the same distinction.
+	FailureExit int
+}
+
+// Describe names the profile as evidence records it.
+func (c Confinement) Describe() string {
+	return fmt.Sprintf("profile %s via %s (sha256:%s)", c.Profile, c.Command, strings.TrimPrefix(strings.ToLower(strings.TrimSpace(c.SHA256)), "sha256:"))
+}
+
+func (c Confinement) failureExit() int {
+	if c.FailureExit != 0 {
+		return c.FailureExit
+	}
+	return 125
+}
+
+// open establishes that the wrapper is the pinned one and returns it open: an
+// absolute path, opened once without following a symlink, to a regular file
+// whose bytes, read through that same descriptor, hash to the pinned digest.
+//
+// The descriptor, not the path, is what runs (commandFor), so a path swapped
+// after hashing cannot change what executes. The interpreter a #! wrapper
+// names is not pinned by this digest.
+func (c Confinement) open() (*os.File, error) {
+	pin := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(c.SHA256)), "sha256:")
+	switch {
+	case strings.TrimSpace(c.Profile) == "":
+		return nil, fmt.Errorf("no confinement profile is named")
+	case !filepath.IsAbs(c.Command):
+		return nil, fmt.Errorf("the confinement wrapper %q is not an absolute path", c.Command)
+	case len(pin) != 64:
+		return nil, fmt.Errorf("the confinement wrapper %s has no pinned sha256", c.Command)
+	}
+	f, err := os.OpenFile(c.Command, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, fmt.Errorf("the confinement wrapper is unavailable: %w", err)
+	}
+	info, err := f.Stat()
+	if err != nil || !info.Mode().IsRegular() {
+		f.Close()
+		return nil, fmt.Errorf("the confinement wrapper %s is not a regular file", c.Command)
+	}
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		f.Close()
+		return nil, fmt.Errorf("the confinement wrapper is unreadable: %w", err)
+	}
+	if got := hex.EncodeToString(h.Sum(nil)); got != pin {
+		f.Close()
+		return nil, fmt.Errorf("the confinement wrapper %s has sha256 %s, not the pinned %s", c.Command, short(got), short(pin))
+	}
+	return f, nil
+}
+
+// commandFor builds the confined process from the wrapper open() verified.
+// The child inherits that descriptor as fd 3 and the kernel executes
+// /proc/self/fd/3, which in the child is exactly the hashed file.
+func (c Confinement) commandFor(ctx context.Context, wrapper *os.File, dir string, check Check) *exec.Cmd {
+	args := append(append(append([]string(nil), c.Args...), "--", check.Command), check.Args...)
+	cmd := exec.CommandContext(ctx, "/proc/self/fd/3", args...)
+	cmd.Args[0] = c.Command
+	cmd.ExtraFiles = []*os.File{wrapper}
+	cmd.Dir = dir
+	return cmd
+}
+
+// command builds the process for one check, confined when the runner is.
+// An error means nothing may run. The caller releases it once it has run.
+func (r Runner) command(ctx context.Context, dir string, check Check) (*exec.Cmd, error) {
+	if r.Confine == nil {
+		cmd := exec.CommandContext(ctx, check.Command, check.Args...)
+		cmd.Dir = dir
+		return cmd, nil
+	}
+	wrapper, err := r.Confine.open()
+	if err != nil {
+		return nil, err
+	}
+	return r.Confine.commandFor(ctx, wrapper, dir, check), nil
+}
+
+// release closes the descriptors a command was given.
+func release(cmd *exec.Cmd) {
+	for _, f := range cmd.ExtraFiles {
+		f.Close()
+	}
 }
 
 // Run executes the checks and returns evidence bound to the candidate content
@@ -330,6 +472,9 @@ func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check C
 		CandidateID: candidateID, DiffDigest: diffDigest,
 		StartedAt: now().UTC(),
 	}
+	if r.RequestedBy != "" {
+		e.RequestedBy = r.RequestedBy
+	}
 	if r.Permits != nil {
 		if permitted, reason := r.Permits(check.Kind); !permitted {
 			e.FinishedAt = now().UTC()
@@ -340,12 +485,39 @@ func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check C
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, check.Command, check.Args...)
-	cmd.Dir = r.Workspace
+	if r.Confine != nil {
+		// The executor actually used, with the pinned profile it ran under:
+		// carried in a field every ValidationRun record already declares.
+		e.ExecutedBy = "sensei-code execution broker under confinement " + r.Confine.Describe()
+	}
+	cmd, cerr := r.command(ctx, r.Workspace, check)
+	if cerr != nil {
+		// Refused before anything ran: there is no unconfined fallback.
+		e.FinishedAt = now().UTC()
+		e.Outcome = Errored
+		e.ExitStatus = -1
+		e.Detail = SandboxUnavailable + ": " + cerr.Error() + "; the check was not run"
+		return e, ""
+	}
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
 	err := cmd.Run()
+	release(cmd)
 	e.FinishedAt = now().UTC()
+	if r.Confine != nil && err != nil {
+		var exitErr *exec.ExitError
+		// A wrapper killed by a signal has no exit status (ExitCode -1): it
+		// is the wrapper's failure as much as its own failure exit is, and
+		// fails closed rather than becoming the candidate's.
+		if !asExitError(err, &exitErr) || exitErr.ExitCode() < 0 || exitErr.ExitCode() == r.Confine.failureExit() {
+			// The wrapper itself failed. Whatever the confined command did or
+			// did not do, nothing here is evidence about the candidate.
+			e.Outcome = Errored
+			e.ExitStatus = -1
+			e.Detail = SandboxUnavailable + ": the confinement wrapper failed: " + err.Error()
+			return e, ""
+		}
+	}
 
 	body := out.String()
 	full := body
@@ -410,11 +582,16 @@ func (r Runner) attribute(ctx context.Context, check Check, e Evidence) Evidence
 		return e
 	}
 
-	cmd := exec.CommandContext(ctx, check.Command, check.Args...)
-	cmd.Dir = base
+	cmd, cerr := r.command(ctx, base, check)
+	if cerr != nil {
+		e.Attribution = "unattributed"
+		e.Detail = "the base could not be run under the same confinement, so this failure could not be attributed: " + cerr.Error()
+		return e
+	}
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
 	baseErr := cmd.Run()
+	release(cmd)
 
 	// The base is judged under the same Check semantics as the candidate, and
 	// "the same way" means the same exit status and the same complete combined

@@ -24,6 +24,11 @@ func main() {
 	if runVersion(os.Args[1:], os.Stdout) {
 		return
 	}
+	// Before discovery: the shim runs inside the candidate worktree and must
+	// not load anything from it.
+	if execShimRequested(os.Args[1:]) {
+		runExecShimMain()
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cwd, err := os.Getwd()
