@@ -39,7 +39,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -386,7 +385,7 @@ func (c Confinement) open() (*os.File, error) {
 	case len(pin) != 64:
 		return nil, fmt.Errorf("the confinement wrapper %s has no pinned sha256", c.Command)
 	}
-	f, err := os.OpenFile(c.Command, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	f, err := openWrapper(c.Command)
 	if err != nil {
 		return nil, fmt.Errorf("the confinement wrapper is unavailable: %w", err)
 	}
