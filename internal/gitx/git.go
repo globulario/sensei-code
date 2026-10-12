@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -533,11 +534,18 @@ func (p hostProfile) baseEnv() []string {
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_CONFIG_GLOBAL=" + os.DevNull,
 		"GIT_TERMINAL_PROMPT=0",
+		// Replace refs and grafts substitute objects: a worker that wrote
+		// refs/replace in the shared repository could make "the base" mean
+		// another commit to every read below (independent review, N2).
+		"GIT_NO_REPLACE_OBJECTS=1",
+		// A path that never exists: no grafts, and no deprecation notice in
+		// the output (os.DevNull "exists" and makes git print one).
+		"GIT_GRAFT_FILE=" + filepath.Join(p.home, "no-grafts"),
 		"LC_ALL=C",
 	}
 	// Not git configuration: the system's own location of temporary files, and
 	// the variables a Windows process needs to start at all.
-	for _, k := range []string{"TMPDIR", "SYSTEMROOT", "SystemRoot"} {
+	for _, k := range []string{"TMPDIR", "TEMP", "TMP", "SYSTEMROOT", "SystemRoot", "PATHEXT"} {
 		if v, ok := os.LookupEnv(k); ok {
 			env = append(env, k+"="+v)
 		}
@@ -564,7 +572,9 @@ func (r Repo) gitCommand(ctx context.Context, dir string, extra []string, readOn
 	if entries, err := os.ReadDir(p.hooks); err != nil || len(entries) != 0 {
 		return nil, refuseProfile("the trusted hooks directory %s is not an empty directory", p.hooks)
 	}
-	env := append(p.baseEnv(), "GIT_DIR="+id.gitDir, "GIT_WORK_TREE="+id.workTree)
+	// GIT_COMMON_DIR too: git would otherwise re-read <gitDir>/commondir at
+	// run time, a file in a directory the worktree's own git writes to.
+	env := append(p.baseEnv(), "GIT_DIR="+id.gitDir, "GIT_COMMON_DIR="+id.commonDir, "GIT_WORK_TREE="+id.workTree)
 	for _, e := range extra {
 		if !strings.HasPrefix(e, "GIT_INDEX_FILE=") && e != "GIT_LITERAL_PATHSPECS=1" {
 			return nil, refuseProfile("environment %q is not part of the trusted profile", e)
@@ -574,6 +584,13 @@ func (r Repo) gitCommand(ctx context.Context, dir string, extra []string, readOn
 	full := []string{"-c", "core.hooksPath=" + p.hooks, "-c", "core.fsmonitor=false"}
 	if readOnly {
 		full = append(full, noOptionalLocks)
+	}
+	// status and diff look inside a nested repository (a gitlink in the
+	// worktree) by running git THERE, with that repository's configuration and
+	// attributes, which this profile never inspected (independent review, B2).
+	// The flag form wins over any .gitmodules "ignore" setting.
+	if len(args) > 0 && (args[0] == "status" || args[0] == "diff") {
+		args = append([]string{args[0], "--ignore-submodules=all"}, args[1:]...)
 	}
 	cmd := exec.CommandContext(ctx, p.exe, append(full, args...)...)
 	cmd.Dir, cmd.Env = id.workTree, env
@@ -613,6 +630,14 @@ func resolveIdentity(dir string) (gitIdentity, error) {
 	case err != nil:
 		return gitIdentity{}, refuseProfile("%s is not a git repository: %v", root, err)
 	case fi.IsDir():
+		// A commondir file would make git read ANOTHER directory's
+		// configuration, one this check never saw (independent review, S2).
+		if _, err := os.Lstat(filepath.Join(dotgit, "commondir")); err == nil {
+			return gitIdentity{}, refuseProfile("%s carries a commondir file, which would redirect git to another repository", dotgit)
+		}
+		if err := ownedByUs(dotgit); err != nil {
+			return gitIdentity{}, err
+		}
 		return gitIdentity{workTree: root, gitDir: dotgit, commonDir: dotgit}, nil
 	case fi.Mode().IsRegular():
 		gitDir, err := readGitdirPointer(root)
@@ -686,7 +711,41 @@ func linkedWorktree(root, common string) (gitIdentity, error) {
 	if err1 != nil || err2 != nil || !os.SameFile(c1, c2) {
 		return gitIdentity{}, refuseProfile("%s belongs to %s, not %s", gitDir, recorded, common)
 	}
+	for _, d := range []string{gitDir, common} {
+		if err := ownedByUs(d); err != nil {
+			return gitIdentity{}, err
+		}
+	}
 	return gitIdentity{workTree: root, gitDir: gitDir, commonDir: common}, nil
+}
+
+// ownedByUs refuses a git directory owned by another user: git's own
+// ownership check (safe.directory) is skipped when GIT_DIR is explicit, and a
+// repository another user can rewrite between this inspection and the run is
+// not one this inspection describes (independent review, S3). Where the
+// platform reports no owner (Windows), no owner can be compared and the check
+// does not apply.
+func ownedByUs(dir string) error {
+	fi, err := os.Lstat(dir)
+	if err != nil {
+		return refuseProfile("%s cannot be inspected: %v", dir, err)
+	}
+	uid := os.Getuid()
+	if uid < 0 || fi.Sys() == nil {
+		return nil
+	}
+	v := reflect.Indirect(reflect.ValueOf(fi.Sys()))
+	if v.Kind() != reflect.Struct {
+		return nil
+	}
+	f := v.FieldByName("Uid")
+	if !f.IsValid() || !f.CanUint() {
+		return nil
+	}
+	if f.Uint() != uint64(uid) {
+		return refuseProfile("%s is owned by uid %d, not this user (uid %d)", dir, f.Uint(), uid)
+	}
+	return nil
 }
 
 // readGitdirPointer reads root/.git as a "gitdir: <path>" file.
@@ -781,15 +840,14 @@ var falseOnlyKeys = setOf("commit.gpgsign", "tag.gpgsign")
 // comment and surrounding quotes are removed, and whether it had an "=" at
 // all (a bare key is git's true).
 type configValue struct {
-	raw       string
-	assigned  bool
-	continued bool
+	raw      string
+	assigned bool
 }
 
 // isFalse is git's boolean false, strictly: an explicit empty value, false,
-// no, off or 0. A bare key, a continued value or anything else is not.
+// no, off or 0. A bare key or anything else is not.
 func (v configValue) isFalse() bool {
-	if !v.assigned || v.continued {
+	if !v.assigned {
 		return false
 	}
 	switch strings.ToLower(v.raw) {
@@ -819,7 +877,7 @@ func valueOf(line string) configValue {
 		}
 		b.WriteByte(c)
 	}
-	return configValue{raw: strings.TrimSpace(b.String()), assigned: true, continued: continuesLine(line)}
+	return configValue{raw: strings.TrimSpace(b.String()), assigned: true}
 }
 
 // Config keys the trusted profile admits, by section. None of them names a
@@ -833,7 +891,9 @@ var (
 	allowedRemote     = setOf("url", "pushurl", "fetch", "push", "tagopt", "prune", "mirror", "skipdefaultupdate", "skipfetchall")
 	allowedUser       = setOf("name", "email")
 	// Sections whose every key is data.
-	openSections = setOf("branch", "gc", "pack", "index", "feature", "color", "advice", "fetch", "pull", "push")
+	// gc and push are not here: gc.recentObjectsHook names a program, and
+	// push.gpgSign runs gpg (independent review, N1).
+	openSections = setOf("branch", "pack", "index", "feature", "color", "advice", "fetch", "pull")
 )
 
 func setOf(ks ...string) map[string]bool {
@@ -888,12 +948,7 @@ func configKeys(path string, optional bool) (map[string][]configValue, error) {
 		return nil, refuseProfile("the repository configuration %s cannot be read: %v", path, err)
 	}
 	section := ""
-	continued := false
 	for n, line := range strings.Split(body, "\n") {
-		if continued {
-			continued = continuesLine(strings.TrimRight(line, "\r"))
-			continue
-		}
 		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
 		if line == "" || line[0] == '#' || line[0] == ';' {
 			continue
@@ -932,17 +987,26 @@ func configKeys(path string, optional bool) (map[string][]configValue, error) {
 		if key == "" || !isConfigName(key) {
 			return nil, refuseProfile("%s:%d is not a configuration key", path, n+1)
 		}
+		// A value continued onto the next line is refused outright. Git carries
+		// quote state across a continuation, so whether the next physical line
+		// is more value or a new key depends on reading the whole value as git
+		// does; a reader that guesses can be made to skip a key git then
+		// applies (independent review, B1). No continued value is needed for
+		// anything the profile admits.
+		if continuesLine(line) {
+			return nil, refuseProfile("%s:%d continues a value onto the next line, which the trusted git profile does not admit", path, n+1)
+		}
 		k := sectionKey(section) + "." + strings.ToLower(key)
 		keys[k] = append(keys[k], valueOf(line))
-		continued = continuesLine(line)
 	}
 	return keys, nil
 }
 
 // continuesLine reports whether a value line ends in an unescaped backslash
 // outside a comment, which is git's line continuation. An escaped backslash
-// ("\\") or a backslash inside a comment is not one, and reading either as a
-// continuation would skip -- and so hide -- the key on the next line.
+// or a backslash inside a comment is not one. Within one line the quote state
+// is git's own, so the answer agrees with git; configKeys refuses every line
+// for which it is true.
 func continuesLine(line string) bool {
 	quoted := false
 	for i := 0; i < len(line); i++ {

@@ -223,7 +223,17 @@ const oversizedBytes = 3 << 20
 // intended are repository-relative paths the plan names as the change's own
 // outputs; an artifact at one of those paths is kept, as metadata.
 func (r Repo) CandidateCapture(ctx context.Context, base string, intended []string) (Capture, error) {
+	// Before AND after recording new paths: `add` itself looks inside a
+	// tracked gitlink whose path holds a repository, so that must be refused
+	// before add runs; an embedded repository add has just recorded must be
+	// refused after.
+	if err := r.refuseNewGitlinks(ctx, base); err != nil {
+		return Capture{}, err
+	}
 	if _, err := r.output(ctx, "add", "--intent-to-add", "--", "."); err != nil {
+		return Capture{}, err
+	}
+	if err := r.refuseNewGitlinks(ctx, base); err != nil {
 		return Capture{}, err
 	}
 	// The intended set is compared against pathnames Git reported EXACTLY, so it
@@ -393,4 +403,49 @@ func Describe(as []Artifact) string {
 		out = append(out, fmt.Sprintf("%s (%s, %d bytes)", a.Path, a.Class, a.Size))
 	}
 	return strings.Join(out, "; ")
+}
+
+// refuseNewGitlinks refuses a candidate that holds a nested repository: a
+// gitlink the worker added (intent-to-add records an embedded repository as
+// one) or changed, or any gitlink -- the base's own included -- whose path in
+// the worktree holds a .git that git could look inside.
+//
+// Looking inside means running git THERE, with configuration this profile
+// never inspected: status and diff do it unless --ignore-submodules=all, and
+// `add` does it with no flag to stop it (measured on git 2.43). And a skipped
+// gitlink would silently fall out of the captured paths, so the reviewer would
+// never see it. A refusal says so instead (independent review, B2). The index
+// listing reads the index and the .git test reads the filesystem; neither runs
+// anything inside the nested repository.
+func (r Repo) refuseNewGitlinks(ctx context.Context, base string) error {
+	out, err := r.raw(ctx, "ls-files", "--stage", "-z")
+	if err != nil {
+		return err
+	}
+	for _, record := range strings.Split(strings.TrimSuffix(out, "\x00"), "\x00") {
+		meta, path, ok := strings.Cut(record, "\t")
+		fields := strings.Fields(meta)
+		if !ok || len(fields) != 3 {
+			if record == "" {
+				continue
+			}
+			return fmt.Errorf("malformed ls-files --stage record: %q", record)
+		}
+		if fields[0] != "160000" {
+			continue
+		}
+		if _, err := os.Lstat(filepath.Join(r.Root, filepath.FromSlash(path), ".git")); err == nil {
+			return fmt.Errorf("%s: the gitlink %q holds a repository in the worktree; "+
+				"trusted git does not look inside one", ProfileRefused, path)
+		}
+		if b := strings.TrimSpace(base); b != "" {
+			at, err := r.envOutput(ctx, []string{"GIT_LITERAL_PATHSPECS=1"}, "ls-tree", "-z", b, "--", path)
+			if err == nil && strings.HasPrefix(at, "160000 commit "+fields[1]+"\t") {
+				continue // the base's own gitlink, unchanged
+			}
+		}
+		return fmt.Errorf("%s: the candidate holds a nested repository at %q; "+
+			"trusted git does not look inside one, so its content cannot be captured for review", ProfileRefused, path)
+	}
+	return nil
 }

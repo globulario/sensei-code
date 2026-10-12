@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // hsRepo is a committed repository at <tmp>/repo with one tracked file.
@@ -188,6 +189,16 @@ func TestExecutableRepositoryConfigurationIsRefusedBeforeGitRuns(t *testing.T) {
 			},
 			control: []string{"status", "--porcelain"},
 		},
+		// The reviewer's B1 config: git closes the quote on the next line, so
+		// ";" starts a comment and there is no continuation; a reader that kept
+		// the quote open would skip the filter line git then applies.
+		"key behind a quoted continuation": {
+			config: func(e string) string {
+				return "[remote \"origin\"]\n\turl = \"x \\\n\"; \\\n[filter \"evil\"] clean = " + e + "\n"
+			},
+			attributes: "*.txt filter=evil\n",
+			control:    []string{"diff", "--no-ext-diff"},
+		},
 		"key after a comment ending in a backslash": {
 			config:  func(e string) string { return "[core]\n\tbare = false ; note \\\n\tfsmonitor = " + e + "\n" },
 			control: []string{"status", "--porcelain"},
@@ -287,6 +298,9 @@ func TestTheCallersEnvironmentDoesNotReachGit(t *testing.T) {
 // repository.
 func TestACandidateCannotRedirectTrustedGit(t *testing.T) {
 	ctx := context.Background()
+	// Each case's control: plain git in the planted worktree is redirected --
+	// it reads a git directory other than the one gitx created, or runs the
+	// planted program.
 	for name, plant := range map[string]func(t *testing.T, wt, evil string){
 		"pointer to an attacker git directory": func(t *testing.T, wt, evil string) {
 			attacker := filepath.Join(t.TempDir(), "attacker")
@@ -343,6 +357,18 @@ func TestACandidateCannotRedirectTrustedGit(t *testing.T) {
 			if hsRan(marker) {
 				t.Fatal("the candidate's program ran through a redirected worktree")
 			}
+			gitDir, _ := hsPlain(wt, "rev-parse", "--absolute-git-dir")
+			gitDir = strings.TrimSpace(gitDir)
+			want := filepath.Join(r.Root, ".git", "worktrees", "redirect")
+			if real, err := filepath.EvalSymlinks(want); err == nil {
+				want = real
+			}
+			if real, err := filepath.EvalSymlinks(gitDir); err == nil {
+				gitDir = real
+			}
+			if gitDir == want {
+				t.Fatalf("premise: plain git in the planted worktree still reads %s, so nothing was redirected", gitDir)
+			}
 		})
 	}
 }
@@ -356,6 +382,7 @@ func TestAWorktreeConfigurationIsInspectedToo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	hsGit(t, r.Root, "config", "core.repositoryformatversion", "1")
 	hsGit(t, r.Root, "config", "extensions.worktreeConfig", "true")
 	marker := filepath.Join(t.TempDir(), "ran")
 	gitDir, err := readGitdirPointer(wt)
@@ -367,6 +394,9 @@ func TestAWorktreeConfigurationIsInspectedToo(t *testing.T) {
 	hsRefused(t, "CandidateCapture", err)
 	if hsRan(marker) {
 		t.Fatal("a program named in config.worktree ran")
+	}
+	if out, _ := hsPlain(wt, "status", "--porcelain"); !hsRan(marker) {
+		t.Fatalf("premise: plain git does not run the program in config.worktree\n%s", out)
 	}
 }
 
@@ -484,6 +514,20 @@ func TestEveryGitInvocationUsesTheTrustedProfile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		for _, imp := range file.Imports {
+			if imp.Path.Value == `"os/exec"` && imp.Name != nil {
+				t.Errorf("%s imports os/exec as %s, which this census would not see", f, imp.Name.Name)
+			}
+			if imp.Path.Value == `"syscall"` || imp.Path.Value == `"golang.org/x/sys/unix"` {
+				t.Errorf("%s imports %s, through which a process could be started unseen", f, imp.Path.Value)
+			}
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			if sel, ok := n.(*ast.SelectorExpr); ok && sel.Sel.Name == "StartProcess" {
+				t.Errorf("%s: os.StartProcess outside the trusted profile", fset.Position(sel.Pos()))
+			}
+			return true
+		})
 		for _, d := range file.Decls {
 			fn, ok := d.(*ast.FuncDecl)
 			if !ok {
@@ -516,13 +560,25 @@ func TestEveryGitInvocationUsesTheTrustedProfile(t *testing.T) {
 func TestTheConfigReaderSeesEveryKeyGitSees(t *testing.T) {
 	fixtures := map[string]string{
 		"escaped backslash ends the value": "[remote \"origin\"]\n\turl = https://example.invalid/r\\\\\n\treceivepack = evil\n",
-		"continued value":                  "[remote \"origin\"]\n\turl = https://example.invalid/\\\nr\n\tuploadpack = evil\n",
 		"backslash in a comment":           "[core]\n\tbare = false ; note \\\n\tfsmonitor = evil\n",
 		"quoted semicolon and hash":        "[remote \"origin\"]\n\turl = \"a;b#c\"\n\tproxy = evil\n",
 		"key on the header line":           "[core] fsmonitor = evil\n[filter \"x\"] clean = evil\n",
 		"deprecated subsection form":       "[Diff.Evil]\n\tTextConv = evil\n",
 		"boolean key without a value":      "[core]\n\tbare\n\tfsmonitor\n",
 		"mixed case subsection":            "[Branch \"Feature/X\"]\n\tRemote = origin\n[INCLUDE]\n\tPath = /x\n",
+	}
+	// A value continued onto the next line is refused whatever git makes of
+	// it, so no key can hide behind one (independent review, B1).
+	for name, body := range map[string]string{
+		"continued value":             "[remote \"origin\"]\n\turl = https://example.invalid/\\\nr\n\tuploadpack = evil\n",
+		"quoted continuation":         "[remote \"origin\"]\n\turl = \"x \\\n\"; \\\n[filter \"evil\"] clean = evil\n",
+		"continuation after a header": "[core] bare = false \\\n\tfsmonitor = evil\n",
+	} {
+		p := filepath.Join(t.TempDir(), "config")
+		hsWrite(t, p, body)
+		if _, err := configKeys(p, false); err == nil || !strings.Contains(err.Error(), "continues a value") {
+			t.Errorf("%s: a continued value was not refused: %v", name, err)
+		}
 	}
 	for name, body := range fixtures {
 		t.Run(name, func(t *testing.T) {
@@ -587,5 +643,184 @@ func TestSigningSettingsAreAdmittedOnlyAsFalse(t *testing.T) {
 				hsRefused(t, section+" "+value, err)
 			}
 		}
+	}
+}
+
+// A nested repository in the candidate is refused, and trusted git never runs
+// git inside it: status and diff of a gitlink would run the nested
+// repository's own configured program (independent review, B2).
+func TestANestedRepositoryNeverRunsItsProgram(t *testing.T) {
+	ctx := context.Background()
+	r, base := hsRepo(t)
+	wt, err := r.CreateWorktreeAt(ctx, "nested", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(t.TempDir(), "ran")
+	evil := hsProgram(t, marker)
+	nested := filepath.Join(wt, "nested")
+	hsWrite(t, filepath.Join(nested, "f.txt"), "x\n")
+	hsWrite(t, filepath.Join(nested, ".gitattributes"), "* filter=evil\n")
+	hsGit(t, nested, "init", "-q")
+	hsGit(t, nested, "add", ".")
+	hsGit(t, nested, "-c", "user.name=T", "-c", "user.email=t@t", "commit", "-q", "-m", "n")
+	hsAppendConfig(t, filepath.Join(nested, ".git", "config"), "[filter \"evil\"]\n\tclean = "+evil+"\n")
+	// The worker records the nested repository as a gitlink and commits it,
+	// as local_commit permits. (An intent-to-add gitlink alone is not looked
+	// into; a committed one is -- measured on git 2.43.)
+	hsGit(t, wt, "add", "nested")
+	hsGit(t, wt, "commit", "-q", "-m", "gitlink")
+	// Stat-dirty with the same content, so git must re-read it through the
+	// filter to decide.
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(filepath.Join(nested, "f.txt"), later, later); err != nil {
+		t.Fatal(err)
+	}
+	// Setup ran plain git, which may itself have looked inside; only what
+	// trusted git does from here on is under test.
+	os.Remove(marker)
+
+	_, err = (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+	hsRefused(t, "CandidateCapture of a nested repository", err)
+	if _, _, err := r.WorktreeIsClean(ctx, wt); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.WorktreeIsCleanDetail(ctx, wt); err != nil {
+		t.Fatal(err)
+	}
+	if hsRan(marker) {
+		t.Fatal("the nested repository's program ran during trusted git operations")
+	}
+	// Control: plain git looks inside the committed gitlink and runs it.
+	if out, _ := hsPlain(wt, "status", "--porcelain"); !hsRan(marker) {
+		t.Fatalf("premise: plain git does not run the nested repository's program\n%s", out)
+	}
+}
+
+// Replace refs do not substitute the base: a worker that wrote refs/replace in
+// the shared repository cannot make the capture build on another commit
+// (independent review, N2).
+func TestAReplaceRefDoesNotSubstituteTheBase(t *testing.T) {
+	ctx := context.Background()
+	r, base := hsRepo(t)
+	realTree := hsGit(t, r.Root, "rev-parse", base+"^{tree}")
+	hsWrite(t, filepath.Join(r.Root, "a.txt"), "forged\n")
+	hsGit(t, r.Root, "commit", "-q", "-am", "forged")
+	forged := hsGit(t, r.Root, "rev-parse", "HEAD")
+	hsGit(t, r.Root, "replace", base, forged)
+	wt, err := r.CreateWorktreeAt(ctx, "replace", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hsWrite(t, filepath.Join(wt, "b.txt"), "b\n")
+	cap, err := (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cap.BaseTree != realTree {
+		t.Fatalf("the capture built on %s, not the base's own tree %s", cap.BaseTree, realTree)
+	}
+	if strings.Contains(cap.Diff, "forged") {
+		t.Fatalf("the replaced base leaked into the diff:\n%s", cap.Diff)
+	}
+	if got := hsGit(t, r.Root, "rev-parse", base+"^{tree}"); got == realTree {
+		t.Fatal("premise: plain git does not honour the replace ref")
+	}
+}
+
+// A commondir file inside a .git directory would make git read another
+// repository's configuration; it is refused (independent review, S2).
+func TestACommondirInAGitDirectoryIsRefused(t *testing.T) {
+	ctx := context.Background()
+	r, _ := hsRepo(t)
+	other, _ := hsRepo(t)
+	marker := filepath.Join(t.TempDir(), "ran")
+	hsAppendConfig(t, filepath.Join(other.Root, ".git", "config"), "[core]\n\tfsmonitor = "+hsProgram(t, marker)+"\n")
+	hsWrite(t, filepath.Join(r.Root, ".git", "commondir"), filepath.Join(other.Root, ".git")+"\n")
+	_, err := r.IsClean(ctx)
+	hsRefused(t, "IsClean", err)
+	if hsRan(marker) {
+		t.Fatal("the other repository's program ran")
+	}
+	if out, _ := hsPlain(r.Root, "status", "--porcelain"); !hsRan(marker) {
+		t.Fatalf("premise: plain git does not follow the commondir file\n%s", out)
+	}
+}
+
+// A git directory owned by another user is refused (independent review, S3).
+// Unprivileged tests cannot create one, so the witness uses "/", which no
+// unprivileged user owns.
+func TestAGitDirectoryOwnedByAnotherUserIsRefused(t *testing.T) {
+	if os.Getuid() <= 0 {
+		t.Skip("running as root or on a platform without uids: no directory here is owned by another user")
+	}
+	hsRefused(t, "ownedByUs(/)", ownedByUs("/"))
+	if err := ownedByUs(t.TempDir()); err != nil {
+		t.Fatalf("this user's own directory was refused: %v", err)
+	}
+}
+
+// The base's own gitlink is no exception: a repository the candidate plants
+// at that path would be looked inside by `add` itself, so it is refused before
+// add runs.
+func TestARepositoryPlantedAtTheBasesGitlinkIsRefused(t *testing.T) {
+	ctx := context.Background()
+	r, _ := hsRepo(t)
+	sub := filepath.Join(t.TempDir(), "sub")
+	hsWrite(t, filepath.Join(sub, "f.txt"), "x\n")
+	hsWrite(t, filepath.Join(sub, ".gitattributes"), "* filter=evil\n")
+	hsGit(t, sub, "init", "-q")
+	hsGit(t, sub, "add", ".")
+	hsGit(t, sub, "-c", "user.name=T", "-c", "user.email=t@t", "commit", "-q", "-m", "s")
+	hsGit(t, r.Root, "update-index", "--add", "--cacheinfo", "160000,"+hsGit(t, sub, "rev-parse", "HEAD")+",mod")
+	hsGit(t, r.Root, "commit", "-q", "-m", "submodule")
+	base := hsGit(t, r.Root, "rev-parse", "HEAD")
+	wt, err := r.CreateWorktreeAt(ctx, "basegitlink", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(t.TempDir(), "ran")
+	// The submodule's own commit, checked out where the base records it, with
+	// a filter configured: exactly what git checks for dirt.
+	planted := filepath.Join(wt, "mod")
+	if err := os.Remove(planted); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	hsGit(t, wt, "clone", "-q", sub, "mod")
+	hsAppendConfig(t, filepath.Join(planted, ".git", "config"), "[filter \"evil\"]\n\tclean = "+hsProgram(t, marker)+"\n")
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(filepath.Join(planted, "f.txt"), later, later); err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(marker)
+	_, err = (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+	hsRefused(t, "CandidateCapture with a repository at the base's gitlink", err)
+	if hsRan(marker) {
+		t.Fatal("the planted repository's program ran during trusted git operations")
+	}
+	if out, _ := hsPlain(wt, "add", "--intent-to-add", "--", "."); !hsRan(marker) {
+		t.Fatalf("premise: plain git add does not look inside the planted repository\n%s", out)
+	}
+}
+
+// A gitlink the candidate records with no repository behind it is still a
+// change, and status/diff with --ignore-submodules=all would silently drop it
+// from the captured paths: it is refused, never omitted from review.
+func TestANewGitlinkIsRefusedNotOmitted(t *testing.T) {
+	ctx := context.Background()
+	r, base := hsRepo(t)
+	wt, err := r.CreateWorktreeAt(ctx, "gitlink", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hsGit(t, wt, "update-index", "--add", "--cacheinfo", "160000,"+base+",linked")
+	hsGit(t, wt, "commit", "-q", "-m", "gitlink")
+	_, err = (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+	hsRefused(t, "CandidateCapture of a new gitlink", err)
+	// Premise: the change is real, and ignoring submodules hides it.
+	all, _ := hsPlain(wt, "diff", "--name-only", base, "HEAD", "--")
+	ignored, _ := hsPlain(wt, "diff", "--ignore-submodules=all", "--name-only", base, "HEAD", "--")
+	if !strings.Contains(all, "linked") || strings.Contains(ignored, "linked") {
+		t.Fatalf("premise: the gitlink is not a change that --ignore-submodules=all hides: %q / %q", all, ignored)
 	}
 }
