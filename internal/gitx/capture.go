@@ -223,6 +223,12 @@ const oversizedBytes = 3 << 20
 // intended are repository-relative paths the plan names as the change's own
 // outputs; an artifact at one of those paths is kept, as metadata.
 func (r Repo) CandidateCapture(ctx context.Context, base string, intended []string) (Capture, error) {
+	// One owner-excludes snapshot for every git call of this capture: what is
+	// ignored cannot change between the paths it lists and the tree it builds.
+	ctx, err := r.pinExcludes(ctx)
+	if err != nil {
+		return Capture{}, err
+	}
 	// Before AND after recording new paths: `add` itself looks inside a
 	// tracked gitlink whose path holds a repository, so that must be refused
 	// before add runs; an embedded repository add has just recorded must be

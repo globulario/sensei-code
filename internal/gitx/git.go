@@ -3,6 +3,8 @@ package gitx
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -477,6 +479,9 @@ type hostProfile struct {
 	ownerConfig []string
 	ownerAttrs  []string
 	ownerHome   string
+	// The default global ignore file, where ordinary git looks when no
+	// core.excludesFile is set.
+	defaultIgnore string
 }
 
 var (
@@ -535,6 +540,11 @@ func (p *hostProfile) locateOwnerFiles() error {
 		}
 	}
 	p.ownerHome = os.Getenv("HOME")
+	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
+		p.defaultIgnore = filepath.Join(x, "git", "ignore")
+	} else {
+		p.defaultIgnore = filepath.Join(p.ownerHome, ".config", "git", "ignore")
+	}
 	for _, v := range []string{"GIT_CONFIG_SYSTEM", "GIT_CONFIG_GLOBAL", "GIT_ATTR_SYSTEM", "GIT_ATTR_GLOBAL"} {
 		cmd := exec.Command(p.exe, "var", v)
 		cmd.Dir, cmd.Env = p.home, env
@@ -550,6 +560,9 @@ func (p *hostProfile) locateOwnerFiles() error {
 			if line = strings.TrimSpace(line); line == "" {
 				continue
 			}
+			if !filepath.IsAbs(line) {
+				return refuseProfile("git reports the owner's %s as %q, which is not an absolute path", v, line)
+			}
 			if strings.HasPrefix(v, "GIT_CONFIG") {
 				p.ownerConfig = append(p.ownerConfig, line)
 			} else {
@@ -560,45 +573,78 @@ func (p *hostProfile) locateOwnerFiles() error {
 	return nil
 }
 
-// checkOwnerContent refuses when the owner's ordinary git would transform
-// content in a way this profile does not reproduce: core.autocrlf other than
-// false, core.eol, core.attributesFile, or an attribute rule that converts
-// content. It reads the files as data -- including the files they include --
-// and reports only the source, key and reason, never a value (RULING-319).
-func (p hostProfile) checkOwnerContent() error {
+// checkOwnerContent refuses when the owner's ordinary git would treat content
+// or paths in a way this profile does not reproduce (RULING-319, RULING-320):
+//   - core.autocrlf other than false, core.eol, core.attributesFile;
+//   - core.bigFileThreshold, core.safecrlf, core.checkRoundtripEncoding, which
+//     change how content is rendered or whether git rejects it;
+//   - core.precomposeUnicode or core.ignoreCase the repository does not set
+//     itself (repo keys win in git's precedence);
+//   - any active rule in an owner attributes file: a candidate can define a
+//     macro of any attribute name, so no bare attribute is harmless;
+//   - more than one excludes file, which is ambiguous.
+//
+// The files are read as data, includes followed as data, and refusals name
+// the source and key, never a value. It also returns the owner's excludes file
+// (the default global ignore when none is set), for the excludes snapshot.
+func (p hostProfile) checkOwnerContent(repoKeys map[string][]configValue) (string, error) {
 	for _, e := range os.Environ() {
 		k, v, _ := strings.Cut(e, "=")
 		if k == "GIT_CONFIG_PARAMETERS" || strings.HasPrefix(k, "GIT_CONFIG_KEY_") {
 			low := strings.ToLower(v)
-			for _, key := range []string{"core.autocrlf", "core.eol", "core.attributesfile"} {
+			for key := range ownerRefusedKeys {
 				if strings.Contains(low, key) {
-					return refuseProfile("the environment (%s) sets %s for ordinary git, which the trusted profile does not reproduce", k, key)
+					return "", refuseProfile("the environment (%s) sets %s for ordinary git, which the trusted profile does not reproduce", k, key)
+				}
+			}
+			for _, key := range []string{"core.autocrlf", "core.precomposeunicode", "core.ignorecase", "core.excludesfile"} {
+				if strings.Contains(low, key) {
+					return "", refuseProfile("the environment (%s) sets %s for ordinary git, which the trusted profile does not reproduce", k, key)
 				}
 			}
 		}
 	}
-	seen := map[string]bool{}
+	o := ownerScan{p: p, repo: repoKeys, seen: map[string]bool{}}
 	for _, f := range p.ownerConfig {
-		if err := p.checkOwnerConfigFile(f, seen, 0); err != nil {
-			return err
+		if err := o.file(f, 0); err != nil {
+			return "", err
 		}
 	}
 	for _, f := range p.ownerAttrs {
 		if err := checkOwnerAttributes(f); err != nil {
-			return err
+			return "", err
 		}
 	}
-	return nil
+	switch len(o.excludes) {
+	case 0:
+		return p.defaultIgnore, nil
+	case 1:
+		for e := range o.excludes {
+			return e, nil
+		}
+	}
+	return "", refuseProfile("the owner's configuration names %d different excludes files; which one ordinary git uses is not established", len(o.excludes))
 }
 
-func (p hostProfile) checkOwnerConfigFile(f string, seen map[string]bool, depth int) error {
+// ownerRefusedKeys change content, its rendering, or whether git rejects it,
+// in ways the trusted profile does not reproduce.
+var ownerRefusedKeys = setOf("core.eol", "core.attributesfile", "core.bigfilethreshold", "core.safecrlf", "core.checkroundtripencoding")
+
+type ownerScan struct {
+	p        hostProfile
+	repo     map[string][]configValue
+	seen     map[string]bool
+	excludes map[string]bool
+}
+
+func (o *ownerScan) file(f string, depth int) error {
 	if depth > 10 {
 		return refuseProfile("the owner's git configuration includes files more than 10 deep at %s", f)
 	}
-	if seen[f] {
+	if o.seen[f] {
 		return nil
 	}
-	seen[f] = true
+	o.seen[f] = true
 	keys, err := configKeys(f, true)
 	if err != nil {
 		return err
@@ -611,19 +657,26 @@ func (p hostProfile) checkOwnerConfigFile(f string, seen map[string]bool, depth 
 					return refuseProfile("%s sets core.autocrlf to a value other than false; ordinary git converts line endings the trusted profile does not", f)
 				}
 			}
-		case k == "core.eol", k == "core.attributesfile":
-			return refuseProfile("%s sets %s; ordinary git transforms content the trusted profile does not", f, k)
+		case ownerRefusedKeys[k]:
+			return refuseProfile("%s sets %s; ordinary git treats content in a way the trusted profile does not", f, k)
+		case k == "core.precomposeunicode", k == "core.ignorecase":
+			// The repository's own setting wins in git's precedence and is read
+			// by the profile too; only an unestablished one diverges.
+			if _, ok := o.repo[k]; !ok {
+				return refuseProfile("%s sets %s and the repository does not set it itself; pathname identity would differ from ordinary git", f, k)
+			}
+		case k == "core.excludesfile":
+			for _, v := range vs {
+				if o.excludes == nil {
+					o.excludes = map[string]bool{}
+				}
+				o.excludes[o.p.ownerPath(v.raw, f)] = true
+			}
 		case k == "include.path" || strings.HasPrefix(k, "includeif.") && strings.HasSuffix(k, ".path"):
 			// Followed as data only, whatever its condition: a file that might
 			// apply is a file whose settings might matter.
 			for _, v := range vs {
-				inc := v.raw
-				if strings.HasPrefix(inc, "~/") {
-					inc = filepath.Join(p.ownerHome, inc[2:])
-				} else if !filepath.IsAbs(inc) {
-					inc = filepath.Join(filepath.Dir(f), inc)
-				}
-				if err := p.checkOwnerConfigFile(inc, seen, depth+1); err != nil {
+				if err := o.file(o.p.ownerPath(v.raw, f), depth+1); err != nil {
 					return err
 				}
 			}
@@ -632,12 +685,24 @@ func (p hostProfile) checkOwnerConfigFile(f string, seen map[string]bool, depth 
 	return nil
 }
 
-// contentAttributes are the attributes that change what content git stores
-// or checks out.
-var contentAttributes = setOf("text", "eol", "crlf", "filter", "working-tree-encoding", "ident", "binary")
+// ownerPath resolves a path named in the owner's configuration file f: "~/"
+// is the owner's home, a relative path is relative to f.
+func (p hostProfile) ownerPath(v, f string) string {
+	switch {
+	case strings.HasPrefix(v, "~/"):
+		return filepath.Join(p.ownerHome, v[2:])
+	case filepath.IsAbs(v):
+		return filepath.Clean(v)
+	}
+	return filepath.Join(filepath.Dir(f), v)
+}
 
-// checkOwnerAttributes refuses an owner attributes file that sets any
-// content-converting attribute.
+// checkOwnerAttributes refuses an owner attributes file with any active rule.
+// Only blank lines and comments are verified inert: a candidate .gitattributes
+// can make ANY attribute name a macro for a filter or a line-ending
+// conversion, so an owner rule setting even a harmless-looking attribute can
+// transform content (independent review G1, RULING-320). The contents are
+// never reported.
 func checkOwnerAttributes(f string) error {
 	body, err := readSmallFile(f)
 	if errors.Is(err, os.ErrNotExist) {
@@ -647,31 +712,107 @@ func checkOwnerAttributes(f string) error {
 		return refuseProfile("the owner's attributes file %s cannot be read: %v", f, err)
 	}
 	for n, line := range strings.Split(body, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || line[0] == '#' {
-			continue
-		}
-		var attrs string
-		switch {
-		case strings.HasPrefix(line, "[attr]"):
-			_, attrs, _ = strings.Cut(strings.TrimSpace(strings.TrimPrefix(line, "[attr]")), " ")
-		case line[0] == '"':
-			end := strings.LastIndex(line, "\"")
-			if end <= 0 {
-				return refuseProfile("%s:%d has an unterminated quoted pattern", f, n+1)
-			}
-			attrs = line[end+1:]
-		default:
-			_, attrs, _ = strings.Cut(strings.ReplaceAll(line, "\t", " "), " ")
-		}
-		for _, a := range strings.Fields(attrs) {
-			name, _, _ := strings.Cut(strings.TrimLeft(a, "-!"), "=")
-			if contentAttributes[strings.ToLower(name)] {
-				return refuseProfile("%s:%d sets the content attribute %s; ordinary git transforms content the trusted profile does not", f, n+1, name)
-			}
+		if line = strings.TrimSpace(line); line != "" && line[0] != '#' {
+			return refuseProfile("%s:%d is an active attribute rule; the trusted profile does not apply owner attributes", f, n+1)
 		}
 	}
 	return nil
+}
+
+// excludesSnapshot copies the owner's excludes file, vetted, into a private
+// file the trusted profile owns and binds core.excludesFile to: ordinary git
+// ignores what the owner ignores, and so must capture (RULING-320 G2). The
+// original is never handed to git. A missing file ignores nothing, as in
+// ordinary git; a symlink, a non-regular file, an unreadable one, or one
+// inside the repository or the worktree is refused. The snapshot is named by
+// its content, written once, read-only.
+func (p hostProfile) excludesSnapshot(id gitIdentity, source string) (string, error) {
+	if !filepath.IsAbs(source) {
+		return "", refuseProfile("the owner's excludes file %q is not an absolute path", source)
+	}
+	for _, inside := range []string{id.workTree, id.commonDir, id.gitDir} {
+		if rel, err := filepath.Rel(inside, source); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return "", refuseProfile("the owner's excludes file %s lies inside %s, where the candidate or the repository can write it", source, inside)
+		}
+	}
+	var body []byte
+	fi, err := os.Lstat(source)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+	case err != nil:
+		return "", refuseProfile("the owner's excludes file %s cannot be inspected: %v", source, err)
+	case !fi.Mode().IsRegular():
+		return "", refuseProfile("the owner's excludes file %s is not a regular file", source)
+	default:
+		s, err := readSmallFile(source)
+		if err != nil {
+			return "", refuseProfile("the owner's excludes file %s cannot be read: %v", source, err)
+		}
+		body = []byte(s)
+	}
+	sum := sha256.Sum256(body)
+	dir := filepath.Join(p.home, "excludes")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", refuseProfile("the excludes snapshot directory cannot be created: %v", err)
+	}
+	snap := filepath.Join(dir, hex.EncodeToString(sum[:]))
+	if b, err := os.ReadFile(snap); err == nil {
+		if sha256.Sum256(b) == sum {
+			return snap, nil
+		}
+		return "", refuseProfile("the excludes snapshot %s does not hold the bytes it is named for", snap)
+	}
+	tmp, err := os.CreateTemp(dir, "pending-")
+	if err != nil {
+		return "", refuseProfile("the excludes snapshot cannot be written: %v", err)
+	}
+	_, werr := tmp.Write(body)
+	if cerr := tmp.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr == nil {
+		werr = os.Chmod(tmp.Name(), 0o400)
+	}
+	if werr == nil {
+		werr = os.Rename(tmp.Name(), snap)
+	}
+	if werr != nil {
+		os.Remove(tmp.Name())
+		return "", refuseProfile("the excludes snapshot cannot be written: %v", werr)
+	}
+	return snap, nil
+}
+
+// pinnedExcludes carries one excludes snapshot through a whole operation, so
+// every git call of one capture ignores exactly the same paths.
+type pinnedExcludes struct{}
+
+// pinExcludes snapshots the owner's excludes now and pins it to ctx.
+func (r Repo) pinExcludes(ctx context.Context) (context.Context, error) {
+	if _, ok := ctx.Value(pinnedExcludes{}).(string); ok {
+		return ctx, nil
+	}
+	p, err := trustedProfile()
+	if err != nil {
+		return ctx, err
+	}
+	id, err := resolveIdentity(r.Root)
+	if err != nil {
+		return ctx, err
+	}
+	keys, err := repoConfigKeys(id)
+	if err != nil {
+		return ctx, err
+	}
+	source, err := p.checkOwnerContent(keys)
+	if err != nil {
+		return ctx, err
+	}
+	snap, err := p.excludesSnapshot(id, source)
+	if err != nil {
+		return ctx, err
+	}
+	return context.WithValue(ctx, pinnedExcludes{}, snap), nil
 }
 
 // versionAtLeast reads "git version X.Y..." and compares X.Y.
@@ -706,6 +847,9 @@ func (p hostProfile) baseEnv() []string {
 		// refs/replace in the shared repository could make "the base" mean
 		// another commit to every read below (independent review, N2).
 		"GIT_NO_REPLACE_OBJECTS=1",
+		// System attributes are hidden like system configuration; the owner's
+		// are refused when they hold any rule (RULING-320 G1).
+		"GIT_ATTR_NOSYSTEM=1",
 		// A path that never exists: no grafts, and no deprecation notice in
 		// the output (os.DevNull "exists" and makes git print one).
 		"GIT_GRAFT_FILE=" + filepath.Join(p.home, "no-grafts"),
@@ -737,8 +881,21 @@ func (r Repo) gitCommand(ctx context.Context, dir string, extra []string, readOn
 	if err := checkRepoConfig(id); err != nil {
 		return nil, err
 	}
-	if err := p.checkOwnerContent(); err != nil {
-		return nil, err
+	// One snapshot for a whole capture when the caller pinned it; otherwise
+	// this call's own, after the same owner checks.
+	snap, pinned := ctx.Value(pinnedExcludes{}).(string)
+	if !pinned {
+		keys, err := repoConfigKeys(id)
+		if err != nil {
+			return nil, err
+		}
+		source, err := p.checkOwnerContent(keys)
+		if err != nil {
+			return nil, err
+		}
+		if snap, err = p.excludesSnapshot(id, source); err != nil {
+			return nil, err
+		}
 	}
 	if entries, err := os.ReadDir(p.hooks); err != nil || len(entries) != 0 {
 		return nil, refuseProfile("the trusted hooks directory %s is not an empty directory", p.hooks)
@@ -752,7 +909,7 @@ func (r Repo) gitCommand(ctx context.Context, dir string, extra []string, readOn
 		}
 		env = append(env, e)
 	}
-	full := []string{"-c", "core.hooksPath=" + p.hooks, "-c", "core.fsmonitor=false"}
+	full := []string{"-c", "core.hooksPath=" + p.hooks, "-c", "core.fsmonitor=false", "-c", "core.excludesFile=" + snap}
 	if readOnly {
 		full = append(full, noOptionalLocks)
 	}
@@ -973,6 +1130,25 @@ func readSmallFile(p string) (string, error) {
 // key outside the closed allowlist. Membership, not exclusion: a key this
 // list does not know is refused, because an unknown key is one nobody has
 // shown cannot name a program.
+// repoConfigKeys is the repository's own configuration (and config.worktree
+// when enabled), as checkRepoConfig reads it.
+func repoConfigKeys(id gitIdentity) (map[string][]configValue, error) {
+	keys, err := configKeys(filepath.Join(id.commonDir, "config"), false)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := keys["extensions.worktreeconfig"]; ok {
+		wt, err := configKeys(filepath.Join(id.gitDir, "config.worktree"), true)
+		if err != nil {
+			return nil, err
+		}
+		for k, vs := range wt {
+			keys[k] = append(keys[k], vs...)
+		}
+	}
+	return keys, nil
+}
+
 func checkRepoConfig(id gitIdentity) error {
 	keys, err := configKeys(filepath.Join(id.commonDir, "config"), false)
 	if err != nil {

@@ -1236,3 +1236,267 @@ func TestCanonicalTreeRefusesASelectedFilter(t *testing.T) {
 	_, err = (Repo{Root: wt}).CanonicalTree(ctx, base, []string{"a.txt", ".gitattributes"})
 	hsRefused(t, "CanonicalTree", err)
 }
+
+// A candidate macro cannot turn an owner attribute rule into a content
+// transformation: any active owner attribute rule is refused, whatever the
+// attribute is called (independent review G1, RULING-320).
+func TestAnOwnerAttributeCannotBeExpandedByACandidateMacro(t *testing.T) {
+	ctx := context.Background()
+	for name, macro := range map[string]string{
+		"into a filter":             "[attr]export-ignore filter=up\n",
+		"into a line-ending change": "[attr]export-ignore text eol=crlf\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, base := hsRepo(t)
+			wt, err := r.CreateWorktreeAt(ctx, "macro", base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hsWrite(t, filepath.Join(wt, ".gitattributes"), macro)
+			hsWrite(t, filepath.Join(wt, "a.txt"), "hello\nworld\n")
+			hsOwner(t, "[filter \"up\"]\n\tclean = tr a-z A-Z\n", "*.txt export-ignore\n")
+			_, err = (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+			hsRefused(t, "CandidateCapture", err)
+			// Control: ordinary git, with the owner's attributes, expands the
+			// macro and stores different bytes than git without them.
+			owner, err1 := hsOwnerGit(wt, "hello\r\nworld\r\n", "hash-object", "--path=a.txt", "--stdin")
+			cmd := exec.Command("git", "-C", wt, "hash-object", "--path=a.txt", "--stdin")
+			cmd.Stdin = strings.NewReader("hello\r\nworld\r\n")
+			cmd.Env = append(os.Environ(), "XDG_CONFIG_HOME="+t.TempDir())
+			plain, err2 := cmd.Output()
+			if err1 != nil || err2 != nil || strings.TrimSpace(owner) == strings.TrimSpace(string(plain)) {
+				t.Fatalf("premise: the owner's attribute does not change what ordinary git stores (%v %v)", err1, err2)
+			}
+		})
+	}
+}
+
+// System attributes are hidden from the trusted profile, as system
+// configuration is: git itself reports no system attributes file under the
+// profile's environment (RULING-320 G1, supported-git witness).
+func TestTheProfileReadsNoSystemAttributes(t *testing.T) {
+	p, err := trustedProfile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(p.exe, "var", "GIT_ATTR_SYSTEM")
+	cmd.Dir, cmd.Env = p.home, p.baseEnv()
+	out, err := cmd.Output()
+	if err == nil && strings.TrimSpace(string(out)) != "" {
+		t.Fatalf("under the profile, git still names a system attributes file: %q", out)
+	}
+	// Control: without the switch, git names one.
+	cmd = exec.Command(p.exe, "var", "GIT_ATTR_SYSTEM")
+	cmd.Dir = p.home
+	if out, err := cmd.Output(); err != nil || strings.TrimSpace(string(out)) == "" {
+		t.Fatalf("premise: git names no system attributes file even without GIT_ATTR_NOSYSTEM: %q %v", out, err)
+	}
+}
+
+// The owner's global excludes are honoured exactly as ordinary git honours
+// them: an owner-ignored file never enters the capture, local rules keep their
+// precedence, an intended path does not override it, and a changed excludes
+// file is seen by the next capture (independent review G2, RULING-320).
+func TestTheOwnersGlobalExcludesAreHonoured(t *testing.T) {
+	ctx := context.Background()
+	r, base := hsRepo(t)
+	wt, err := r.CreateWorktreeAt(ctx, "excludes", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"secret.env", "kept.env", "notes.local", "b.txt"} {
+		hsWrite(t, filepath.Join(wt, f), "dummy\n")
+	}
+	hsWrite(t, filepath.Join(wt, ".gitignore"), "!kept.env\n")
+	home := hsOwner(t, "", "")
+	ignore := filepath.Join(home, "xdg", "git", "ignore")
+	hsWrite(t, ignore, "*.env\n")
+	paths := func() []string {
+		t.Helper()
+		cap, err := (Repo{Root: wt}).CandidateCapture(ctx, base, []string{"secret.env"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cap.Paths
+	}
+	has := func(ps []string, p string) bool {
+		for _, x := range ps {
+			if x == p {
+				return true
+			}
+		}
+		return false
+	}
+	got := paths()
+	if has(got, "secret.env") {
+		t.Fatalf("an owner-ignored file entered the capture (even named as intended): %q", got)
+	}
+	if !has(got, "kept.env") || !has(got, "b.txt") {
+		t.Fatalf("the repository's negation or an ordinary new file was lost: %q", got)
+	}
+	// The same verdict as ordinary git under the owner's configuration.
+	ordinary, _ := hsOwnerGit(wt, "", "status", "--porcelain", "--untracked-files=all")
+	if strings.Contains(ordinary, "secret.env") || !strings.Contains(ordinary, "kept.env") {
+		t.Fatalf("premise: ordinary git does not ignore secret.env and keep kept.env:\n%s", ordinary)
+	}
+	// Control: without the owner's excludes, secret.env WOULD be captured.
+	cmd := exec.Command("git", "-C", wt, "status", "--porcelain", "--untracked-files=all")
+	cmd.Env = append(os.Environ(), "XDG_CONFIG_HOME="+t.TempDir())
+	if out, _ := cmd.Output(); !strings.Contains(string(out), "secret.env") {
+		t.Fatalf("premise: without the owner's excludes secret.env is not a new file\n%s", out)
+	}
+	// A changed excludes file is seen by the next capture -- of a worktree the
+	// first capture has not already intent-added paths in (a path git already
+	// tracks is not un-tracked by a new ignore rule, in ordinary git either).
+	hsWrite(t, ignore, "*.local\n")
+	wt2, err := r.CreateWorktreeAt(ctx, "excludes-changed", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"secret.env", "notes.local"} {
+		hsWrite(t, filepath.Join(wt2, f), "dummy\n")
+	}
+	cap2, err := (Repo{Root: wt2}).CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !has(cap2.Paths, "secret.env") || has(cap2.Paths, "notes.local") {
+		t.Fatalf("the changed owner excludes were not honoured: %q", cap2.Paths)
+	}
+}
+
+// An excludes source that is unsafe or ambiguous is refused; a missing one
+// ignores nothing, as in ordinary git (RULING-320 G2).
+func TestAnUnsafeOwnerExcludesSourceIsRefused(t *testing.T) {
+	ctx := context.Background()
+	for name, c := range map[string]struct {
+		config func(home, wt string) string
+		refuse bool
+	}{
+		"inside the candidate worktree": {config: func(home, wt string) string {
+			return "[core]\n\texcludesFile = " + filepath.Join(wt, "ignore") + "\n"
+		}, refuse: true},
+		"a symlink": {config: func(home, wt string) string {
+			os.Symlink(filepath.Join(wt, "ignore"), filepath.Join(home, "link"))
+			return "[core]\n\texcludesFile = " + filepath.Join(home, "link") + "\n"
+		}, refuse: true},
+		"two different files": {config: func(home, wt string) string {
+			inc := filepath.Join(home, "inc")
+			os.WriteFile(inc, []byte("[core]\n\texcludesFile = /x/two\n"), 0o644)
+			return "[core]\n\texcludesFile = /x/one\n[include]\n\tpath = " + inc + "\n"
+		}, refuse: true},
+		"missing": {config: func(home, wt string) string {
+			return "[core]\n\texcludesFile = " + filepath.Join(home, "absent") + "\n"
+		}, refuse: false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, base := hsRepo(t)
+			wt, err := r.CreateWorktreeAt(ctx, "unsafe", base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hsWrite(t, filepath.Join(wt, "ignore"), "*.txt\n")
+			home := t.TempDir()
+			hsOwner(t, c.config(home, wt), "")
+			_, err = (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+			if c.refuse {
+				hsRefused(t, "CandidateCapture", err)
+			} else if err != nil {
+				t.Fatalf("a missing excludes file was refused: %v", err)
+			}
+		})
+	}
+	t.Run("unreadable", func(t *testing.T) {
+		if os.Getuid() <= 0 {
+			t.Skip("root reads any file")
+		}
+		r, base := hsRepo(t)
+		wt, err := r.CreateWorktreeAt(ctx, "unreadable", base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		home := hsOwner(t, "", "")
+		ignore := filepath.Join(home, "xdg", "git", "ignore")
+		hsWrite(t, ignore, "*.env\n")
+		if err := os.Chmod(ignore, 0); err != nil {
+			t.Fatal(err)
+		}
+		_, err = (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+		hsRefused(t, "CandidateCapture", err)
+	})
+}
+
+// Owner settings that change pathname identity, rendering or rejection are
+// refused unless the repository establishes them itself (RULING-320 G3, G4).
+func TestOwnerPathAndRenderingSettingsAreRefused(t *testing.T) {
+	ctx := context.Background()
+	for name, c := range map[string]struct {
+		gitconfig string
+		control   func(t *testing.T, r Repo) bool // ordinary git behaves differently; nil where the platform cannot show it
+	}{
+		"core.ignoreCase": {gitconfig: "[core]\n\tignoreCase = true\n", control: func(t *testing.T, r Repo) bool {
+			// A.TXT beside the tracked a.txt: ordinary git under the owner's
+			// ignoreCase no longer reports it as a new file.
+			hsWrite(t, filepath.Join(r.Root, "A.TXT"), "upper\n")
+			owner, _ := hsOwnerGit(r.Root, "", "status", "--porcelain", "--untracked-files=all")
+			cmd := exec.Command("git", "-C", r.Root, "status", "--porcelain", "--untracked-files=all")
+			cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull)
+			plain, _ := cmd.Output()
+			return owner != string(plain)
+		}},
+		// Linux git does not act on it: conservative refusal (RULING-320 Q3).
+		"core.precomposeUnicode": {gitconfig: "[core]\n\tprecomposeUnicode = true\n"},
+		"core.bigFileThreshold": {gitconfig: "[core]\n\tbigFileThreshold = 1\n", control: func(t *testing.T, r Repo) bool {
+			hsWrite(t, filepath.Join(r.Root, "a.txt"), "changed\n")
+			out, _ := hsOwnerGit(r.Root, "", "diff", "--no-ext-diff")
+			return strings.Contains(out, "Binary files")
+		}},
+		"core.safecrlf": {gitconfig: "[core]\n\tsafecrlf = true\n\tautocrlf = false\n", control: func(t *testing.T, r Repo) bool {
+			hsWrite(t, filepath.Join(r.Root, ".gitattributes"), "*.txt text\n")
+			hsWrite(t, filepath.Join(r.Root, "a.txt"), "one\r\ntwo\n")
+			_, err := hsOwnerGit(r.Root, "", "add", "a.txt")
+			return err != nil
+		}},
+		"core.checkRoundtripEncoding": {gitconfig: "[core]\n\tcheckRoundtripEncoding = UTF-16\n"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, _ := hsRepo(t)
+			hsOwner(t, c.gitconfig, "")
+			_, err := r.Head(ctx)
+			hsRefused(t, "Head", err)
+			if c.control != nil && !c.control(t, r) {
+				t.Fatal("premise: ordinary git under the owner's setting behaves no differently")
+			}
+		})
+	}
+	// The repository's own setting wins in git's precedence, so the owner's no
+	// longer diverges.
+	r, _ := hsRepo(t)
+	hsGit(t, r.Root, "config", "core.ignoreCase", "false")
+	hsOwner(t, "[core]\n\tignoreCase = true\n", "")
+	if _, err := r.Head(ctx); err != nil {
+		t.Fatalf("an owner ignoreCase the repository overrides was refused: %v", err)
+	}
+}
+
+// Discovery that git cannot answer exactly is a refusal, and the supported
+// version boundary is git 2.42 (RULING-320 G6).
+func TestOwnerDiscoveryAndVersionBoundary(t *testing.T) {
+	r, _ := hsRepo(t)
+	hsOwner(t, "", "")
+	t.Setenv("GIT_CONFIG_GLOBAL", "relative/config")
+	profileMu.Lock()
+	profile = nil
+	profileMu.Unlock()
+	_, err := r.Head(context.Background())
+	hsRefused(t, "a relative global configuration path", err)
+	for v, ok := range map[string]bool{
+		"git version 2.41.0": false, "git version 2.42.0": true, "git version 2.43.0": true,
+		"git version 2.42.0.windows.1": true, "git version 3.0.0": true, "git version 2.34.1": false,
+		"not git": false,
+	} {
+		if versionAtLeast(v, 2, 42) != ok {
+			t.Errorf("versionAtLeast(%q, 2.42) != %v", v, ok)
+		}
+	}
+}
