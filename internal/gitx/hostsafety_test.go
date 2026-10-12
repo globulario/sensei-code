@@ -1,0 +1,591 @@
+package gitx
+
+// Host-safety witnesses for the trusted git profile (GITX objective,
+// RULING-313/316). Every case drives the real gitx functions against a
+// disposable repository and plants a program that leaves a marker if git runs
+// it. A negative passes only when the marker is absent; each attack has a
+// control showing that plain git, given the same repository, does run it --
+// so an absent marker means the profile stopped it, not that the attack was
+// inert.
+
+import (
+	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// hsRepo is a committed repository at <tmp>/repo with one tracked file.
+func hsRepo(t *testing.T) (Repo, string) {
+	t.Helper()
+	root := filepath.Join(t.TempDir(), "repo")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hsGit(t, root, "init", "-q", "-b", "main")
+	hsGit(t, root, "config", "user.email", "t@example.invalid")
+	hsGit(t, root, "config", "user.name", "T")
+	hsGit(t, root, "config", "commit.gpgsign", "false")
+	hsWrite(t, filepath.Join(root, "a.txt"), "one\n")
+	hsGit(t, root, "add", "a.txt")
+	hsGit(t, root, "commit", "-q", "-m", "base")
+	return Repo{Root: root}, hsGit(t, root, "rev-parse", "HEAD")
+}
+
+// hsGit is plain, unrestricted git: the test's own tool and the controls.
+// Its hooks are pointed at nothing so setup never fires a planted program.
+func hsGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	out, err := hsPlain(dir, append([]string{"-c", "core.hooksPath=" + os.DevNull}, args...)...)
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(out)
+}
+
+func hsPlain(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func hsWrite(t *testing.T, p, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// hsProgram writes an executable that touches marker, and returns its path.
+func hsProgram(t *testing.T, marker string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "evil.sh")
+	hsWrite(t, p, "#!/bin/sh\ntouch '"+marker+"'\ncat\n")
+	return p
+}
+
+func hsRan(marker string) bool {
+	_, err := os.Stat(marker)
+	return err == nil
+}
+
+func hsRefused(t *testing.T, what string, err error) {
+	t.Helper()
+	if err == nil || !strings.Contains(err.Error(), ProfileRefused) {
+		t.Fatalf("%s: want a %s refusal, got %v", what, ProfileRefused, err)
+	}
+}
+
+func hsAppendConfig(t *testing.T, path, body string) {
+	t.Helper()
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(body); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Hooks git would run for worktree creation, index changes and ref updates
+// are never run: the profile points core.hooksPath at an empty directory.
+func TestHostGitRunsNoRepositoryHook(t *testing.T) {
+	ctx := context.Background()
+	r, base := hsRepo(t)
+	marker := filepath.Join(t.TempDir(), "hook-ran")
+	evil := hsProgram(t, marker)
+	for _, h := range []string{"post-checkout", "post-index-change", "reference-transaction"} {
+		hsWrite(t, filepath.Join(r.Root, ".git", "hooks", h), "#!/bin/sh\nexec '"+evil+"'\n")
+	}
+	wt, err := r.CreateWorktreeAt(ctx, "hooks", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hsWrite(t, filepath.Join(wt, "b.txt"), "new\n")
+	cap, err := (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit, err := r.MintCanonicalCommit(ctx, base, cap.Tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.PointBranchAt(ctx, r.WorktreeBranch("hooks"), commit); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.RemoveWorktree(ctx, wt); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.DeleteBranch(ctx, r.WorktreeBranch("hooks")); err != nil {
+		t.Fatal(err)
+	}
+	if hsRan(marker) {
+		t.Fatal("a repository hook ran during trusted git operations")
+	}
+	// Control: the same hooks fire under plain git.
+	if out, err := hsPlain(r.Root, "worktree", "add", "-q", "--detach", filepath.Join(t.TempDir(), "control"), base); err != nil {
+		t.Fatalf("control: %v\n%s", err, out)
+	}
+	if !hsRan(marker) {
+		t.Fatal("premise: the planted hook does not run under plain git, so its absence proves nothing")
+	}
+}
+
+// Executable configuration is refused BEFORE git runs, by name, for every
+// gitx entry point; plain git given the same repository runs the program.
+func TestExecutableRepositoryConfigurationIsRefusedBeforeGitRuns(t *testing.T) {
+	ctx := context.Background()
+	cases := map[string]struct {
+		config     func(evil string) string
+		attributes string
+		control    []string // plain git command that runs the program
+	}{
+		"fsmonitor": {
+			config:  func(e string) string { return "[core]\n\tfsmonitor = " + e + "\n" },
+			control: []string{"status", "--porcelain"},
+		},
+		"clean filter": {
+			config:     func(e string) string { return "[filter \"evil\"]\n\tclean = " + e + "\n" },
+			attributes: "*.txt filter=evil\n",
+			control:    []string{"diff", "--no-ext-diff"},
+		},
+		"process filter": {
+			config:     func(e string) string { return "[filter \"evil\"]\n\tprocess = " + e + "\n\trequired = true\n" },
+			attributes: "*.txt filter=evil\n",
+			control:    []string{"diff", "--no-ext-diff"},
+		},
+		"textconv": {
+			config:     func(e string) string { return "[diff \"evil\"]\n\ttextconv = " + e + "\n" },
+			attributes: "*.txt diff=evil\n",
+			control:    []string{"diff", "HEAD"},
+		},
+		"external diff": {
+			config:  func(e string) string { return "[diff]\n\texternal = " + e + "\n" },
+			control: []string{"diff", "HEAD"},
+		},
+		"include": {
+			config: func(e string) string {
+				inc := filepath.Join(filepath.Dir(e), "included.conf")
+				os.WriteFile(inc, []byte("[core]\n\tfsmonitor = "+e+"\n"), 0o644)
+				return "[include]\n\tpath = " + inc + "\n"
+			},
+			control: []string{"status", "--porcelain"},
+		},
+		"includeIf": {
+			config: func(e string) string {
+				inc := filepath.Join(filepath.Dir(e), "included.conf")
+				os.WriteFile(inc, []byte("[core]\n\tfsmonitor = "+e+"\n"), 0o644)
+				return "[includeIf \"gitdir:/\"]\n\tpath = " + inc + "\n"
+			},
+			control: []string{"status", "--porcelain"},
+		},
+		"key after a comment ending in a backslash": {
+			config:  func(e string) string { return "[core]\n\tbare = false ; note \\\n\tfsmonitor = " + e + "\n" },
+			control: []string{"status", "--porcelain"},
+		},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			r, base := hsRepo(t)
+			wt, err := r.CreateWorktreeAt(ctx, "cfg", base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hsWrite(t, filepath.Join(wt, "a.txt"), "two\n")
+			hsWrite(t, filepath.Join(r.Root, "a.txt"), "two\n")
+			if c.attributes != "" {
+				hsWrite(t, filepath.Join(wt, ".gitattributes"), c.attributes)
+				hsWrite(t, filepath.Join(r.Root, ".gitattributes"), c.attributes)
+			}
+			marker := filepath.Join(t.TempDir(), "ran")
+			hsAppendConfig(t, filepath.Join(r.Root, ".git", "config"), c.config(hsProgram(t, marker)))
+
+			cand := Repo{Root: wt}
+			_, err = cand.CandidateCapture(ctx, base, nil)
+			hsRefused(t, "CandidateCapture", err)
+			_, _, err = r.WorktreeIsClean(ctx, wt)
+			hsRefused(t, "WorktreeIsClean", err)
+			_, err = r.IsClean(ctx)
+			hsRefused(t, "IsClean", err)
+			_, err = r.Head(ctx)
+			hsRefused(t, "Head", err)
+			_, err = r.CreateObservationWorktree(ctx, "cfg", base)
+			hsRefused(t, "CreateObservationWorktree", err)
+			_, err = Discover(ctx, r.Root)
+			hsRefused(t, "Discover", err)
+			if hsRan(marker) {
+				t.Fatal("the repository's program ran during a refused operation")
+			}
+			if out, _ := hsPlain(r.Root, c.control...); !hsRan(marker) {
+				t.Fatalf("premise: plain git %v did not run the program, so the refusal proves nothing\n%s", c.control, out)
+			}
+		})
+	}
+}
+
+// The caller's environment and global configuration cannot reach git: hostile
+// GIT_* variables and a HOME whose .gitconfig names a program are ignored, and
+// the capture is the ordinary one.
+func TestTheCallersEnvironmentDoesNotReachGit(t *testing.T) {
+	ctx := context.Background()
+	r, base := hsRepo(t)
+	wt, err := r.CreateWorktreeAt(ctx, "env", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hsWrite(t, filepath.Join(wt, "a.txt"), "two\n")
+	hsWrite(t, filepath.Join(wt, ".gitattributes"), "*.txt filter=evil diff=evil\n")
+	marker := filepath.Join(t.TempDir(), "ran")
+	evil := hsProgram(t, marker)
+	home := t.TempDir()
+	hsWrite(t, filepath.Join(home, ".gitconfig"), "[core]\n\tfsmonitor = "+evil+"\n[filter \"evil\"]\n\tclean = "+evil+"\n")
+	hsWrite(t, filepath.Join(home, "xdg", "git", "config"), "[core]\n\tfsmonitor = "+evil+"\n")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
+	t.Setenv("GIT_CONFIG_PARAMETERS", "'diff.evil.textconv'='"+evil+"'")
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "core.fsmonitor")
+	t.Setenv("GIT_CONFIG_VALUE_0", evil)
+	t.Setenv("GIT_DIR", filepath.Join(home, "elsewhere"))
+	t.Setenv("GIT_EXTERNAL_DIFF", evil)
+	t.Setenv("GIT_EXEC_PATH", home)
+
+	cap, err := (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hsRan(marker) {
+		t.Fatal("a program from the caller's environment or global configuration ran")
+	}
+	if !strings.Contains(cap.Diff, "+two") || len(cap.Paths) != 2 {
+		t.Fatalf("the capture is not the ordinary one: paths %q\n%s", cap.Paths, cap.Diff)
+	}
+	// Control: plain git with the same HOME (GIT_DIR and GIT_EXEC_PATH dropped,
+	// or it would fail before reading any configuration) runs the program.
+	control := exec.Command("git", "-C", wt, "status", "--porcelain")
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "GIT_DIR=") && !strings.HasPrefix(e, "GIT_EXEC_PATH=") {
+			control.Env = append(control.Env, e)
+		}
+	}
+	if out, _ := control.CombinedOutput(); !hsRan(marker) {
+		t.Fatalf("premise: plain git with this environment does not run the program\n%s", out)
+	}
+}
+
+// A candidate cannot redirect trusted git by rewriting its worktree's .git:
+// neither to a git directory of its own nor by replacing the pointer with a
+// repository.
+func TestACandidateCannotRedirectTrustedGit(t *testing.T) {
+	ctx := context.Background()
+	for name, plant := range map[string]func(t *testing.T, wt, evil string){
+		"pointer to an attacker git directory": func(t *testing.T, wt, evil string) {
+			attacker := filepath.Join(t.TempDir(), "attacker")
+			hsGit(t, filepath.Dir(attacker), "init", "-q", attacker)
+			hsAppendConfig(t, filepath.Join(attacker, ".git", "config"), "[core]\n\tfsmonitor = "+evil+"\n")
+			hsWrite(t, filepath.Join(wt, ".git"), "gitdir: "+filepath.Join(attacker, ".git")+"\n")
+		},
+		"a repository in place of the pointer": func(t *testing.T, wt, evil string) {
+			if err := os.Remove(filepath.Join(wt, ".git")); err != nil {
+				t.Fatal(err)
+			}
+			hsGit(t, wt, "init", "-q")
+			hsAppendConfig(t, filepath.Join(wt, ".git", "config"), "[core]\n\tfsmonitor = "+evil+"\n")
+		},
+		// Identity alone, with no program anywhere: a clean repository in place
+		// of the pointer would let git capture content the candidate chose.
+		"a clean repository in place of the pointer": func(t *testing.T, wt, evil string) {
+			if err := os.Remove(filepath.Join(wt, ".git")); err != nil {
+				t.Fatal(err)
+			}
+			hsGit(t, wt, "init", "-q")
+		},
+		// A fabricated repository whose worktree records point back at this
+		// worktree: every link is self-consistent, and only the anchor in the
+		// owner repository tells it apart.
+		"a fabricated repository that points back": func(t *testing.T, wt, evil string) {
+			fake := filepath.Join(t.TempDir(), "fake")
+			hsGit(t, filepath.Dir(fake), "init", "-q", fake)
+			g := filepath.Join(fake, ".git", "worktrees", "n")
+			hsWrite(t, filepath.Join(g, "gitdir"), filepath.Join(wt, ".git")+"\n")
+			hsWrite(t, filepath.Join(g, "commondir"), "../..\n")
+			hsWrite(t, filepath.Join(g, "HEAD"), "ref: refs/heads/main\n")
+			hsWrite(t, filepath.Join(wt, ".git"), "gitdir: "+g+"\n")
+		},
+		"pointer to another worktree of the same repository": func(t *testing.T, wt, evil string) {
+			hsWrite(t, filepath.Join(wt, ".git"), "gitdir: "+filepath.Join(filepath.Dir(filepath.Dir(wt)), "repo", ".git", "worktrees", "other")+"\n")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, base := hsRepo(t)
+			if _, err := r.CreateWorktreeAt(ctx, "other", base); err != nil {
+				t.Fatal(err)
+			}
+			wt, err := r.CreateWorktreeAt(ctx, "redirect", base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			marker := filepath.Join(t.TempDir(), "ran")
+			plant(t, wt, hsProgram(t, marker))
+			_, err = (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+			hsRefused(t, "CandidateCapture", err)
+			_, _, err = r.WorktreeIsClean(ctx, wt)
+			hsRefused(t, "WorktreeIsClean", err)
+			if hsRan(marker) {
+				t.Fatal("the candidate's program ran through a redirected worktree")
+			}
+		})
+	}
+}
+
+// With extensions.worktreeConfig, a worktree's own config.worktree is
+// configuration too, and is held to the same allowlist.
+func TestAWorktreeConfigurationIsInspectedToo(t *testing.T) {
+	ctx := context.Background()
+	r, base := hsRepo(t)
+	wt, err := r.CreateWorktreeAt(ctx, "wtcfg", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hsGit(t, r.Root, "config", "extensions.worktreeConfig", "true")
+	marker := filepath.Join(t.TempDir(), "ran")
+	gitDir, err := readGitdirPointer(wt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hsAppendConfig(t, filepath.Join(gitDir, "config.worktree"), "[core]\n\tfsmonitor = "+hsProgram(t, marker)+"\n")
+	_, err = (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+	hsRefused(t, "CandidateCapture", err)
+	if hsRan(marker) {
+		t.Fatal("a program named in config.worktree ran")
+	}
+}
+
+// No trusted executable, an extra variable outside the profile, or a polluted
+// hooks directory is a refusal -- never unrestricted git.
+func TestAnUnestablishedProfileNeverFallsBack(t *testing.T) {
+	ctx := context.Background()
+	r, _ := hsRepo(t)
+
+	profileMu.Lock()
+	saved, savedProgram := profile, gitProgram
+	profile, gitProgram = nil, "sensei-code-no-such-git"
+	profileMu.Unlock()
+	_, err := r.Head(ctx)
+	profileMu.Lock()
+	profile, gitProgram = saved, savedProgram
+	profileMu.Unlock()
+	hsRefused(t, "missing executable", err)
+
+	_, err = r.envOutput(ctx, []string{"GIT_EXTERNAL_DIFF=/bin/true"}, "rev-parse", "HEAD")
+	hsRefused(t, "extra environment", err)
+
+	p, err := trustedProfile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stray := filepath.Join(p.hooks, "post-checkout")
+	hsWrite(t, stray, "#!/bin/sh\n")
+	_, err = r.Head(ctx)
+	os.Remove(stray)
+	hsRefused(t, "polluted hooks directory", err)
+	if _, err := r.Head(ctx); err != nil {
+		t.Fatalf("the profile did not recover once the hooks directory was empty again: %v", err)
+	}
+}
+
+// On a safe repository the profile changes nothing a reviewer sees: the
+// capture's tree and diff are exactly what unrestricted git produces, built-in
+// attribute conversions included.
+func TestASafeRepositoryCapturesTheSameIdentity(t *testing.T) {
+	ctx := context.Background()
+	r, _ := hsRepo(t)
+	hsWrite(t, filepath.Join(r.Root, ".gitattributes"), "*.txt text eol=lf\n")
+	hsGit(t, r.Root, "add", ".gitattributes")
+	hsGit(t, r.Root, "commit", "-q", "-m", "attributes")
+	base := hsGit(t, r.Root, "rev-parse", "HEAD")
+	wt, err := r.CreateWorktreeAt(ctx, "same", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hsWrite(t, filepath.Join(wt, "a.txt"), "one\r\ntwo\r\n")
+	hsWrite(t, filepath.Join(wt, "dir", "new.txt"), "new\n")
+	cap, err := (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The same tree, built by unrestricted git from the same paths.
+	index := filepath.Join(t.TempDir(), "index")
+	plain := func(args ...string) string {
+		cmd := exec.Command("git", append([]string{"-C", wt, "-c", "core.hooksPath=" + os.DevNull}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_INDEX_FILE="+index, "GIT_LITERAL_PATHSPECS=1")
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
+		return string(out)
+	}
+	plain("read-tree", base)
+	plain(append([]string{"add", "--all", "--"}, cap.Paths...)...)
+	if want := strings.TrimSpace(plain("write-tree")); cap.Tree != want {
+		t.Fatalf("the capture's tree %s is not unrestricted git's %s", cap.Tree, want)
+	}
+	if want, err := hsPlain(wt, "diff", "--no-ext-diff", base, cap.Tree, "--"); err != nil || cap.Diff != want {
+		t.Fatalf("the capture's diff differs from unrestricted git's:\n%s\n---\n%s", cap.Diff, want)
+	}
+	if !strings.Contains(cap.Diff, "+two") || strings.Contains(cap.Diff, "\r") {
+		t.Fatalf("the eol conversion did not apply:\n%q", cap.Diff)
+	}
+	// The ordinary lifecycle still works end to end.
+	obs, err := r.CreateObservationWorktree(ctx, "same", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clean, _, err := r.WorktreeIsClean(ctx, obs); err != nil || !clean {
+		t.Fatalf("a fresh observation worktree is not clean: %v %v", clean, err)
+	}
+	if err := r.RemoveObservationWorktree(ctx, obs); err != nil {
+		t.Fatal(err)
+	}
+	commit, err := r.MintCanonicalCommit(ctx, base, cap.Tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.VerifyCanonicalCommit(ctx, base, cap.Tree, commit); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Every git this package runs goes through gitCommand: the only process
+// launches in the package's production files are gitCommand's and the
+// profile's own version probe.
+func TestEveryGitInvocationUsesTheTrustedProfile(t *testing.T) {
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed := map[string]bool{"gitCommand": true, "trustedProfile": true}
+	fset := token.NewFileSet()
+	seen := 0
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, f, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, d := range file.Decls {
+			fn, ok := d.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			ast.Inspect(fn, func(n ast.Node) bool {
+				sel, ok := n.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				if x, ok := sel.X.(*ast.Ident); ok && x.Name == "exec" && strings.HasPrefix(sel.Sel.Name, "Command") {
+					seen++
+					if !allowed[fn.Name.Name] {
+						t.Errorf("%s: %s calls exec.%s outside the trusted profile", fset.Position(sel.Pos()), fn.Name.Name, sel.Sel.Name)
+					}
+				}
+				return true
+			})
+		}
+	}
+	if seen == 0 {
+		t.Fatal("premise: the census found no process launch at all, so it inspected nothing")
+	}
+}
+
+// The configuration reader sees exactly the keys git sees, so no key can hide
+// from the allowlist behind a continuation, a comment, a quoted value or a
+// header written on the same line as a key. Git reads the same files as data
+// (config --list runs nothing) and is the oracle.
+func TestTheConfigReaderSeesEveryKeyGitSees(t *testing.T) {
+	fixtures := map[string]string{
+		"escaped backslash ends the value": "[remote \"origin\"]\n\turl = https://example.invalid/r\\\\\n\treceivepack = evil\n",
+		"continued value":                  "[remote \"origin\"]\n\turl = https://example.invalid/\\\nr\n\tuploadpack = evil\n",
+		"backslash in a comment":           "[core]\n\tbare = false ; note \\\n\tfsmonitor = evil\n",
+		"quoted semicolon and hash":        "[remote \"origin\"]\n\turl = \"a;b#c\"\n\tproxy = evil\n",
+		"key on the header line":           "[core] fsmonitor = evil\n[filter \"x\"] clean = evil\n",
+		"deprecated subsection form":       "[Diff.Evil]\n\tTextConv = evil\n",
+		"boolean key without a value":      "[core]\n\tbare\n\tfsmonitor\n",
+		"mixed case subsection":            "[Branch \"Feature/X\"]\n\tRemote = origin\n[INCLUDE]\n\tPath = /x\n",
+	}
+	for name, body := range fixtures {
+		t.Run(name, func(t *testing.T) {
+			p := filepath.Join(t.TempDir(), "config")
+			hsWrite(t, p, body)
+			got, err := configKeys(p, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			oracle := exec.Command("git", "config", "--file", p, "--list", "--name-only")
+			oracle.Dir = filepath.Dir(p) // outside any repository
+			out, err := oracle.Output()
+			if err != nil {
+				t.Fatalf("git cannot read the fixture, so it is not a configuration git would act on: %v", err)
+			}
+			want := map[string]bool{}
+			for _, k := range strings.Fields(string(out)) {
+				want[k] = true
+			}
+			for k := range want {
+				if _, ok := got[k]; !ok {
+					t.Errorf("git sees %s; the reader does not", k)
+				}
+			}
+			for k := range got {
+				if !want[k] {
+					t.Errorf("the reader invents %s, which git does not see", k)
+				}
+			}
+		})
+	}
+}
+
+// Signing settings are admitted only as false: false in any of git's spellings
+// passes, and true -- including a bare key, which git reads as true -- is
+// refused before git runs (RULING-317 Q3).
+func TestSigningSettingsAreAdmittedOnlyAsFalse(t *testing.T) {
+	ctx := context.Background()
+	for value, ok := range map[string]bool{
+		"\tgpgsign = false\n": true, "\tgpgsign = No\n": true, "\tgpgsign = off ; disabled\n": true,
+		"\tgpgsign = 0\n": true, "\tgpgsign =\n": true, "\tgpgsign = \"false\"\n": true,
+		"\tgpgsign = true\n": false, "\tgpgsign\n": false, "\tgpgsign = yes\n": false,
+		"\tgpgsign = 1\n": false, "\tgpgsign = maybe\n": false, "\tgpgsign = false\n\tgpgsign = true\n": false,
+	} {
+		for _, section := range []string{"commit", "tag"} {
+			r, _ := hsRepo(t)
+			cfg := filepath.Join(r.Root, ".git", "config")
+			// hsRepo set commit.gpgsign=false; replace it with the case under test.
+			body, err := os.ReadFile(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cleaned := strings.Replace(string(body), "[commit]\n\tgpgsign = false\n", "", 1)
+			if err := os.WriteFile(cfg, []byte(cleaned+"["+section+"]\n"+value), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, err = r.Head(ctx)
+			if ok && err != nil {
+				t.Errorf("%s %q: refused: %v", section, value, err)
+			}
+			if !ok {
+				hsRefused(t, section+" "+value, err)
+			}
+		}
+	}
+}

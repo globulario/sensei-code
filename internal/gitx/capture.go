@@ -146,7 +146,7 @@ func (r Repo) validateBoundaryAgainstTree(ctx context.Context, base, tree string
 // sizeInTree is a blob's size AS THE FROZEN TREE HOLDS IT, not as the worktree
 // happens to hold it now.
 func (r Repo) sizeInTree(ctx context.Context, tree, path string) (int64, error) {
-	out, err := r.envOutput(ctx, append(os.Environ(), "GIT_LITERAL_PATHSPECS=1"),
+	out, err := r.envOutput(ctx, []string{"GIT_LITERAL_PATHSPECS=1"},
 		"ls-tree", "-l", "-z", tree, "--", path)
 	if err != nil {
 		return 0, err
@@ -175,7 +175,7 @@ func (r Repo) sizeInTree(ctx context.Context, tree, path string) (int64, error) 
 // never classified. Exact bytes are not enough if the receiver may read them as
 // a pattern.
 func (r Repo) literalPathOutput(ctx context.Context, args ...string) (string, error) {
-	return r.envOutput(ctx, append(os.Environ(), "GIT_LITERAL_PATHSPECS=1"), args...)
+	return r.envOutput(ctx, []string{"GIT_LITERAL_PATHSPECS=1"}, args...)
 }
 
 // parseNameStatusZ reads `--name-status -z` output: a status field and a path

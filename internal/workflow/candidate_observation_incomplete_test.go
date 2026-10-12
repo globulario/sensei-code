@@ -5,12 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/globulario/sensei-code/internal/agent"
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/gitx"
+	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/runreceipt"
 )
 
@@ -746,22 +751,77 @@ func TestDF41A4WorktreeObservationsNeverBorrowAStaleRef(t *testing.T) {
 	}
 }
 
-// captureFilter installs, on cycle 1, a required clean filter on main.go that
-// performs action whenever main.go prints 4 and passes every other content
-// through. The third cycle-2 attempt writes println(4), so it is the capture
-// after that attempt's worker turn -- before any validation -- that action
-// affects, and the earlier attempts are captured, validated and committed
-// unaffected.
-func captureFilter(action string) config.Command {
-	return whenPrinting(1, `d=$(cd "$(git rev-parse --git-common-dir)" && pwd)
-mkdir -p "$d/info"
-cat > "$d/df41a4-filter.sh" <<'FILTER'
-c=$(cat)
-case "$c" in *"println(4)"*) `+action+` ;; *) printf '%s\n' "$c" ;; esac
-FILTER
-git config filter.df41a4.clean "sh $d/df41a4-filter.sh"
-git config filter.df41a4.required true
-echo 'main.go filter=df41a4' >> "$d/info/attributes"`)
+// stimulusRunners is the completion rig with one fixture mutation performed
+// by the implementer itself: on the turn that writes main.go printing value,
+// after the scripted write and IMMEDIATELY BEFORE the implementer returns.
+// Nothing runs between that mutation and the engine's post-worker capture --
+// no formatter, no repository program -- so it is that capture, through gitx,
+// that observes the condition. (It replaces a repository clean filter, which
+// the trusted git profile now refuses to run: RULING-317.)
+type stimulusRunners struct {
+	*completionRig
+	value   int
+	mutate  func(workspace string) error
+	applied int // the 1-based implementer invocation that performed it; 0 if none
+}
+
+func (s *stimulusRunners) Resolve(spec RunnerSpec) (Resolved, error) {
+	res, err := s.completionRig.Resolve(spec)
+	if err == nil && spec.Role == roles.Implementer {
+		res.Runner = stimulusImplementer{s}
+	}
+	return res, err
+}
+
+type stimulusImplementer struct{ s *stimulusRunners }
+
+func (x stimulusImplementer) Run(ctx context.Context, req agent.Request, emit func(event.Event)) (agent.Result, error) {
+	turn := x.s.turns[x.s.next]
+	res, err := rigImplementer{x.s.completionRig}.Run(ctx, req, emit)
+	if err == nil && turn.value == x.s.value {
+		if merr := x.s.mutate(req.Workspace); merr != nil {
+			return agent.Result{}, merr
+		}
+		x.s.applied = x.s.next
+	}
+	return res, err
+}
+
+// restoreBaseMain writes main.go back to its exact bytes at the candidate's
+// base, so the work is canonically empty.
+func restoreBaseMain(h *gateHarness) func(string) error {
+	return func(workspace string) error {
+		out, err := exec.Command("git", "-C", h.engine.Repo.Root, "show", h.tc.Identity.BaseSHA+":main.go").Output()
+		if err != nil {
+			return fmt.Errorf("read main.go at the base: %w", err)
+		}
+		return os.WriteFile(filepath.Join(workspace, "main.go"), out, 0o644)
+	}
+}
+
+// unsupportedWorktreeConfig installs, as data, a configuration key the trusted
+// git profile does not admit -- in the candidate worktree's own
+// config.worktree, so only that worktree's capture is refused and the
+// repository's own reads (the candidate ref) still answer.
+func unsupportedWorktreeConfig(h *gateHarness) func(string) error {
+	return func(workspace string) error {
+		pointer, err := os.ReadFile(filepath.Join(workspace, ".git"))
+		if err != nil {
+			return err
+		}
+		gitDir := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(string(pointer)), "gitdir:"))
+		common := filepath.Join(h.engine.Repo.Root, ".git", "config")
+		f, err := os.OpenFile(common, os.O_APPEND|os.O_WRONLY, 0o644)
+		if err != nil {
+			return err
+		}
+		_, err = f.WriteString("[extensions]\n\tworktreeConfig = true\n")
+		f.Close()
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(filepath.Join(gitDir, "config.worktree"), []byte("[df41a4]\n\tunsupported = fixture\n"), 0o644)
+	}
 }
 
 // DF-41A4 f2 INITIAL-CAPTURE OUTCOMES. Candidate A is established by the
@@ -773,20 +833,25 @@ echo 'main.go filter=df41a4' >> "$d/info/attributes"`)
 // failed one -- which established nothing -- and never candidate A.
 func TestDF41A4TheInitialCaptureOutcomeIsRecordedBeforeItsReturn(t *testing.T) {
 	for _, c := range []struct {
-		name, action, premise string
-		state                 runreceipt.CandidateState
-		reason                string
+		name    string
+		action  func(*gateHarness) func(string) error
+		premise string
+		state   runreceipt.CandidateState
+		reason  string
 	}{
-		{"empty", `printf 'package main\n\nfunc main() {}\n'`, "implementor produced no candidate diff",
+		{"empty", restoreBaseMain, "implementor produced no candidate diff",
 			runreceipt.CandidateNone, "no current candidate"},
-		{"failure", `echo 'df41a4: capture refused' >&2; exit 1`, "df41a4",
+		{"failure", unsupportedWorktreeConfig, gitx.ProfileRefused + ": the repository configuration sets df41a4.unsupported",
 			runreceipt.CandidateUnknown, postWorkerCapture + " failed"},
 	} {
 		r := exhaustingRig(t, 2)
-		v := committingValidation()
-		v.Format = append(v.Format, captureFilter(c.action))
-		r.h.engine.Config.Validation = v
+		r.h.engine.Config.Validation = committingValidation()
+		stim := &stimulusRunners{completionRig: r, value: 4, mutate: c.action(r.h)}
+		r.h.engine.Runners = stim
 		_, err := r.run()
+		if stim.applied != 4 {
+			t.Fatalf("%s: premise: the stimulus was not performed by the third cycle-2 implementer turn (invocation %d)", c.name, stim.applied)
+		}
 		var typed *ImplementerIncomplete
 		if err == nil || errors.As(err, &typed) || !strings.Contains(err.Error(), c.premise) {
 			t.Fatalf("%s: premise: the capture after attempt 3's turn did not end the run: %v", c.name, err)
