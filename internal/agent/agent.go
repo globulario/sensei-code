@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -53,7 +54,29 @@ type Request struct {
 	// launched so that it can reach this graph and no other. Nil means the
 	// caller made no claim, and the provider's own configuration applies.
 	Graph *GraphBinding
+	// Exec is the engine's task-bound execution service for this one
+	// invocation (N3). When set, the provider is launched with that service
+	// and the bound graph as its only MCP servers and with no built-in tools,
+	// from configuration written outside the candidate. Nil is the ordinary
+	// launch, unchanged.
+	Exec *ExecBinding
 }
+
+// ExecBinding is one invocation's execution service, as the client reaches it.
+type ExecBinding struct {
+	// Command and Args launch the relay to the service's socket. They are
+	// the engine's, never the candidate's.
+	Command string
+	Args    []string
+	// Dir is the invocation's private directory, outside the worktree, where
+	// the client configuration is written.
+	Dir string
+	// Settings is the trusted client settings document.
+	Settings []byte
+}
+
+// ExecServerName is the MCP server name the execution service is offered as.
+const ExecServerName = "sensei_exec"
 
 // GraphBinding is one verified graph, as an MCP server the agent may reach.
 type GraphBinding struct {
@@ -290,7 +313,7 @@ func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Resu
 	}
 
 	args := append([]string(nil), c.Args...)
-	if req.Graph != nil {
+	if req.Graph != nil || req.Exec != nil {
 		bound, err := c.bindGraphArgs(req, args)
 		if err != nil {
 			return Result{Invocation: &Invocation{Transport: cliTransport(args), TransportFailed: true}}, err
@@ -533,6 +556,9 @@ func (inv *Invocation) observe(kind LifecycleKind, operation string) {
 // Anything else: refused, because a provider that cannot be bound would run
 // against whatever it finds, and "unbound" must not look like "bound".
 func (c CLI) bindGraphArgs(req Request, args []string) ([]string, error) {
+	if req.Exec != nil {
+		return c.bindExecArgs(req, args)
+	}
 	if c.NoGraph {
 		return args, nil
 	}
@@ -551,6 +577,115 @@ func (c CLI) bindGraphArgs(req Request, args []string) ([]string, error) {
 		return append(req.Graph.CodexOverrides(), args...), nil
 	}
 	return nil, fmt.Errorf("provider %q cannot be bound to the verified graph; refusing to run it unbound", c.Name)
+}
+
+// bindExecArgs launches an implementer whose only reach into the candidate is
+// the engine's execution service (N3).
+//
+// claude only: an execution-scoped --mcp-config naming the service and the
+// bound graph, --strict-mcp-config so no other MCP source applies, --tools ""
+// so no built-in tool exists, and the trusted --settings. Every file is
+// written into the invocation's private directory, which must lie outside the
+// workspace: configuration the candidate can rewrite is configuration the
+// candidate chose. Any other provider is refused, because one that keeps its
+// own tools would reach the worktree around the service.
+func (c CLI) bindExecArgs(req Request, args []string) ([]string, error) {
+	if err := c.ExecBindable(); err != nil {
+		return nil, err
+	}
+	x := req.Exec
+	if strings.TrimSpace(x.Command) == "" {
+		return nil, errors.New("the execution binding names no server command; refusing to run the implementer unbound")
+	}
+	dir, err := privateDirOutside(x.Dir, req.Workspace)
+	if err != nil {
+		return nil, err
+	}
+	servers := map[string]any{ExecServerName: map[string]any{"command": x.Command, "args": x.Args}}
+	if req.Graph != nil && !c.NoGraph {
+		servers["sensei"] = map[string]any{"command": req.Graph.Command, "args": req.Graph.Args}
+	}
+	body, err := json.Marshal(map[string]any{"mcpServers": servers})
+	if err != nil {
+		return nil, err
+	}
+	config := filepath.Join(dir, "mcp-"+sanitize(req.TaskID)+".json")
+	if err := os.WriteFile(config, body, 0o600); err != nil {
+		return nil, err
+	}
+	settings, err := trustedSettings(x.Settings)
+	if err != nil {
+		return nil, err
+	}
+	settingsPath := filepath.Join(dir, "settings-"+sanitize(req.TaskID)+".json")
+	if err := os.WriteFile(settingsPath, settings, 0o600); err != nil {
+		return nil, fmt.Errorf("the trusted client settings could not be written; refusing to run the implementer without them: %w", err)
+	}
+	// --setting-sources "" keeps the client from loading user, project and
+	// local settings: the project ones live in the worktree, and their hooks
+	// would run on the host, outside D2. disableAllHooks in the trusted
+	// settings is the second, independent wall.
+	return append(args, "--mcp-config", config, "--strict-mcp-config", "--tools", "", "--setting-sources", "", "--settings", settingsPath), nil
+}
+
+// ExecBindable reports whether this adapter can honour Request.Exec: only a
+// claude command line can be launched with the execution service as its only
+// reach and no built-in tool of its own.
+func (c CLI) ExecBindable() error {
+	if strings.ToLower(strings.TrimSpace(c.Name)) != "claude" {
+		return fmt.Errorf("provider %q cannot be bound to the execution service; refusing to run it with its own tools", c.Name)
+	}
+	return nil
+}
+
+// trustedSettings returns the configured client settings with
+// "disableAllHooks": true merged in, whatever the configuration says.
+// Settings that are not a JSON object are refused rather than replaced.
+func trustedSettings(configured []byte) ([]byte, error) {
+	settings := map[string]any{}
+	if len(bytes.TrimSpace(configured)) > 0 {
+		var v any
+		if err := json.Unmarshal(configured, &v); err != nil {
+			return nil, fmt.Errorf("the configured client settings are not valid JSON; refusing to run the implementer: %w", err)
+		}
+		obj, ok := v.(map[string]any)
+		if !ok {
+			return nil, errors.New("the configured client settings are not a JSON object; refusing to run the implementer")
+		}
+		settings = obj
+	}
+	settings["disableAllHooks"] = true
+	return json.Marshal(settings)
+}
+
+// privateDirOutside returns dir once it is established as an existing,
+// non-symlink 0700 directory that is not the workspace or inside it.
+func privateDirOutside(dir, workspace string) (string, error) {
+	if strings.TrimSpace(dir) == "" || !filepath.IsAbs(dir) {
+		return "", fmt.Errorf("the execution binding's configuration directory %q is not an absolute path", dir)
+	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return "", fmt.Errorf("the execution binding's configuration directory is unavailable: %w", err)
+	}
+	if !info.IsDir() || info.Mode().Perm() != 0o700 {
+		return "", fmt.Errorf("the execution binding's configuration directory %s is not a private 0700 directory", dir)
+	}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", err
+	}
+	ws, err := filepath.Abs(workspace)
+	if err != nil {
+		return "", err
+	}
+	if resolved, err := filepath.EvalSymlinks(ws); err == nil {
+		ws = resolved
+	}
+	if rel, err := filepath.Rel(ws, real); err != nil || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
+		return "", fmt.Errorf("the execution binding's configuration directory %s is inside the workspace %s; the candidate could rewrite it", dir, workspace)
+	}
+	return dir, nil
 }
 
 func sanitize(s string) string {
