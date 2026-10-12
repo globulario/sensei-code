@@ -1385,6 +1385,16 @@ func TestAnUnsafeOwnerExcludesSourceIsRefused(t *testing.T) {
 			os.WriteFile(inc, []byte("[core]\n\texcludesFile = /x/two\n"), 0o644)
 			return "[core]\n\texcludesFile = /x/one\n[include]\n\tpath = " + inc + "\n"
 		}, refuse: true},
+		// H1: a value behind an unevaluated includeIf may not apply.
+		"behind an includeIf": {config: func(home, wt string) string {
+			inc := filepath.Join(home, "work.inc")
+			os.WriteFile(inc, []byte("[core]\n\texcludesFile = "+filepath.Join(home, "work-ignore")+"\n"), 0o644)
+			return "[includeIf \"gitdir:" + filepath.Join(home, "work") + "/\"]\n\tpath = " + inc + "\n"
+		}, refuse: true},
+		// H2: ordinary git resolves a relative value inside the repository.
+		"relative": {config: func(home, wt string) string {
+			return "[core]\n\texcludesFile = rel-ignore\n"
+		}, refuse: true},
 		"missing": {config: func(home, wt string) string {
 			return "[core]\n\texcludesFile = " + filepath.Join(home, "absent") + "\n"
 		}, refuse: false},
@@ -1446,6 +1456,15 @@ func TestOwnerPathAndRenderingSettingsAreRefused(t *testing.T) {
 		}},
 		// Linux git does not act on it: conservative refusal (RULING-320 Q3).
 		"core.precomposeUnicode": {gitconfig: "[core]\n\tprecomposeUnicode = true\n"},
+		// H4: recorded modes, when the repository does not set it.
+		"core.fileMode": {gitconfig: "[core]\n\tfileMode = false\n", control: func(t *testing.T, r Repo) bool {
+			os.Chmod(filepath.Join(r.Root, "a.txt"), 0o644) // hsWrite commits 0755
+			owner, _ := hsOwnerGit(r.Root, "", "status", "--porcelain")
+			cmd := exec.Command("git", "-C", r.Root, "status", "--porcelain")
+			cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull)
+			plain, _ := cmd.Output()
+			return owner != string(plain)
+		}},
 		"core.bigFileThreshold": {gitconfig: "[core]\n\tbigFileThreshold = 1\n", control: func(t *testing.T, r Repo) bool {
 			hsWrite(t, filepath.Join(r.Root, "a.txt"), "changed\n")
 			out, _ := hsOwnerGit(r.Root, "", "diff", "--no-ext-diff")
@@ -1461,6 +1480,10 @@ func TestOwnerPathAndRenderingSettingsAreRefused(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			r, _ := hsRepo(t)
+			if name == "core.fileMode" {
+				// git init records it; only a repository without it diverges.
+				hsGit(t, r.Root, "config", "--unset", "core.filemode")
+			}
 			hsOwner(t, c.gitconfig, "")
 			_, err := r.Head(ctx)
 			hsRefused(t, "Head", err)

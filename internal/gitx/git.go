@@ -606,7 +606,7 @@ func (p hostProfile) checkOwnerContent(repoKeys map[string][]configValue) (strin
 	}
 	o := ownerScan{p: p, repo: repoKeys, seen: map[string]bool{}}
 	for _, f := range p.ownerConfig {
-		if err := o.file(f, 0); err != nil {
+		if err := o.file(f, 0, false); err != nil {
 			return "", err
 		}
 	}
@@ -637,7 +637,10 @@ type ownerScan struct {
 	excludes map[string]bool
 }
 
-func (o *ownerScan) file(f string, depth int) error {
+// file scans one owner configuration file. conditional says it was reached
+// through an includeIf, whose condition this scan does not evaluate: following
+// it only makes a refusal stricter, so it is never used to CHOOSE a value.
+func (o *ownerScan) file(f string, depth int, conditional bool) error {
 	if depth > 10 {
 		return refuseProfile("the owner's git configuration includes files more than 10 deep at %s", f)
 	}
@@ -659,13 +662,25 @@ func (o *ownerScan) file(f string, depth int) error {
 			}
 		case ownerRefusedKeys[k]:
 			return refuseProfile("%s sets %s; ordinary git treats content in a way the trusted profile does not", f, k)
-		case k == "core.precomposeunicode", k == "core.ignorecase":
+		case k == "core.precomposeunicode", k == "core.ignorecase", k == "core.filemode":
 			// The repository's own setting wins in git's precedence and is read
 			// by the profile too; only an unestablished one diverges.
 			if _, ok := o.repo[k]; !ok {
 				return refuseProfile("%s sets %s and the repository does not set it itself; pathname identity would differ from ordinary git", f, k)
 			}
 		case k == "core.excludesfile":
+			// Which file ordinary git uses must be established, not guessed: a
+			// value behind an unevaluated includeIf may not apply, and a
+			// relative one is resolved by git against the worktree, where the
+			// candidate writes (independent review H1, H2).
+			if conditional {
+				return refuseProfile("%s sets core.excludesFile behind an includeIf; whether ordinary git uses it is not established", f)
+			}
+			for _, v := range vs {
+				if !strings.HasPrefix(v.raw, "~/") && !filepath.IsAbs(v.raw) {
+					return refuseProfile("%s sets a relative core.excludesFile, which ordinary git resolves inside the repository", f)
+				}
+			}
 			for _, v := range vs {
 				if o.excludes == nil {
 					o.excludes = map[string]bool{}
@@ -675,8 +690,9 @@ func (o *ownerScan) file(f string, depth int) error {
 		case k == "include.path" || strings.HasPrefix(k, "includeif.") && strings.HasSuffix(k, ".path"):
 			// Followed as data only, whatever its condition: a file that might
 			// apply is a file whose settings might matter.
+			cond := conditional || strings.HasPrefix(k, "includeif.")
 			for _, v := range vs {
-				if err := o.file(o.p.ownerPath(v.raw, f), depth+1); err != nil {
+				if err := o.file(o.p.ownerPath(v.raw, f), depth+1, cond); err != nil {
 					return err
 				}
 			}
