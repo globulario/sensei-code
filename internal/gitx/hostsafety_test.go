@@ -2011,3 +2011,52 @@ func TestEnvironmentConfigurationProvidesOnlyInertKeys(t *testing.T) {
 		t.Fatalf("an inert environment key was refused: %v", err)
 	}
 }
+
+// Owner configuration paths are taken exactly as git reports them: a path
+// whose spelling ends in whitespace is refused, not trimmed into another
+// file; /dev/null, git's spelling of an empty configuration, is empty
+// (Codex r4251563406, r4251563416).
+func TestOwnerConfigurationPathsAreExact(t *testing.T) {
+	ctx := context.Background()
+	t.Run("a global path ending in whitespace", func(t *testing.T) {
+		r, _ := hsRepo(t)
+		home := hsOwner(t, "", "")
+		spaced := filepath.Join(home, "global ")
+		hsWrite(t, spaced, "[core]\n\tautocrlf = true\n")
+		t.Setenv("GIT_CONFIG_GLOBAL", spaced)
+		profileMu.Lock()
+		profile = nil
+		profileMu.Unlock()
+		_, err := r.Head(ctx)
+		hsRefused(t, "Head", err)
+		// Control: git itself reads the spaced file.
+		if out, _ := hsOwnerGit(r.Root, "", "config", "--global", "--get", "core.autocrlf"); strings.TrimSpace(out) != "true" {
+			t.Fatalf("premise: git does not read the whitespace-ended path: %q", out)
+		}
+	})
+	t.Run("GIT_CONFIG_GLOBAL=/dev/null", func(t *testing.T) {
+		r, _ := hsRepo(t)
+		hsOwner(t, "", "")
+		t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+		profileMu.Lock()
+		profile = nil
+		profileMu.Unlock()
+		if _, err := r.Head(ctx); err != nil {
+			t.Fatalf("an explicitly empty global configuration was refused: %v", err)
+		}
+	})
+	t.Run("another non-regular file", func(t *testing.T) {
+		r, _ := hsRepo(t)
+		home := hsOwner(t, "", "")
+		dir := filepath.Join(home, "a-directory")
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("GIT_CONFIG_GLOBAL", dir)
+		profileMu.Lock()
+		profile = nil
+		profileMu.Unlock()
+		_, err := r.Head(ctx)
+		hsRefused(t, "Head with a directory as global configuration", err)
+	})
+}

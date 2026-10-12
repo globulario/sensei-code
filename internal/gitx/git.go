@@ -566,9 +566,15 @@ func (p *hostProfile) locateOwnerFiles() error {
 			}
 			return refuseProfile("the owner's %s cannot be located: %v", v, err)
 		}
-		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-			if line = strings.TrimSpace(line); line == "" {
+		// Paths exactly as git prints them, one per line: a path whose own
+		// spelling begins or ends with whitespace is refused rather than
+		// trimmed into a different file (Codex r4251563406).
+		for _, line := range strings.Split(strings.TrimSuffix(string(out), "\n"), "\n") {
+			if line == "" {
 				continue
+			}
+			if line != strings.TrimSpace(line) {
+				return refuseProfile("git reports the owner's %s with surrounding whitespace, which the trusted profile does not resolve exactly", v)
 			}
 			if !filepath.IsAbs(line) {
 				return refuseProfile("git reports the owner's %s as %q, which is not an absolute path", v, line)
@@ -621,6 +627,9 @@ func (p hostProfile) checkOwnerContent(repoKeys map[string][]configValue) (strin
 		}
 	}
 	for _, f := range p.ownerConfig {
+		if f == os.DevNull {
+			continue // an explicitly empty configuration (Codex r4251563416)
+		}
 		keys, err := configKeys(f, true)
 		if err != nil {
 			return "", err
@@ -794,6 +803,9 @@ func ownerFilePath(v, home, source string) (string, error) {
 // transform content (independent review G1, RULING-320). The contents are
 // never reported.
 func checkOwnerAttributes(f string) error {
+	if f == os.DevNull {
+		return nil
+	}
 	body, err := readSmallFile(f)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
