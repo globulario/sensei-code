@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +16,7 @@ import (
 
 	"github.com/globulario/sensei-code/internal/derived"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/session"
 )
 
@@ -392,6 +396,162 @@ func TestGitShowAtDistinguishesMissingFromUnreadable(t *testing.T) {
 	}
 	if _, err := read(context.Background(), strings.Repeat("0", 40), gosumcheckF); err == nil || confirmedMissing(err) {
 		t.Fatalf("a world that is not an object must be unclassified, got %v", err)
+	}
+}
+
+// S1-GIT (RULING-326): the world reader the engine uses goes through trusted
+// git, and only a successful inspection of the intended tree that finds no
+// entry is ABSENCE. A refused profile, a redirected candidate, a revision that
+// is no object or a present entry that cannot be read stays unclassified, and
+// the reader's bytes are the object's exactly.
+func TestTheWorldReaderMapsOnlyAnInspectedAbsence(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := mintRepo(t)
+	const odd = "pkg/tab\tname.go"
+	commitFixtureFile(t, repo.Root, "pkg/crlf.go", "package pkg\r\n\r\n")
+	t.Setenv("GIT_LITERAL_PATHSPECS", "1") // so the fixture's own git add takes the name literally
+	commitFixtureFile(t, repo.Root, ":(top)top.go", "package main\n")
+	world := commitFixtureFile(t, repo.Root, odd, "package pkg\n\n\n")
+	read := gitShowAt(repo.Root)
+	unclassified := func(name string, err error) {
+		t.Helper()
+		if err == nil || confirmedMissing(err) {
+			t.Errorf("%s: want an unclassified failure, got %v", name, err)
+		}
+	}
+
+	for p, want := range map[string]string{"pkg/crlf.go": "package pkg\r\n\r\n", odd: "package pkg\n\n\n", ":(top)top.go": "package main\n"} {
+		if b, err := read(ctx, world, p); err != nil || string(b) != want {
+			t.Errorf("%q read %q, %v; want its exact bytes", p, b, err)
+		}
+	}
+	for _, p := range []string{"pkg/missing.go", "top.go", "missing/dir/x.go"} {
+		if _, err := read(ctx, world, p); !confirmedMissing(err) {
+			t.Errorf("%q is absent from the inspected tree, got %v", p, err)
+		}
+	}
+	_, err := read(ctx, world, "pkg")
+	unclassified("a present entry that is not a file", err)
+	if err != nil && !strings.Contains(err.Error(), "present but unreadable") {
+		t.Errorf("a present entry lost its presence: %v", err)
+	}
+	_, err = read(ctx, "", "pkg/missing.go")
+	unclassified("an empty revision", err)
+	_, err = read(ctx, strings.Repeat("0", 40), "pkg/missing.go")
+	unclassified("a revision that is no object", err)
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	_, err = read(cancelled, world, "pkg/missing.go")
+	unclassified("a cancelled read", err)
+
+	// The engine's reader ignores the caller's environment.
+	other := t.TempDir()
+	if out, err := exec.Command("git", "-C", other, "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	t.Run("hostile environment", func(t *testing.T) {
+		t.Setenv("GIT_DIR", filepath.Join(other, ".git"))
+		if b, err := read(ctx, world, odd); err != nil || string(b) != "package pkg\n\n\n" {
+			t.Errorf("the environment redirected the read: %q, %v", b, err)
+		}
+		if _, err := read(ctx, world, "pkg/missing.go"); !confirmedMissing(err) {
+			t.Errorf("the environment changed absence: %v", err)
+		}
+	})
+
+	// A redirected candidate pointer is refused, and a path its planted
+	// repository lacks is not thereby absent.
+	wt, err := repo.CreateWorktreeAt(ctx, "s1-redirect", world)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wt, ".git"), []byte("gitdir: "+filepath.Join(other, ".git")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("git", "-C", wt, "rev-parse", "--absolute-git-dir").Output(); err != nil || !strings.Contains(string(out), other) {
+		t.Fatalf("premise: plain git in the planted worktree does not read the planted repository: %q, %v", out, err)
+	}
+	for _, p := range []string{odd, "pkg/missing.go"} {
+		_, err := gitShowAt(wt)(ctx, world, p)
+		unclassified("redirected pointer "+p, err)
+		if err != nil && !strings.Contains(err.Error(), gitx.ProfileRefused) {
+			t.Errorf("redirected pointer %q: the refusal was not preserved: %v", p, err)
+		}
+	}
+
+	// An unsafe repository is refused before git runs, and refusal is not absence.
+	marker := filepath.Join(t.TempDir(), "ran")
+	evil := filepath.Join(t.TempDir(), "evil.sh")
+	if err := os.WriteFile(evil, []byte("#!/bin/sh\ntouch '"+marker+"'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.OpenFile(filepath.Join(repo.Root, ".git", "config"), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("[core]\n\tfsmonitor = " + evil + "\n"); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	_, err = read(ctx, world, "pkg/missing.go")
+	unclassified("an unsafe repository", err)
+	if err != nil && !strings.Contains(err.Error(), gitx.ProfileRefused) {
+		t.Errorf("the profile refusal was not preserved: %v", err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("the repository's program ran")
+	}
+}
+
+// The base and the candidate's frozen tree are read as their own objects by
+// the state candidate inspection receives.
+func TestCandidateTestStateReadsTheBaseAndTheFrozenTree(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := mintRepo(t)
+	world := commitFixtureFile(t, repo.Root, "pkg/a_test.go", "package pkg\n")
+	wt, err := repo.CreateWorktreeAt(ctx, "s1-tree", world)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wt, "pkg", "a_test.go"), []byte("package pkg // edited\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	capture, err := gitx.Repo{Root: wt}.CandidateCapture(ctx, world, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := candidateTestStateAt(ctx, wt, world, capture.Tree, capture.Paths, capture.Diff)
+	if b, err := state.AtWorld("pkg/a_test.go"); err != nil || string(b) != "package pkg\n" {
+		t.Errorf("at world: %q, %v", b, err)
+	}
+	if b, err := state.InCandidate("pkg/a_test.go"); err != nil || string(b) != "package pkg // edited\n" {
+		t.Errorf("in candidate: %q, %v", b, err)
+	}
+	if _, err := state.InCandidate("pkg/b_test.go"); !confirmedMissing(err) {
+		t.Errorf("a file the frozen tree lacks: %v", err)
+	}
+}
+
+// Census (supplementary to the witnesses above): the workflow's world and
+// candidate readers start no git process of their own.
+func TestTheWorldReadersStartNoProcess(t *testing.T) {
+	fset := token.NewFileSet()
+	for _, f := range []string{"prospective.go", "testedit.go"} {
+		file, err := parser.ParseFile(fset, f, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, imp := range file.Imports {
+			if imp.Path.Value == `"os/exec"` || imp.Path.Value == `"syscall"` || imp.Path.Value == `"golang.org/x/sys/unix"` {
+				t.Errorf("%s imports %s", f, imp.Path.Value)
+			}
+		}
+		ast.Inspect(file, func(n ast.Node) bool {
+			if sel, ok := n.(*ast.SelectorExpr); ok && (sel.Sel.Name == "StartProcess" || strings.HasPrefix(sel.Sel.Name, "Command")) {
+				t.Errorf("%s: %s.%s starts a process", fset.Position(sel.Pos()), sel.X, sel.Sel.Name)
+			}
+			return true
+		})
 	}
 }
 
