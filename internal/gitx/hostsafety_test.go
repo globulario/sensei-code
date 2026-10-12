@@ -2134,6 +2134,27 @@ func TestObjectReadsAreExactAndBoundToTheirObject(t *testing.T) {
 		}
 	}
 
+	// The listing is held to exactly one record for exactly the path, which
+	// the path check alone keeps true: a listing for "dir/" (refused above)
+	// names the directory's entries instead, and must never read as presence.
+	widened, err := exec.Command("git", "-C", r.Root, "ls-tree", "-z", "--full-tree", base, "--", "dir/sub/").Output()
+	if err != nil || !strings.Contains(string(widened), "dir/sub/deep.txt") {
+		t.Fatalf("premise: plain ls-tree for dir/sub/ lists its entries: %q, %v", widened, err)
+	}
+	if present, err := entryListed(widened, "dir/sub/"); err == nil || present {
+		t.Errorf("a listing of other paths read as %v, %v", present, err)
+	}
+	two, err := exec.Command("git", "-C", r.Root, "ls-tree", "-z", "--full-tree", base, "--", "crlf.txt", "a*").Output()
+	if err != nil || strings.Count(string(two), "\x00") != 2 {
+		t.Fatalf("premise: plain ls-tree lists two records: %q, %v", two, err)
+	}
+	if !strings.Contains(strings.SplitN(string(two), "\x00", 2)[0], "\ta*") {
+		t.Fatalf("premise: a* is the first record: %q", two)
+	}
+	if present, err := entryListed(two, "a*"); err == nil || present {
+		t.Errorf("two records read as %v, %v", present, err)
+	}
+
 	// A present entry that is not a blob is present and unreadable.
 	if present, err := r.TreeEntryAt(ctx, base, "dir"); err != nil || !present {
 		t.Errorf("TreeEntryAt dir = %v, %v; want present", present, err)

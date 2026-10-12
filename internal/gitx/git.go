@@ -397,6 +397,16 @@ func (r Repo) TreeEntryAt(ctx context.Context, rev, path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	present, err := entryListed(out, path)
+	if err != nil {
+		return false, fmt.Errorf("git ls-tree %s: %w", rev, err)
+	}
+	return present, nil
+}
+
+// entryListed reads an ls-tree -z listing for path: no record is absence,
+// exactly one record for exactly path is presence, anything else is an error.
+func entryListed(out []byte, path string) (bool, error) {
 	records := splitZ(string(out))
 	switch {
 	case len(records) == 0:
@@ -407,7 +417,7 @@ func (r Repo) TreeEntryAt(ctx context.Context, rev, path string) (bool, error) {
 			return true, nil
 		}
 	}
-	return false, fmt.Errorf("git ls-tree %s -- %q: not exactly one record for the path: %q", rev, path, out)
+	return false, fmt.Errorf("-- %q: not exactly one record for the path: %q", path, out)
 }
 
 // checkObjectRead refuses a read that could select something other than the
