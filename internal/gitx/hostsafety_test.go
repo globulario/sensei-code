@@ -254,7 +254,10 @@ func TestTheCallersEnvironmentDoesNotReachGit(t *testing.T) {
 		t.Fatal(err)
 	}
 	hsWrite(t, filepath.Join(wt, "a.txt"), "two\n")
-	hsWrite(t, filepath.Join(wt, ".gitattributes"), "*.txt filter=evil diff=evil\n")
+	// diff=evil: a textconv driver named by the hostile environment. (A
+	// filter attribute is refused outright now -- RULING-319 -- and has its
+	// own witnesses.)
+	hsWrite(t, filepath.Join(wt, ".gitattributes"), "*.txt diff=evil\n")
 	marker := filepath.Join(t.TempDir(), "ran")
 	evil := hsProgram(t, marker)
 	home := t.TempDir()
@@ -503,7 +506,7 @@ func TestEveryGitInvocationUsesTheTrustedProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	allowed := map[string]bool{"gitCommand": true, "trustedProfile": true}
+	allowed := map[string]bool{"gitCommand": true, "trustedProfile": true, "locateOwnerFiles": true}
 	fset := token.NewFileSet()
 	seen := 0
 	for _, f := range files {
@@ -948,4 +951,288 @@ func TestCanonicalTreeRefusesAPathHoldingARepository(t *testing.T) {
 	hsGit(t, filepath.Join(wt, "plain"), "init", "-q")
 	_, err = (Repo{Root: wt}).CanonicalTree(ctx, base, []string{"plain"})
 	hsRefused(t, "CanonicalTree of a path holding a repository", err)
+}
+
+// hsOwner gives this test an owner whose global git configuration and
+// global attributes are the given text, and makes the trusted profile locate
+// them afresh; the profile is located again from the real environment after.
+func hsOwner(t *testing.T, gitconfig, attributes string) string {
+	t.Helper()
+	home := t.TempDir()
+	if gitconfig != "" {
+		hsWrite(t, filepath.Join(home, ".gitconfig"), gitconfig)
+	}
+	if attributes != "" {
+		hsWrite(t, filepath.Join(home, "xdg", "git", "attributes"), attributes)
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "xdg"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_ATTR_NOSYSTEM", "1")
+	resetProfile := func() {
+		profileMu.Lock()
+		profile = nil
+		profileMu.Unlock()
+	}
+	resetProfile()
+	t.Cleanup(resetProfile)
+	return home
+}
+
+// hsOwnerGit is ordinary git under the owner's configuration: the control.
+func hsOwnerGit(dir string, stdin string, args ...string) (string, error) {
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// A content filter selected by the repository's attributes -- whose driver
+// lives only in the owner's global configuration -- is refused before any
+// content passes through git, wherever the attribute comes from; ordinary
+// git would run the driver (Codex P1 on #297; RULING-319 witnesses 1-5).
+func TestASelectedContentFilterIsRefused(t *testing.T) {
+	ctx := context.Background()
+	for name, c := range map[string]struct {
+		plant   func(t *testing.T, r Repo, wt string)
+		control []string // ordinary git in the worktree that runs the driver
+	}{
+		"global clean filter selected by a tracked .gitattributes": {
+			plant: func(t *testing.T, r Repo, wt string) {
+				hsWrite(t, filepath.Join(wt, ".gitattributes"), "*.txt filter=g\n")
+				hsGit(t, wt, "-c", "filter.g.clean=cat", "add", ".gitattributes")
+				hsGit(t, wt, "-c", "filter.g.clean=cat", "commit", "-q", "-m", "attributes")
+				hsWrite(t, filepath.Join(wt, "a.txt"), "changed\n")
+			},
+			control: []string{"diff", "--no-ext-diff"},
+		},
+		"a git-lfs attribute whose driver is only global": {
+			plant: func(t *testing.T, r Repo, wt string) {
+				hsWrite(t, filepath.Join(wt, ".gitattributes"), "*.bin filter=lfs diff=lfs merge=lfs -text\n")
+				hsWrite(t, filepath.Join(wt, "a.bin"), "large\n")
+			},
+			control: []string{"add", "a.bin"},
+		},
+		"repository info/attributes selecting a filter": {
+			plant: func(t *testing.T, r Repo, wt string) {
+				hsWrite(t, filepath.Join(r.Root, ".git", "info", "attributes"), "*.txt filter=g\n")
+				hsWrite(t, filepath.Join(wt, "a.txt"), "changed\n")
+			},
+			control: []string{"diff", "--no-ext-diff"},
+		},
+		"a new candidate file whose attributes select a filter": {
+			plant: func(t *testing.T, r Repo, wt string) {
+				hsWrite(t, filepath.Join(wt, ".gitattributes"), "*.dat filter=g\n")
+				hsWrite(t, filepath.Join(wt, "new.dat"), "new\n")
+			},
+			control: []string{"add", "new.dat"},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, base := hsRepo(t)
+			wt, err := r.CreateWorktreeAt(ctx, "filter", base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.plant(t, r, wt)
+			marker := filepath.Join(t.TempDir(), "ran")
+			evil := hsProgram(t, marker)
+			before := hsGit(t, wt, "ls-files", "--stage", "-z")
+			hsOwner(t, "[filter \"g\"]\n\tclean = "+evil+"\n\tsmudge = "+evil+"\n[filter \"lfs\"]\n\tclean = "+evil+"\n\tsmudge = "+evil+"\n", "")
+			_, err = (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+			hsRefused(t, "CandidateCapture", err)
+			// Refused BEFORE the first staging operation: the index is exactly as
+			// the worker left it (RULING-319 Q2).
+			if after, _ := hsOwnerGit(wt, "", "ls-files", "--stage", "-z"); strings.TrimSpace(after) != before {
+				t.Fatalf("the refused capture changed the index first:\nbefore %q\nafter  %q", before, after)
+			}
+			if !strings.Contains(err.Error(), "content filter") {
+				t.Fatalf("refused, but not for the selected filter: %v", err)
+			}
+			if hsRan(marker) {
+				t.Fatal("the filter driver ran through the trusted profile")
+			}
+			if out, _ := hsOwnerGit(wt, "", c.control...); !hsRan(marker) {
+				t.Fatalf("premise: ordinary git under the owner's configuration does not run the driver\n%s", out)
+			}
+		})
+	}
+}
+
+// A checkout that would smudge through a filter is refused before the
+// worktree is created (RULING-319 witness 2).
+func TestASmudgingCheckoutIsRefused(t *testing.T) {
+	ctx := context.Background()
+	r, _ := hsRepo(t)
+	hsWrite(t, filepath.Join(r.Root, ".gitattributes"), "*.txt filter=g\n")
+	hsGit(t, r.Root, "-c", "filter.g.clean=cat", "add", ".gitattributes")
+	hsGit(t, r.Root, "-c", "filter.g.clean=cat", "commit", "-q", "-m", "attributes")
+	base := hsGit(t, r.Root, "rev-parse", "HEAD")
+	marker := filepath.Join(t.TempDir(), "ran")
+	hsOwner(t, "[filter \"g\"]\n\tsmudge = "+hsProgram(t, marker)+"\n", "")
+	_, err := r.CreateWorktreeAt(ctx, "smudge", base)
+	hsRefused(t, "CreateWorktreeAt", err)
+	_, err = r.CreateObservationWorktree(ctx, "smudge", base)
+	hsRefused(t, "CreateObservationWorktree", err)
+	if hsRan(marker) {
+		t.Fatal("the smudge driver ran through the trusted profile")
+	}
+	if out, _ := hsOwnerGit(r.Root, "", "worktree", "add", "-q", "--detach", filepath.Join(t.TempDir(), "control"), base); !hsRan(marker) {
+		t.Fatalf("premise: an ordinary checkout does not smudge\n%s", out)
+	}
+}
+
+// The owner's content-transforming configuration and attributes refuse every
+// trusted git operation; each case's control shows ordinary git converting
+// content differently from the trusted profile (RULING-319 witnesses 6-11).
+func TestTheOwnersContentTransformationsAreRefused(t *testing.T) {
+	ctx := context.Background()
+	crlf := "one\r\ntwo\r\n"
+	for name, c := range map[string]struct {
+		gitconfig, attributes string
+		control               func(t *testing.T, r Repo) bool // true when ordinary git transforms
+	}{
+		"core.autocrlf true": {gitconfig: "[core]\n\tautocrlf = true\n", control: func(t *testing.T, r Repo) bool {
+			return hsHashDiffers(t, r, crlf)
+		}},
+		"core.autocrlf input": {gitconfig: "[core]\n\tautocrlf = input\n", control: func(t *testing.T, r Repo) bool {
+			return hsHashDiffers(t, r, crlf)
+		}},
+		"core.eol":                 {gitconfig: "[core]\n\teol = crlf\n", control: hsCheckoutConverts},
+		"a global attributes file": {attributes: "*.txt text eol=crlf\n", control: hsCheckoutConverts},
+		"core.attributesFile":      {gitconfig: "[core]\n\tattributesFile = ATTRS\n", control: hsCheckoutConverts},
+		"an included file setting core.autocrlf": {gitconfig: "[include]\n\tpath = INCLUDED\n", control: func(t *testing.T, r Repo) bool {
+			return hsHashDiffers(t, r, crlf)
+		}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, _ := hsRepo(t)
+			hsWrite(t, filepath.Join(r.Root, ".gitattributes"), "*.txt text\n")
+			hsGit(t, r.Root, "add", ".gitattributes")
+			hsGit(t, r.Root, "commit", "-q", "-m", "text")
+			home := t.TempDir()
+			attrs := filepath.Join(home, "attrs")
+			hsWrite(t, attrs, "*.txt text eol=crlf\n")
+			included := filepath.Join(home, "included")
+			hsWrite(t, included, "[core]\n\tautocrlf = true\n")
+			cfg := strings.ReplaceAll(strings.ReplaceAll(c.gitconfig, "ATTRS", attrs), "INCLUDED", included)
+			hsOwner(t, cfg, c.attributes)
+			_, err := r.Head(ctx)
+			hsRefused(t, "Head", err)
+			_, err = r.CreateWorktreeAt(ctx, "owner", hsGit(t, r.Root, "rev-parse", "HEAD"))
+			hsRefused(t, "CreateWorktreeAt", err)
+			if !c.control(t, r) {
+				t.Fatal("premise: ordinary git under the owner's configuration does not transform content")
+			}
+		})
+	}
+	// Malformed or unreadable owner configuration is not a configuration the
+	// profile can vouch for.
+	t.Run("malformed owner configuration", func(t *testing.T) {
+		r, _ := hsRepo(t)
+		hsOwner(t, "[core\n\tautocrlf = true\n", "")
+		_, err := r.Head(ctx)
+		hsRefused(t, "Head", err)
+	})
+	t.Run("unreadable owner configuration", func(t *testing.T) {
+		if os.Getuid() <= 0 {
+			t.Skip("root reads any file")
+		}
+		r, _ := hsRepo(t)
+		home := hsOwner(t, "[core]\n\tbare = false\n", "")
+		if err := os.Chmod(filepath.Join(home, ".gitconfig"), 0); err != nil {
+			t.Fatal(err)
+		}
+		_, err := r.Head(ctx)
+		hsRefused(t, "Head", err)
+	})
+}
+
+// hsHashDiffers reports whether ordinary git, under the owner's
+// configuration, stores different bytes for a CRLF file than git with no
+// owner configuration does.
+func hsHashDiffers(t *testing.T, r Repo, body string) bool {
+	t.Helper()
+	owner, err1 := hsOwnerGit(r.Root, body, "hash-object", "--path=a.dat", "--stdin")
+	cmd := exec.Command("git", "-C", r.Root, "hash-object", "--path=a.dat", "--stdin")
+	cmd.Stdin = strings.NewReader(body)
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull)
+	plain, err2 := cmd.Output()
+	return err1 == nil && err2 == nil && strings.TrimSpace(owner) != strings.TrimSpace(string(plain))
+}
+
+// hsCheckoutConverts reports whether ordinary git, under the owner's
+// configuration, checks a.txt out with CRLF line endings.
+func hsCheckoutConverts(t *testing.T, r Repo) bool {
+	t.Helper()
+	hsWrite(t, filepath.Join(r.Root, "a.txt"), "one\n")
+	out, err := hsOwnerGit(r.Root, "", "cat-file", "--filters", "HEAD:a.txt")
+	return err == nil && strings.Contains(out, "\r\n")
+}
+
+// The positive: the owner's autocrlf=false and a globally installed driver no
+// path selects change nothing -- capture proceeds and is exactly ordinary
+// git's (RULING-319 positives).
+func TestNeutralOwnerConfigurationCapturesNormally(t *testing.T) {
+	ctx := context.Background()
+	r, base := hsRepo(t)
+	wt, err := r.CreateWorktreeAt(ctx, "neutral", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hsWrite(t, filepath.Join(wt, "a.txt"), "two\n")
+	marker := filepath.Join(t.TempDir(), "ran")
+	hsOwner(t, "[core]\n\tautocrlf = false\n[filter \"unused\"]\n\tclean = "+hsProgram(t, marker)+"\n", "# no rules\n")
+	cap, err := (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatalf("a neutral owner configuration was refused: %v", err)
+	}
+	if hsRan(marker) || !strings.Contains(cap.Diff, "+two") {
+		t.Fatalf("unexpected capture (marker %v):\n%s", hsRan(marker), cap.Diff)
+	}
+	want, err := hsOwnerGit(wt, "", "diff", "--no-ext-diff", base, cap.Tree, "--")
+	if err != nil || want != cap.Diff {
+		t.Fatalf("the capture differs from ordinary git's rendering of its tree: %v\n%s\n---\n%s", err, cap.Diff, want)
+	}
+}
+
+// The attribute query's answer is matched to its question exactly: a short,
+// reordered or foreign answer is a refusal, never a pass (RULING-319
+// witness 12).
+func TestAnUnmatchedAttributeAnswerIsRefused(t *testing.T) {
+	paths := []string{"a.txt", "b\tc.txt"}
+	ok := "a.txt\x00filter\x00unspecified\x00b\tc.txt\x00filter\x00unset\x00"
+	if err := filterAttributesRefusal(ok, paths); err != nil {
+		t.Fatalf("a complete, matching answer was refused: %v", err)
+	}
+	for name, out := range map[string]string{
+		"short":           "a.txt\x00filter\x00unspecified\x00",
+		"reordered":       "b\tc.txt\x00filter\x00unset\x00a.txt\x00filter\x00unspecified\x00",
+		"wrong attribute": "a.txt\x00diff\x00unspecified\x00b\tc.txt\x00filter\x00unset\x00",
+		"unterminated":    "a.txt\x00filter\x00unspecified\x00b\tc.txt\x00filter\x00unset",
+		"selected":        "a.txt\x00filter\x00lfs\x00b\tc.txt\x00filter\x00unset\x00",
+		"set":             "a.txt\x00filter\x00set\x00b\tc.txt\x00filter\x00unset\x00",
+	} {
+		if err := filterAttributesRefusal(out, paths); err == nil || !strings.Contains(err.Error(), ProfileRefused) {
+			t.Errorf("%s: not refused: %v", name, err)
+		}
+	}
+}
+
+// CanonicalTree checks again before it stages: a named path whose attributes
+// select a filter is refused there too, not only by the capture before it
+// (RULING-319 Q2 coverage).
+func TestCanonicalTreeRefusesASelectedFilter(t *testing.T) {
+	ctx := context.Background()
+	r, base := hsRepo(t)
+	wt, err := r.CreateWorktreeAt(ctx, "canonfilter", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hsWrite(t, filepath.Join(wt, ".gitattributes"), "*.txt filter=g\n")
+	hsWrite(t, filepath.Join(wt, "a.txt"), "two\n")
+	_, err = (Repo{Root: wt}).CanonicalTree(ctx, base, []string{"a.txt", ".gitattributes"})
+	hsRefused(t, "CanonicalTree", err)
 }

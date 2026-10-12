@@ -112,6 +112,9 @@ func (r Repo) CanonicalTree(ctx context.Context, base string, paths []string) (s
 			return "", fmt.Errorf("%s: the reviewed path %q holds a repository; trusted git does not look inside one", ProfileRefused, p)
 		}
 	}
+	if err := r.refuseFilterAttributes(ctx, "", paths); err != nil {
+		return "", err
+	}
 	args := append([]string{"add", "--all", "--"}, paths...)
 	if _, err := r.envOutput(ctx, env, args...); err != nil {
 		return "", fmt.Errorf("stage the reviewed paths: %w", err)

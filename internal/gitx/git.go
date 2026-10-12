@@ -230,6 +230,9 @@ func (r Repo) CreateObservationWorktree(ctx context.Context, taskID, baseSHA str
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
+	if err := r.refuseFilterAttributesAt(ctx, base); err != nil {
+		return "", err
+	}
 	cmd, err := r.gitCommand(ctx, r.Root, nil, false, "worktree", "add", "--detach", path, base)
 	if err != nil {
 		return "", err
@@ -263,6 +266,9 @@ func (r Repo) WorktreeIsClean(ctx context.Context, path string) (bool, string, e
 }
 
 func (r Repo) addWorktree(ctx context.Context, path, branch, base string) error {
+	if err := r.refuseFilterAttributesAt(ctx, base); err != nil {
+		return err
+	}
 	cmd, err := r.gitCommand(ctx, r.Root, nil, false, "worktree", "add", "-b", branch, path, base)
 	if err != nil {
 		return err
@@ -464,6 +470,13 @@ type hostProfile struct {
 	exe   string // absolute path of the git executable
 	home  string // empty directory standing in for HOME and XDG_CONFIG_HOME
 	hooks string // empty directory every invocation points core.hooksPath at
+	// The owner's own configuration and attribute files, which ordinary git
+	// would read and this profile does not. They are read as DATA, never
+	// through git, so a content transformation they select can be refused
+	// rather than silently dropped (RULING-319).
+	ownerConfig []string
+	ownerAttrs  []string
+	ownerHome   string
 }
 
 var (
@@ -499,11 +512,166 @@ func trustedProfile() (hostProfile, error) {
 	if err != nil {
 		return hostProfile{}, refuseProfile("%s --version failed: %v", exe, err)
 	}
-	if !versionAtLeast(string(out), 2, 32) {
-		return hostProfile{}, refuseProfile("%s is %q; GIT_CONFIG_GLOBAL needs git 2.32 or later", exe, strings.TrimSpace(string(out)))
+	if !versionAtLeast(string(out), 2, 42) {
+		return hostProfile{}, refuseProfile("%s is %q; the trusted profile needs git 2.42 or later (GIT_CONFIG_GLOBAL, git var config paths)", exe, strings.TrimSpace(string(out)))
+	}
+	if err := p.locateOwnerFiles(); err != nil {
+		return hostProfile{}, err
 	}
 	profile = &p
 	return p, nil
+}
+
+// locateOwnerFiles asks git WHERE ordinary git would read the owner's global
+// and system configuration and attributes, honouring the caller's
+// path-selection variables. `git var` prints paths and reads nothing else;
+// it runs in the empty home, outside any repository.
+func (p *hostProfile) locateOwnerFiles() error {
+	env := []string{"PATH=" + os.Getenv("PATH")}
+	for _, k := range []string{"HOME", "XDG_CONFIG_HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM",
+		"GIT_ATTR_NOSYSTEM", "SYSTEMROOT", "SystemRoot", "USERPROFILE"} {
+		if v, ok := os.LookupEnv(k); ok {
+			env = append(env, k+"="+v)
+		}
+	}
+	p.ownerHome = os.Getenv("HOME")
+	for _, v := range []string{"GIT_CONFIG_SYSTEM", "GIT_CONFIG_GLOBAL", "GIT_ATTR_SYSTEM", "GIT_ATTR_GLOBAL"} {
+		cmd := exec.Command(p.exe, "var", v)
+		cmd.Dir, cmd.Env = p.home, env
+		out, err := cmd.Output()
+		if err != nil {
+			// A system source switched off by the caller has no path.
+			if strings.HasSuffix(v, "_SYSTEM") && (os.Getenv("GIT_CONFIG_NOSYSTEM") != "" || os.Getenv("GIT_ATTR_NOSYSTEM") != "") {
+				continue
+			}
+			return refuseProfile("the owner's %s cannot be located: %v", v, err)
+		}
+		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+			if line = strings.TrimSpace(line); line == "" {
+				continue
+			}
+			if strings.HasPrefix(v, "GIT_CONFIG") {
+				p.ownerConfig = append(p.ownerConfig, line)
+			} else {
+				p.ownerAttrs = append(p.ownerAttrs, line)
+			}
+		}
+	}
+	return nil
+}
+
+// checkOwnerContent refuses when the owner's ordinary git would transform
+// content in a way this profile does not reproduce: core.autocrlf other than
+// false, core.eol, core.attributesFile, or an attribute rule that converts
+// content. It reads the files as data -- including the files they include --
+// and reports only the source, key and reason, never a value (RULING-319).
+func (p hostProfile) checkOwnerContent() error {
+	for _, e := range os.Environ() {
+		k, v, _ := strings.Cut(e, "=")
+		if k == "GIT_CONFIG_PARAMETERS" || strings.HasPrefix(k, "GIT_CONFIG_KEY_") {
+			low := strings.ToLower(v)
+			for _, key := range []string{"core.autocrlf", "core.eol", "core.attributesfile"} {
+				if strings.Contains(low, key) {
+					return refuseProfile("the environment (%s) sets %s for ordinary git, which the trusted profile does not reproduce", k, key)
+				}
+			}
+		}
+	}
+	seen := map[string]bool{}
+	for _, f := range p.ownerConfig {
+		if err := p.checkOwnerConfigFile(f, seen, 0); err != nil {
+			return err
+		}
+	}
+	for _, f := range p.ownerAttrs {
+		if err := checkOwnerAttributes(f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p hostProfile) checkOwnerConfigFile(f string, seen map[string]bool, depth int) error {
+	if depth > 10 {
+		return refuseProfile("the owner's git configuration includes files more than 10 deep at %s", f)
+	}
+	if seen[f] {
+		return nil
+	}
+	seen[f] = true
+	keys, err := configKeys(f, true)
+	if err != nil {
+		return err
+	}
+	for k, vs := range keys {
+		switch {
+		case k == "core.autocrlf":
+			for _, v := range vs {
+				if !v.isFalse() {
+					return refuseProfile("%s sets core.autocrlf to a value other than false; ordinary git converts line endings the trusted profile does not", f)
+				}
+			}
+		case k == "core.eol", k == "core.attributesfile":
+			return refuseProfile("%s sets %s; ordinary git transforms content the trusted profile does not", f, k)
+		case k == "include.path" || strings.HasPrefix(k, "includeif.") && strings.HasSuffix(k, ".path"):
+			// Followed as data only, whatever its condition: a file that might
+			// apply is a file whose settings might matter.
+			for _, v := range vs {
+				inc := v.raw
+				if strings.HasPrefix(inc, "~/") {
+					inc = filepath.Join(p.ownerHome, inc[2:])
+				} else if !filepath.IsAbs(inc) {
+					inc = filepath.Join(filepath.Dir(f), inc)
+				}
+				if err := p.checkOwnerConfigFile(inc, seen, depth+1); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// contentAttributes are the attributes that change what content git stores
+// or checks out.
+var contentAttributes = setOf("text", "eol", "crlf", "filter", "working-tree-encoding", "ident", "binary")
+
+// checkOwnerAttributes refuses an owner attributes file that sets any
+// content-converting attribute.
+func checkOwnerAttributes(f string) error {
+	body, err := readSmallFile(f)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return refuseProfile("the owner's attributes file %s cannot be read: %v", f, err)
+	}
+	for n, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || line[0] == '#' {
+			continue
+		}
+		var attrs string
+		switch {
+		case strings.HasPrefix(line, "[attr]"):
+			_, attrs, _ = strings.Cut(strings.TrimSpace(strings.TrimPrefix(line, "[attr]")), " ")
+		case line[0] == '"':
+			end := strings.LastIndex(line, "\"")
+			if end <= 0 {
+				return refuseProfile("%s:%d has an unterminated quoted pattern", f, n+1)
+			}
+			attrs = line[end+1:]
+		default:
+			_, attrs, _ = strings.Cut(strings.ReplaceAll(line, "\t", " "), " ")
+		}
+		for _, a := range strings.Fields(attrs) {
+			name, _, _ := strings.Cut(strings.TrimLeft(a, "-!"), "=")
+			if contentAttributes[strings.ToLower(name)] {
+				return refuseProfile("%s:%d sets the content attribute %s; ordinary git transforms content the trusted profile does not", f, n+1, name)
+			}
+		}
+	}
+	return nil
 }
 
 // versionAtLeast reads "git version X.Y..." and compares X.Y.
@@ -567,6 +735,9 @@ func (r Repo) gitCommand(ctx context.Context, dir string, extra []string, readOn
 		return nil, err
 	}
 	if err := checkRepoConfig(id); err != nil {
+		return nil, err
+	}
+	if err := p.checkOwnerContent(); err != nil {
 		return nil, err
 	}
 	if entries, err := os.ReadDir(p.hooks); err != nil || len(entries) != 0 {

@@ -230,6 +230,15 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 	if err := r.refuseNewGitlinks(ctx, base); err != nil {
 		return Capture{}, err
 	}
+	// Before the first operation that would pass content through a filter:
+	// every tracked and every new, non-ignored path (RULING-319).
+	listed, err := r.raw(ctx, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+	if err != nil {
+		return Capture{}, err
+	}
+	if err := r.refuseFilterAttributes(ctx, "", splitZ(listed)); err != nil {
+		return Capture{}, err
+	}
 	if _, err := r.output(ctx, "add", "--intent-to-add", "--", "."); err != nil {
 		return Capture{}, err
 	}
@@ -472,6 +481,71 @@ func (r Repo) refuseNewGitlinks(ctx context.Context, base string) error {
 				return fmt.Errorf("%s: the candidate removed or changed the base's gitlink %q; "+
 					"trusted git does not look at gitlinks, so that change cannot be captured for review", ProfileRefused, path)
 			}
+		}
+	}
+	return nil
+}
+
+// splitZ splits NUL-terminated git output into its records.
+func splitZ(out string) []string {
+	if out == "" {
+		return nil
+	}
+	return strings.Split(strings.TrimSuffix(out, "\x00"), "\x00")
+}
+
+// refuseFilterAttributesAt refuses a checkout of base when any of its paths
+// would be smudged through a content filter (RULING-319).
+func (r Repo) refuseFilterAttributesAt(ctx context.Context, base string) error {
+	names, err := r.raw(ctx, "ls-tree", "-r", "-z", "--name-only", "--full-tree", base)
+	if err != nil {
+		return err
+	}
+	return r.refuseFilterAttributes(ctx, base, splitZ(names))
+}
+
+// refuseFilterAttributes refuses when any path selects a content filter.
+//
+// Ordinary git would pass such a path's content through the filter's
+// program; the trusted profile runs no such program, so the bytes it stored
+// or compared would not be the ones git stores. It does not supply an empty
+// driver in place of a missing one: a selected filter is a refusal, wherever
+// its driver is (or is not) configured (Codex P1 on #297, RULING-319).
+//
+// check-attr only looks attributes up; it runs nothing. With source it reads
+// the attributes a checkout of that tree would apply; without, the ones add
+// and diff apply to the worktree.
+func (r Repo) refuseFilterAttributes(ctx context.Context, source string, paths []string) error {
+	if len(paths) == 0 {
+		return nil
+	}
+	args := []string{"check-attr", "-z", "--stdin"}
+	if source != "" {
+		args = append(args, "--source="+source)
+	}
+	out, err := r.stdinOutput(ctx, nil, strings.Join(paths, "\x00")+"\x00", append(args, "filter")...)
+	if err != nil {
+		return fmt.Errorf("%s: the content filters of the candidate's paths cannot be evaluated: %v", ProfileRefused, err)
+	}
+	return filterAttributesRefusal(out, paths)
+}
+
+// filterAttributesRefusal reads check-attr -z output -- path, attribute,
+// value, each NUL-terminated, one triple per path in input order -- and
+// refuses a selected filter, or output it cannot match to its input.
+func filterAttributesRefusal(out string, paths []string) error {
+	fields := strings.Split(out, "\x00")
+	if len(fields) != 3*len(paths)+1 || fields[len(fields)-1] != "" {
+		return fmt.Errorf("%s: the content-filter query answered %d field(s) for %d path(s)", ProfileRefused, len(fields)-1, len(paths))
+	}
+	for i, p := range paths {
+		path, attr, value := fields[3*i], fields[3*i+1], fields[3*i+2]
+		if path != p || attr != "filter" {
+			return fmt.Errorf("%s: the content-filter query answered %q/%q for %q", ProfileRefused, path, attr, p)
+		}
+		if value != "unspecified" && value != "unset" {
+			return fmt.Errorf("%s: %q selects the content filter %q, which the trusted git profile does not run; "+
+				"its content cannot be captured as git would store it", ProfileRefused, p, value)
 		}
 	}
 	return nil
