@@ -2086,6 +2086,7 @@ func TestObjectReadsAreExactAndBoundToTheirObject(t *testing.T) {
 		"dir/tab\tname.go":     "package dir\n",
 		"line\nbreak.txt":      "newline in the name\n",
 		"a*":                   "a star\n",
+		"ab":                   "what a? would match as a glob\n",
 		":(top)magic":          "looks like pathspec magic\n",
 		"dir/sub/deep.txt":     "deep\n",
 		".gitattributes":       "lf-*.txt text eol=crlf\n",
@@ -2124,7 +2125,7 @@ func TestObjectReadsAreExactAndBoundToTheirObject(t *testing.T) {
 	if out, _ := hsPlain(r.Root, "ls-tree", "--full-tree", base, "--", ":(top)magic"); strings.TrimSpace(out) != "" {
 		t.Fatalf("premise: plain ls-tree reads :(top)magic as magic and lists nothing, got %q", out)
 	}
-	for _, p := range []string{"a?", "magic", "dir/tab", "dir/sub/deep", "missing.txt", "dir/missing.go"} {
+	for _, p := range []string{"a?", "a[b]", "magic", "dir/tab", "dir/sub/deep", "missing.txt", "dir/missing.go"} {
 		present, err := r.TreeEntryAt(ctx, base, p)
 		if err != nil || present {
 			t.Errorf("TreeEntryAt %q = %v, %v; want confirmed absent", p, present, err)

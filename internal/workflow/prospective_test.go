@@ -451,6 +451,9 @@ func TestTheWorldReaderMapsOnlyAnInspectedAbsence(t *testing.T) {
 	}
 	t.Run("hostile environment", func(t *testing.T) {
 		t.Setenv("GIT_DIR", filepath.Join(other, ".git"))
+		if out, err := exec.Command("git", "-C", repo.Root, "cat-file", "blob", world+":"+odd).CombinedOutput(); err == nil {
+			t.Fatalf("premise: plain git under this environment still reads the repository: %q", out)
+		}
 		if b, err := read(ctx, world, odd); err != nil || string(b) != "package pkg\n\n\n" {
 			t.Errorf("the environment redirected the read: %q, %v", b, err)
 		}
@@ -500,6 +503,25 @@ func TestTheWorldReaderMapsOnlyAnInspectedAbsence(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); err == nil {
 		t.Error("the repository's program ran")
+	}
+}
+
+// A listed blob whose object is gone is present and unreadable, not absent.
+func TestTheWorldReaderKeepsAMissingObjectPresent(t *testing.T) {
+	ctx := context.Background()
+	repo, _ := mintRepo(t)
+	world := commitFixtureFile(t, repo.Root, "pkg/a.go", "package pkg\n")
+	out, err := exec.Command("git", "-C", repo.Root, "rev-parse", world+":pkg/a.go").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	blob := strings.TrimSpace(string(out))
+	if err := os.Remove(filepath.Join(repo.Root, ".git", "objects", blob[:2], blob[2:])); err != nil {
+		t.Fatalf("premise: the blob is a loose object: %v", err)
+	}
+	_, err = gitShowAt(repo.Root)(ctx, world, "pkg/a.go")
+	if err == nil || confirmedMissing(err) || !strings.Contains(err.Error(), "present but unreadable") {
+		t.Errorf("a listed blob whose object is missing: want present but unreadable, got %v", err)
 	}
 }
 

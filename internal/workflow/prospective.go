@@ -129,7 +129,7 @@ func gitShowAt(root string) worldReader {
 		case lsErr != nil:
 			return nil, fmt.Errorf("read %s:%s: unclassified read failure: %w (existence check: %v)", world, file, err, lsErr)
 		case !present:
-			return nil, fmt.Errorf("read %s:%s: %w", world, file, errNotAtWorld)
+			return nil, fmt.Errorf("read %s:%s: %w (read: %v)", world, file, errNotAtWorld, err)
 		}
 		return nil, fmt.Errorf("read %s:%s: present but unreadable: %w", world, file, err)
 	}
