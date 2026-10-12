@@ -541,6 +541,12 @@ func (p *hostProfile) locateOwnerFiles() error {
 	for _, k := range []string{"HOME", "XDG_CONFIG_HOME", "GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM",
 		"GIT_ATTR_NOSYSTEM", "SYSTEMROOT", "SystemRoot", "USERPROFILE"} {
 		if v, ok := os.LookupEnv(k); ok {
+			// git var prints one path per line, so a path variable holding a
+			// newline would read back as two other paths (review note on
+			// 1cebca1): refused rather than misread.
+			if strings.ContainsAny(v, "\n\r") {
+				return refuseProfile("the environment's %s contains a line break, which git var cannot report exactly", k)
+			}
 			env = append(env, k+"="+v)
 		}
 	}

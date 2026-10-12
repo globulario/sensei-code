@@ -2034,6 +2034,16 @@ func TestOwnerConfigurationPathsAreExact(t *testing.T) {
 			t.Fatalf("premise: git does not read the whitespace-ended path: %q", out)
 		}
 	})
+	t.Run("a path variable holding a newline", func(t *testing.T) {
+		r, _ := hsRepo(t)
+		home := hsOwner(t, "", "")
+		t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, "a")+"\n"+filepath.Join(home, "b"))
+		profileMu.Lock()
+		profile = nil
+		profileMu.Unlock()
+		_, err := r.Head(ctx)
+		hsRefused(t, "Head", err)
+	})
 	t.Run("GIT_CONFIG_GLOBAL=/dev/null", func(t *testing.T) {
 		r, _ := hsRepo(t)
 		hsOwner(t, "", "")
