@@ -684,6 +684,23 @@ func envConfigKey(key string) (string, bool) {
 // and gitx runs no network operation a helper could serve.
 var ownerInertKeys = setOf("user.name", "user.email", "init.defaultbranch", "safe.directory", "credential.helper")
 
+// ownerFilterDriverKey is exactly filter.<driver>.{clean,smudge,process,required}.
+func ownerFilterDriverKey(k string) bool {
+	if !strings.HasPrefix(k, "filter.") {
+		return false
+	}
+	rest := strings.TrimPrefix(k, "filter.")
+	i := strings.LastIndex(rest, ".")
+	if i <= 0 {
+		return false
+	}
+	switch rest[i+1:] {
+	case "clean", "smudge", "process", "required":
+		return true
+	}
+	return false
+}
+
 // ownerRepoPrecedenceKeys are admitted only when the repository sets the key
 // itself: repository configuration wins in git's precedence and the trusted
 // profile reads it too, so only then do both sides apply the same value.
@@ -700,6 +717,19 @@ func (o *ownerScan) admit(source, k string, vs []configValue) error {
 	switch {
 	case ownerInertKeys[k]:
 		return nil
+	case source == envSource:
+		// Command scope outranks the owner's files AND the repository's own
+		// configuration, so no special key from it can be reconciled with the
+		// repository the profile reads (Codex r4251382662, RULING-324).
+		return refuseProfile("%s sets %s, which outranks the repository's configuration for ordinary git", source, k)
+	case ownerFilterDriverKey(k):
+		// A filter driver the owner installed (git-lfs, typically) is
+		// observed, never used: the profile reads no owner configuration,
+		// and any path whose attributes SELECT a driver is refused before it
+		// is staged or checked out (refuseFilterAttributes). An installed,
+		// unselected driver changes nothing gitx does (Codex r4251382665,
+		// RULING-319 Q3, RULING-324).
+		return nil
 	case k == "core.autocrlf":
 		for _, v := range vs {
 			if !v.isFalse() {
@@ -707,10 +737,6 @@ func (o *ownerScan) admit(source, k string, vs []configValue) error {
 			}
 		}
 		return nil
-	case ownerRepoPrecedenceKeys[k] && source == envSource:
-		// Command-scope configuration outranks the repository's own, so the
-		// repository cannot establish the value (independent review K1).
-		return refuseProfile("%s sets %s, which would override the repository's own value for ordinary git", source, k)
 	case ownerRepoPrecedenceKeys[k]:
 		for _, v := range vs {
 			if !v.isBool() {

@@ -1918,3 +1918,96 @@ func TestEnvironmentPrecedenceAndQuotedPathsAreRefused(t *testing.T) {
 		})
 	}
 }
+
+// An owner-installed filter driver no path selects -- the git-lfs block a
+// GitHub runner's /etc/gitconfig carries -- changes nothing: capture works and
+// is identical, and the driver never runs; once a path selects it, the
+// capture is refused before staging (Codex r4251382665, RULING-324).
+func TestAnInstalledUnselectedFilterDriverIsObservedOnly(t *testing.T) {
+	ctx := context.Background()
+	marker := filepath.Join(t.TempDir(), "driver-ran")
+	evil := hsProgram(t, marker)
+	lfs := "[filter \"lfs\"]\n\tclean = " + evil + "\n\tsmudge = " + evil + "\n\tprocess = " + evil + "\n\trequired = true\n"
+	capture := func(t *testing.T, gitconfig, attrs string) (Capture, error) {
+		t.Helper()
+		r, base := hsRepo(t)
+		hsOwner(t, gitconfig, "")
+		wt, err := r.CreateWorktreeAt(ctx, "lfs", base)
+		if err != nil {
+			return Capture{}, err
+		}
+		hsWrite(t, filepath.Join(wt, "a.txt"), "two\n")
+		hsWrite(t, filepath.Join(wt, "b.bin"), "data\n")
+		if attrs != "" {
+			hsWrite(t, filepath.Join(wt, ".gitattributes"), attrs)
+		}
+		return (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+	}
+	with, err := capture(t, lfs, "")
+	if err != nil {
+		t.Fatalf("an installed, unselected driver refused the capture: %v", err)
+	}
+	without, err := capture(t, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if with.Tree != without.Tree || with.Diff != without.Diff {
+		t.Fatal("an installed, unselected driver changed the capture")
+	}
+	_, err = capture(t, lfs, "*.bin filter=lfs\n")
+	if err == nil || !strings.Contains(err.Error(), "content filter") {
+		t.Fatalf("a path selecting the installed driver was not refused as a content filter: %v", err)
+	}
+	if hsRan(marker) {
+		t.Fatal("the installed driver ran")
+	}
+	// Only the four driver keys: any other filter.* key is still refused.
+	r, _ := hsRepo(t)
+	hsOwner(t, "[filter \"lfs\"]\n\tsomethingElse = x\n", "")
+	_, err = r.Head(ctx)
+	hsRefused(t, "an unknown filter key", err)
+}
+
+// Environment-supplied configuration may provide only inert keys: command
+// scope outranks the repository's own configuration, so an environment
+// core.autocrlf over a repository value is refused (Codex r4251382662).
+func TestEnvironmentConfigurationProvidesOnlyInertKeys(t *testing.T) {
+	ctx := context.Background()
+	r, _ := hsRepo(t)
+	hsGit(t, r.Root, "config", "core.autocrlf", "true")
+	hsOwner(t, "", "")
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "core.autocrlf")
+	t.Setenv("GIT_CONFIG_VALUE_0", "false")
+	_, err := r.Head(ctx)
+	hsRefused(t, "an environment core.autocrlf over the repository's", err)
+	// Control: ordinary git with the environment stores different bytes than
+	// git reading only the repository's value.
+	body := "one\r\ntwo\r\n"
+	with, err1 := hsOwnerGit(r.Root, body, "hash-object", "--path=a.dat", "--stdin")
+	cmd := exec.Command("git", "-C", r.Root, "hash-object", "--path=a.dat", "--stdin")
+	cmd.Stdin = strings.NewReader(body)
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "GIT_CONFIG_") {
+			cmd.Env = append(cmd.Env, e)
+		}
+	}
+	without, err2 := cmd.Output()
+	if err1 != nil || err2 != nil || strings.TrimSpace(with) == strings.TrimSpace(string(without)) {
+		t.Fatalf("premise: the environment's autocrlf does not change what ordinary git stores (%v %v)", err1, err2)
+	}
+	// Every other special key, and filter definitions, from the environment
+	// are refused too (RULING-324 Q6 E, F).
+	for key, value := range map[string]string{"core.excludesFile": "/tmp/ignore", "filter.lfs.clean": "cat", "core.symlinks": "false"} {
+		t.Setenv("GIT_CONFIG_KEY_0", key)
+		t.Setenv("GIT_CONFIG_VALUE_0", value)
+		_, err := r.Head(ctx)
+		hsRefused(t, "an environment "+key, err)
+	}
+	// An inert key from the environment is admitted.
+	t.Setenv("GIT_CONFIG_KEY_0", "user.name")
+	t.Setenv("GIT_CONFIG_VALUE_0", "Owner")
+	if _, err := r.Head(ctx); err != nil {
+		t.Fatalf("an inert environment key was refused: %v", err)
+	}
+}
