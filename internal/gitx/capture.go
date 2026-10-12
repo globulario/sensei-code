@@ -422,6 +422,11 @@ func (r Repo) refuseNewGitlinks(ctx context.Context, base string) error {
 	if err != nil {
 		return err
 	}
+	// Every index entry by its exact path, parsed on record boundaries: a
+	// pathname may contain a tab, so no substring of the listing may stand in
+	// for an entry (independent final-delta review, F1).
+	type entry struct{ mode, sha, stage string }
+	index := map[string][]entry{}
 	for _, record := range strings.Split(strings.TrimSuffix(out, "\x00"), "\x00") {
 		meta, path, ok := strings.Cut(record, "\t")
 		fields := strings.Fields(meta)
@@ -431,6 +436,7 @@ func (r Repo) refuseNewGitlinks(ctx context.Context, base string) error {
 			}
 			return fmt.Errorf("malformed ls-files --stage record: %q", record)
 		}
+		index[path] = append(index[path], entry{fields[0], fields[1], fields[2]})
 		if fields[0] != "160000" {
 			continue
 		}
@@ -462,7 +468,7 @@ func (r Repo) refuseNewGitlinks(ctx context.Context, base string) error {
 			if !ok || len(fields) != 3 || fields[0] != "160000" {
 				continue
 			}
-			if !strings.Contains(out, "160000 "+fields[2]+" 0\t"+path+"\x00") {
+			if e := index[path]; len(e) != 1 || e[0] != (entry{"160000", fields[2], "0"}) {
 				return fmt.Errorf("%s: the candidate removed or changed the base's gitlink %q; "+
 					"trusted git does not look at gitlinks, so that change cannot be captured for review", ProfileRefused, path)
 			}

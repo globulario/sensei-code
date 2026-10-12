@@ -896,3 +896,56 @@ func TestARemovedBaseGitlinkIsRefusedNotOmitted(t *testing.T) {
 		t.Fatalf("premise: the removal is not a change that --ignore-submodules=all hides: %q / %q", all, ignored)
 	}
 }
+
+// Every way a base gitlink can stop being the base's own is refused, decided
+// on exact index entries -- including a crafted file whose NAME embeds the
+// gitlink's index record (independent final-delta review, F1).
+func TestEveryChangeToABaseGitlinkIsRefused(t *testing.T) {
+	ctx := context.Background()
+	for name, change := range map[string]func(t *testing.T, wt, sha string){
+		"a different commit": func(t *testing.T, wt, sha string) {
+			hsGit(t, wt, "update-index", "--cacheinfo", "160000,"+hsGit(t, wt, "rev-parse", "HEAD")+",mod")
+		},
+		"a regular file at the path": func(t *testing.T, wt, sha string) {
+			hsGit(t, wt, "rm", "-q", "--cached", "mod")
+			if err := os.Remove(filepath.Join(wt, "mod")); err != nil && !os.IsNotExist(err) {
+				t.Fatal(err)
+			}
+			hsWrite(t, filepath.Join(wt, "mod"), "file\n")
+			hsGit(t, wt, "add", "mod")
+		},
+		"a tree at the path": func(t *testing.T, wt, sha string) {
+			hsGit(t, wt, "rm", "-q", "--cached", "mod")
+			hsWrite(t, filepath.Join(wt, "mod", "f"), "file\n")
+			hsGit(t, wt, "add", "mod/f")
+		},
+		"a removal masked by a crafted name": func(t *testing.T, wt, sha string) {
+			hsGit(t, wt, "rm", "-q", "--cached", "mod")
+			hsWrite(t, filepath.Join(wt, "x160000 "+sha+" 0\tmod"), "crafted\n")
+			hsGit(t, wt, "add", "--", "x160000 "+sha+" 0\tmod")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, base, wt, sub := hsBaseWithGitlink(t, "changed")
+			change(t, wt, hsGit(t, sub, "rev-parse", "HEAD"))
+			hsGit(t, wt, "commit", "-q", "-m", "change the gitlink")
+			_, err := (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+			hsRefused(t, "CandidateCapture after "+name, err)
+		})
+	}
+}
+
+// CanonicalTree refuses a named path that holds a repository even when the
+// base has no gitlink there: the .git test, not the index listing, decides.
+func TestCanonicalTreeRefusesAPathHoldingARepository(t *testing.T) {
+	ctx := context.Background()
+	r, base := hsRepo(t)
+	wt, err := r.CreateWorktreeAt(ctx, "plainrepo", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hsWrite(t, filepath.Join(wt, "plain", "f.txt"), "x\n")
+	hsGit(t, filepath.Join(wt, "plain"), "init", "-q")
+	_, err = (Repo{Root: wt}).CanonicalTree(ctx, base, []string{"plain"})
+	hsRefused(t, "CanonicalTree of a path holding a repository", err)
+}
