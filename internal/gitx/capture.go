@@ -447,5 +447,26 @@ func (r Repo) refuseNewGitlinks(ctx context.Context, base string) error {
 		return fmt.Errorf("%s: the candidate holds a nested repository at %q; "+
 			"trusted git does not look inside one, so its content cannot be captured for review", ProfileRefused, path)
 	}
+	// And the other direction: a gitlink the base holds that the candidate
+	// removed or changed. Status and diff ignore gitlinks, so a removal would
+	// vanish from the captured paths while the canonical tree silently kept the
+	// base's gitlink (independent review cycle 2, N-b).
+	if b := strings.TrimSpace(base); b != "" {
+		tree, err := r.raw(ctx, "ls-tree", "-r", "-z", "--full-tree", b)
+		if err != nil {
+			return err
+		}
+		for _, record := range strings.Split(strings.TrimSuffix(tree, "\x00"), "\x00") {
+			meta, path, ok := strings.Cut(record, "\t")
+			fields := strings.Fields(meta)
+			if !ok || len(fields) != 3 || fields[0] != "160000" {
+				continue
+			}
+			if !strings.Contains(out, "160000 "+fields[2]+" 0\t"+path+"\x00") {
+				return fmt.Errorf("%s: the candidate removed or changed the base's gitlink %q; "+
+					"trusted git does not look at gitlinks, so that change cannot be captured for review", ProfileRefused, path)
+			}
+		}
+	}
 	return nil
 }

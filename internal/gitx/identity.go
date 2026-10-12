@@ -31,6 +31,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -92,6 +93,24 @@ func (r Repo) CanonicalTree(ctx context.Context, base string, paths []string) (s
 	env := []string{"GIT_INDEX_FILE=" + indexPath, "GIT_LITERAL_PATHSPECS=1"}
 	if _, err := r.envOutput(ctx, env, "read-tree", base); err != nil {
 		return "", fmt.Errorf("read the base tree: %w", err)
+	}
+	// add looks inside a gitlink path by running git THERE (independent
+	// review cycle 2, N-a): no named path may be a gitlink in the base, nor
+	// hold a repository in the worktree.
+	staged, err := r.envOutput(ctx, env, append([]string{"ls-files", "--stage", "-z", "--"}, paths...)...)
+	if err != nil {
+		return "", fmt.Errorf("read the base entries of the reviewed paths: %w", err)
+	}
+	for _, record := range strings.Split(strings.TrimSuffix(staged, "\x00"), "\x00") {
+		if strings.HasPrefix(record, "160000 ") {
+			_, p, _ := strings.Cut(record, "\t")
+			return "", fmt.Errorf("%s: the reviewed path %q is a gitlink; trusted git does not look inside one", ProfileRefused, p)
+		}
+	}
+	for _, p := range paths {
+		if _, err := os.Lstat(filepath.Join(r.Root, filepath.FromSlash(p), ".git")); err == nil {
+			return "", fmt.Errorf("%s: the reviewed path %q holds a repository; trusted git does not look inside one", ProfileRefused, p)
+		}
 	}
 	args := append([]string{"add", "--all", "--"}, paths...)
 	if _, err := r.envOutput(ctx, env, args...); err != nil {

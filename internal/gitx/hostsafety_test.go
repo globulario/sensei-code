@@ -824,3 +824,75 @@ func TestANewGitlinkIsRefusedNotOmitted(t *testing.T) {
 		t.Fatalf("premise: the gitlink is not a change that --ignore-submodules=all hides: %q / %q", all, ignored)
 	}
 }
+
+// hsBaseWithGitlink is a repository whose base records a gitlink at "mod" for
+// a submodule repository carrying a filter attribute, and a candidate
+// worktree cut from that base.
+func hsBaseWithGitlink(t *testing.T, task string) (Repo, string, string, string) {
+	t.Helper()
+	r, _ := hsRepo(t)
+	sub := filepath.Join(t.TempDir(), "sub")
+	hsWrite(t, filepath.Join(sub, "f.txt"), "x\n")
+	hsWrite(t, filepath.Join(sub, ".gitattributes"), "* filter=evil\n")
+	hsGit(t, sub, "init", "-q")
+	hsGit(t, sub, "add", ".")
+	hsGit(t, sub, "-c", "user.name=T", "-c", "user.email=t@t", "commit", "-q", "-m", "s")
+	hsGit(t, r.Root, "update-index", "--add", "--cacheinfo", "160000,"+hsGit(t, sub, "rev-parse", "HEAD")+",mod")
+	hsGit(t, r.Root, "commit", "-q", "-m", "submodule")
+	base := hsGit(t, r.Root, "rev-parse", "HEAD")
+	wt, err := r.CreateWorktreeAt(context.Background(), task, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r, base, wt, sub
+}
+
+// CanonicalTree never looks inside a gitlink path it is handed, even though
+// today no caller hands it one (independent review cycle 2, N-a).
+func TestCanonicalTreeNeverEntersAGitlinkPath(t *testing.T) {
+	ctx := context.Background()
+	_, base, wt, sub := hsBaseWithGitlink(t, "canon")
+	marker := filepath.Join(t.TempDir(), "ran")
+	if err := os.Remove(filepath.Join(wt, "mod")); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	hsGit(t, wt, "clone", "-q", sub, "mod")
+	hsAppendConfig(t, filepath.Join(wt, "mod", ".git", "config"), "[filter \"evil\"]\n\tclean = "+hsProgram(t, marker)+"\n")
+	later := time.Now().Add(time.Hour)
+	if err := os.Chtimes(filepath.Join(wt, "mod", "f.txt"), later, later); err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(marker)
+	_, err := (Repo{Root: wt}).CanonicalTree(ctx, base, []string{"mod"})
+	hsRefused(t, "CanonicalTree of a gitlink path", err)
+	if hsRan(marker) {
+		t.Fatal("the planted repository's program ran while building the canonical tree")
+	}
+	// Control: the same temporary-index add under plain git runs it.
+	index := filepath.Join(t.TempDir(), "index")
+	for _, args := range [][]string{{"read-tree", base}, {"add", "--all", "--", "mod"}} {
+		cmd := exec.Command("git", append([]string{"-C", wt}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_INDEX_FILE="+index)
+		cmd.CombinedOutput()
+	}
+	if !hsRan(marker) {
+		t.Fatal("premise: plain git's temporary-index add does not enter the planted repository")
+	}
+}
+
+// A candidate that removes the base's gitlink is refused, not reviewed
+// without the removal: ignoring submodules hides it from every diff
+// (independent review cycle 2, N-b).
+func TestARemovedBaseGitlinkIsRefusedNotOmitted(t *testing.T) {
+	ctx := context.Background()
+	_, base, wt, _ := hsBaseWithGitlink(t, "removed")
+	hsGit(t, wt, "rm", "-q", "--cached", "mod")
+	hsGit(t, wt, "commit", "-q", "-m", "drop the submodule")
+	_, err := (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+	hsRefused(t, "CandidateCapture after removing the base's gitlink", err)
+	all, _ := hsPlain(wt, "diff", "--name-status", base, "HEAD", "--")
+	ignored, _ := hsPlain(wt, "diff", "--ignore-submodules=all", "--name-status", base, "HEAD", "--")
+	if !strings.Contains(all, "mod") || strings.Contains(ignored, "mod") {
+		t.Fatalf("premise: the removal is not a change that --ignore-submodules=all hides: %q / %q", all, ignored)
+	}
+}
