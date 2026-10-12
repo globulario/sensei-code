@@ -1863,3 +1863,58 @@ func TestObservedOwnerKeysNeverReachGit(t *testing.T) {
 	_, err = r.Head(ctx)
 	hsRefused(t, "a repository credential helper", err)
 }
+
+// Locating the owner's files never reads another repository's configuration:
+// git var is fenced at the empty home, so a repository above it -- a planted
+// /tmp/.git, trusted through the owner's safe.directory -- cannot redirect
+// where the owner's attributes are found (independent review K0, RULING-323).
+func TestLocatingOwnerFilesReadsNoEnclosingRepository(t *testing.T) {
+	ctx := context.Background()
+	r, _ := hsRepo(t)
+	planted := t.TempDir()
+	benign := filepath.Join(planted, "benign-attrs")
+	hsWrite(t, benign, "# nothing\n")
+	hsGit(t, planted, "init", "-q")
+	hsGit(t, planted, "config", "core.attributesFile", benign)
+	t.Setenv("TMPDIR", planted) // the profile's home is created inside it
+	hsOwner(t, "[safe]\n\tdirectory = *\n", "* text\n")
+	_, err := r.Head(ctx)
+	hsRefused(t, "Head with an owner attribute rule", err)
+	// Control: git var run inside the planted repository is redirected.
+	sub := filepath.Join(planted, "sub")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "var", "GIT_ATTR_GLOBAL")
+	cmd.Dir = sub
+	if out, _ := cmd.Output(); strings.TrimSpace(string(out)) != benign {
+		t.Fatalf("premise: git var inside the planted repository is not redirected: %q", out)
+	}
+}
+
+// Environment configuration outranks the repository's, so the repository
+// cannot establish a path key the environment sets; a quoted excludes path
+// and GIT_ATTR_SOURCE are refused (independent review K1, K2, K3).
+func TestEnvironmentPrecedenceAndQuotedPathsAreRefused(t *testing.T) {
+	ctx := context.Background()
+	for name, c := range map[string]struct {
+		gitconfig string
+		env       map[string]string
+	}{
+		"an environment core.symlinks over the repository's": {
+			env: map[string]string{"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "core.symlinks", "GIT_CONFIG_VALUE_0": "false"}},
+		"a quoted excludes path": {gitconfig: "[core]\n\texcludesFile = \"/tmp/x \"\n"},
+		"GIT_ATTR_SOURCE":        {env: map[string]string{"GIT_ATTR_SOURCE": "HEAD"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, _ := hsRepo(t)
+			hsGit(t, r.Root, "config", "core.symlinks", "true")
+			hsOwner(t, c.gitconfig, "")
+			for k, v := range c.env {
+				t.Setenv(k, v)
+			}
+			_, err := r.Head(ctx)
+			hsRefused(t, "Head", err)
+		})
+	}
+}

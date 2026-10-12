@@ -544,6 +544,11 @@ func (p *hostProfile) locateOwnerFiles() error {
 			env = append(env, k+"="+v)
 		}
 	}
+	// git var looks upward from its working directory for a repository and
+	// would read ITS configuration -- a /tmp/.git another user plants, trusted
+	// through the owner's safe.directory -- so the search stops at the empty
+	// home (independent review K0, RULING-323).
+	env = append(env, "GIT_CEILING_DIRECTORIES="+filepath.Dir(p.home))
 	p.ownerHome = os.Getenv("HOME")
 	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
 		p.defaultIgnore = filepath.Join(x, "git", "ignore")
@@ -588,6 +593,10 @@ func (p *hostProfile) locateOwnerFiles() error {
 // source and key, never a value.
 func (p hostProfile) checkOwnerContent(repoKeys map[string][]configValue) (string, error) {
 	o := ownerScan{repo: repoKeys, home: p.ownerHome}
+	if v, ok := os.LookupEnv("GIT_ATTR_SOURCE"); ok && v != "" {
+		// Attributes read from a tree the trusted profile does not use (K3).
+		return "", refuseProfile("the environment sets GIT_ATTR_SOURCE, which changes the attributes ordinary git applies")
+	}
 	if v, ok := os.LookupEnv("GIT_CONFIG_PARAMETERS"); ok && strings.TrimSpace(v) != "" {
 		return "", refuseProfile("the environment supplies GIT_CONFIG_PARAMETERS, whose settings the trusted profile does not read exactly as git does")
 	}
@@ -606,7 +615,7 @@ func (p hostProfile) checkOwnerContent(repoKeys map[string][]configValue) (strin
 				return "", refuseProfile("the environment's GIT_CONFIG_KEY_%d is not a configuration key git would read exactly so", i)
 			}
 			value := configValue{raw: os.Getenv("GIT_CONFIG_VALUE_" + strconv.Itoa(i)), assigned: true}
-			if err := o.admit("the environment", k, []configValue{value}); err != nil {
+			if err := o.admit(envSource, k, []configValue{value}); err != nil {
 				return "", err
 			}
 		}
@@ -637,6 +646,9 @@ func (p hostProfile) checkOwnerContent(repoKeys map[string][]configValue) (strin
 	}
 	return "", refuseProfile("the owner's configuration names %d different excludes files; which one ordinary git uses is not established", len(o.excludes))
 }
+
+// envSource names configuration the environment supplies.
+const envSource = "the environment"
 
 // envConfigKey normalises a GIT_CONFIG_KEY_n value the way configKeys spells
 // keys: section and name lower-cased, a subsection kept as written.
@@ -695,6 +707,10 @@ func (o *ownerScan) admit(source, k string, vs []configValue) error {
 			}
 		}
 		return nil
+	case ownerRepoPrecedenceKeys[k] && source == envSource:
+		// Command-scope configuration outranks the repository's own, so the
+		// repository cannot establish the value (independent review K1).
+		return refuseProfile("%s sets %s, which would override the repository's own value for ordinary git", source, k)
 	case ownerRepoPrecedenceKeys[k]:
 		for _, v := range vs {
 			if !v.isBool() {
@@ -707,6 +723,10 @@ func (o *ownerScan) admit(source, k string, vs []configValue) error {
 		return nil
 	case k == "core.excludesfile":
 		for _, v := range vs {
+			if v.quoted {
+				// git keeps spacing inside quotes that this reader trims (K2).
+				return refuseProfile("%s names its excludes file in quotes, which the trusted profile does not decode exactly", source)
+			}
 			path, err := ownerFilePath(v.raw, o.home, source)
 			if err != nil {
 				return err
@@ -1270,6 +1290,7 @@ var falseOnlyKeys = setOf("commit.gpgsign", "tag.gpgsign")
 type configValue struct {
 	raw      string
 	assigned bool
+	quoted   bool // the value used double quotes, whose spacing git keeps
 }
 
 // isFalse is git's boolean false, strictly: an explicit empty value, false,
@@ -1318,7 +1339,7 @@ func valueOf(line string) configValue {
 		}
 		b.WriteByte(c)
 	}
-	return configValue{raw: strings.TrimSpace(b.String()), assigned: true}
+	return configValue{raw: strings.TrimSpace(b.String()), assigned: true, quoted: strings.Contains(rest, "\"")}
 }
 
 // Config keys the trusted profile admits, by section. None of them names a
