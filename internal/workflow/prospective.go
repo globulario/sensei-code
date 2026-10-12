@@ -1,18 +1,17 @@
 package workflow
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"go/parser"
 	"go/token"
-	"os/exec"
 	"path"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/report"
 )
 
@@ -111,24 +110,28 @@ func confirmedMissing(err error) bool { return errors.Is(err, errNotAtWorld) }
 // can be tested without a repository; the engine supplies gitShowAt.
 type worldReader func(ctx context.Context, world, file string) ([]byte, error)
 
-// gitShowAt reads `git show <world>:<file>` in root. It never consults the
-// working tree. When show fails, absence is established separately by listing
-// the world's tree at the path: an empty listing from a tree git could read is
-// the only thing that says "missing"; a listing that fails leaves the read
-// unclassified.
+// gitShowAt reads <file> in the tree of <world> through trusted git in root
+// (gitx.ShowAt): the object's exact bytes, never the working tree or index.
+// When the read fails, absence is established separately by listing the
+// world's tree at the exact path (gitx.TreeEntryAt): only a listing that
+// succeeded and found no entry says "missing". A refused profile, a revision
+// that is not an object, a cancelled context or a present entry that cannot
+// be read leaves the read unclassified, with both failures preserved.
 func gitShowAt(root string) worldReader {
+	repo := gitx.Repo{Root: root}
 	return func(ctx context.Context, world, file string) ([]byte, error) {
-		cmd := exec.CommandContext(ctx, "git", "-C", root, "--no-optional-locks", "show", world+":"+file)
-		b, err := cmd.Output()
+		b, err := repo.ShowAt(ctx, world, file)
 		if err == nil {
 			return b, nil
 		}
-		ls := exec.CommandContext(ctx, "git", "-C", root, "--no-optional-locks", "ls-tree", "--full-tree", world, "--", file)
-		out, lsErr := ls.Output()
-		if lsErr == nil && len(bytes.TrimSpace(out)) == 0 {
-			return nil, fmt.Errorf("git show %s:%s: %w", world, file, errNotAtWorld)
+		present, lsErr := repo.TreeEntryAt(ctx, world, file)
+		switch {
+		case lsErr != nil:
+			return nil, fmt.Errorf("read %s:%s: unclassified read failure: %w (existence check: %v)", world, file, err, lsErr)
+		case !present:
+			return nil, fmt.Errorf("read %s:%s: %w (read: %v)", world, file, errNotAtWorld, err)
 		}
-		return nil, fmt.Errorf("git show %s:%s: unclassified read failure: %w", world, file, err)
+		return nil, fmt.Errorf("read %s:%s: present but unreadable: %w", world, file, err)
 	}
 }
 

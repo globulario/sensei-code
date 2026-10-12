@@ -2070,3 +2070,270 @@ func TestOwnerConfigurationPathsAreExact(t *testing.T) {
 		hsRefused(t, "Head with a directory as global configuration", err)
 	})
 }
+
+// S1-GIT (RULING-326): ShowAt returns an object's exact stored bytes and
+// TreeEntryAt answers presence for exactly one path, both through the trusted
+// profile, for the pinned base commit and for a candidate's frozen tree. Only
+// a successful listing with no record is absence; every other outcome is an
+// error. Plain git is the oracle for bytes and the control for the attacks.
+func TestObjectReadsAreExactAndBoundToTheirObject(t *testing.T) {
+	ctx := context.Background()
+	r, _ := hsRepo(t)
+	files := map[string]string{
+		"crlf.txt":             "one\r\ntwo\r\n",
+		"blank-tail.txt":       "body\n\n\n",
+		"no-newline.txt":       "  spaced  ",
+		"dir/tab\tname.go":     "package dir\n",
+		"line\nbreak.txt":      "newline in the name\n",
+		"a*":                   "a star\n",
+		"ab":                   "what a? would match as a glob\n",
+		":(top)magic":          "looks like pathspec magic\n",
+		"dir/sub/deep.txt":     "deep\n",
+		".gitattributes":       "lf-*.txt text eol=crlf\n",
+		"lf-in-a-crlf-txt.txt": "stored with lf\n",
+	}
+	for p, body := range files {
+		hsWrite(t, filepath.Join(r.Root, filepath.FromSlash(p)), body)
+	}
+	hsGit(t, r.Root, "add", "-A")
+	hsGit(t, r.Root, "commit", "-q", "-m", "objects")
+	base := hsGit(t, r.Root, "rev-parse", "HEAD")
+
+	for p := range files {
+		want, err := exec.Command("git", "-C", r.Root, "cat-file", "blob", base+":"+p).Output()
+		if err != nil {
+			t.Fatalf("oracle %q: %v", p, err)
+		}
+		got, err := r.ShowAt(ctx, base, p)
+		if err != nil || string(got) != string(want) {
+			t.Errorf("ShowAt %q = %q, %v; plain git stores %q", p, got, err, want)
+		}
+		if present, err := r.TreeEntryAt(ctx, base, p); err != nil || !present {
+			t.Errorf("TreeEntryAt %q = %v, %v; want present", p, present, err)
+		}
+	}
+	if got, _ := r.ShowAt(ctx, base, "crlf.txt"); string(got) != files["crlf.txt"] {
+		t.Errorf("premise: the stored bytes are not the written ones: %q", got)
+	}
+	// Stored with LF; a checkout would write CRLF. The read is the object.
+	if got, _ := r.ShowAt(ctx, base, "lf-in-a-crlf-txt.txt"); string(got) != "stored with lf\n" {
+		t.Errorf("ShowAt converted the stored bytes: %q", got)
+	}
+
+	// Pathspec characters select nothing else: a? and a* name no "ab", and
+	// :(top)magic is that file, not the top-level path "magic".
+	if out, _ := hsPlain(r.Root, "ls-tree", "--full-tree", base, "--", ":(top)magic"); strings.TrimSpace(out) != "" {
+		t.Fatalf("premise: plain ls-tree reads :(top)magic as magic and lists nothing, got %q", out)
+	}
+	for _, p := range []string{"a?", "a[b]", "magic", "dir/tab", "dir/sub/deep", "missing.txt", "dir/missing.go"} {
+		present, err := r.TreeEntryAt(ctx, base, p)
+		if err != nil || present {
+			t.Errorf("TreeEntryAt %q = %v, %v; want confirmed absent", p, present, err)
+		}
+		if _, err := r.ShowAt(ctx, base, p); err == nil {
+			t.Errorf("ShowAt %q read an absent path", p)
+		}
+	}
+
+	// The listing is held to exactly one record for exactly the path, which
+	// the path check alone keeps true: a listing for "dir/" (refused above)
+	// names the directory's entries instead, and must never read as presence.
+	widened, err := exec.Command("git", "-C", r.Root, "ls-tree", "-z", "--full-tree", base, "--", "dir/sub/").Output()
+	if err != nil || !strings.Contains(string(widened), "dir/sub/deep.txt") {
+		t.Fatalf("premise: plain ls-tree for dir/sub/ lists its entries: %q, %v", widened, err)
+	}
+	if present, err := entryListed(widened, "dir/sub/"); err == nil || present {
+		t.Errorf("a listing of other paths read as %v, %v", present, err)
+	}
+	two, err := exec.Command("git", "-C", r.Root, "ls-tree", "-z", "--full-tree", base, "--", "crlf.txt", "a*").Output()
+	if err != nil || strings.Count(string(two), "\x00") != 2 {
+		t.Fatalf("premise: plain ls-tree lists two records: %q, %v", two, err)
+	}
+	if !strings.Contains(strings.SplitN(string(two), "\x00", 2)[0], "\ta*") {
+		t.Fatalf("premise: a* is the first record: %q", two)
+	}
+	if present, err := entryListed(two, "a*"); err == nil || present {
+		t.Errorf("two records read as %v, %v", present, err)
+	}
+
+	// A present entry that is not a blob is present and unreadable.
+	if present, err := r.TreeEntryAt(ctx, base, "dir"); err != nil || !present {
+		t.Errorf("TreeEntryAt dir = %v, %v; want present", present, err)
+	}
+	if b, err := r.ShowAt(ctx, base, "dir"); err == nil {
+		t.Errorf("ShowAt read a tree as file contents: %q", b)
+	}
+
+	// Revisions and paths that could select another object are refused
+	// before git runs; a well-formed id that is no object is a failure.
+	for _, c := range []struct{ rev, path string }{
+		{"", "crlf.txt"}, {"HEAD", "crlf.txt"}, {base[:12], "crlf.txt"}, {strings.ToUpper(base), "crlf.txt"},
+		{base, ""}, {base, "./crlf.txt"}, {base, "dir/../crlf.txt"}, {base, "/crlf.txt"}, {base, "../x"},
+		{base, "."}, {base, "dir/"}, {strings.Repeat("0", 40), "crlf.txt"},
+	} {
+		if _, err := r.ShowAt(ctx, c.rev, c.path); err == nil {
+			t.Errorf("ShowAt(%q, %q) answered", c.rev, c.path)
+		}
+		if _, err := r.TreeEntryAt(ctx, c.rev, c.path); err == nil {
+			t.Errorf("TreeEntryAt(%q, %q) answered", c.rev, c.path)
+		}
+	}
+
+	// Diagnostics never become content: a ref named like the base's id makes
+	// git warn on stderr during a successful read, and the id still names the
+	// object, not the ref.
+	hsGit(t, r.Root, "update-ref", "refs/heads/"+base, hsGit(t, r.Root, "rev-parse", "HEAD~1"))
+	plain := exec.Command("git", "-C", r.Root, "cat-file", "blob", base+":crlf.txt")
+	var warn strings.Builder
+	plain.Stderr = &warn
+	if _, err := plain.Output(); err != nil || !strings.Contains(warn.String(), "ambiguous") {
+		t.Fatalf("premise: plain git does not warn on stderr during the read: %v %q", err, warn.String())
+	}
+	if got, err := r.ShowAt(ctx, base, "crlf.txt"); err != nil || string(got) != files["crlf.txt"] {
+		t.Errorf("ShowAt with a warning on stderr = %q, %v", got, err)
+	}
+	if present, err := r.TreeEntryAt(ctx, base, "crlf.txt"); err != nil || !present {
+		t.Errorf("TreeEntryAt with a warning on stderr = %v, %v", present, err)
+	}
+
+	// A cancelled read is a failure, not an answer.
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := r.TreeEntryAt(cancelled, base, "missing.txt"); err == nil {
+		t.Error("a cancelled TreeEntryAt answered")
+	}
+
+	// The base commit and a candidate's frozen tree are different objects,
+	// each read as itself.
+	wt, err := r.CreateWorktreeAt(ctx, "objects", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hsWrite(t, filepath.Join(wt, "crlf.txt"), "candidate\n")
+	hsWrite(t, filepath.Join(wt, "added.txt"), "new\n")
+	capture, err := (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := (Repo{Root: wt}).ShowAt(ctx, capture.Tree, "crlf.txt"); err != nil || string(got) != "candidate\n" {
+		t.Errorf("candidate tree read %q, %v", got, err)
+	}
+	if got, err := (Repo{Root: wt}).ShowAt(ctx, base, "crlf.txt"); err != nil || string(got) != files["crlf.txt"] {
+		t.Errorf("base read through the candidate %q, %v", got, err)
+	}
+	if present, err := r.TreeEntryAt(ctx, base, "added.txt"); err != nil || present {
+		t.Errorf("the base lists the candidate's file: %v, %v", present, err)
+	}
+	if present, err := r.TreeEntryAt(ctx, capture.Tree, "added.txt"); err != nil || !present {
+		t.Errorf("the candidate tree lacks its file: %v, %v", present, err)
+	}
+}
+
+// The object reads inherit the profile's refusals: a caller's environment
+// cannot point them at another repository, an unsafe repository is refused
+// before git runs, and a candidate that redirects its worktree pointer is
+// refused rather than read from the object store it names.
+func TestObjectReadsRefuseWhatTheProfileRefuses(t *testing.T) {
+	ctx := context.Background()
+	t.Run("hostile environment", func(t *testing.T) {
+		r, base := hsRepo(t)
+		other := filepath.Join(t.TempDir(), "other")
+		hsGit(t, filepath.Dir(other), "init", "-q", other)
+		t.Setenv("GIT_DIR", filepath.Join(other, ".git"))
+		t.Setenv("GIT_OBJECT_DIRECTORY", filepath.Join(other, ".git", "objects"))
+		if out, err := hsPlain(r.Root, "cat-file", "blob", base+":a.txt"); err == nil {
+			t.Fatalf("premise: plain git under this environment still reads the repository: %q", out)
+		}
+		if got, err := r.ShowAt(ctx, base, "a.txt"); err != nil || string(got) != "one\n" {
+			t.Errorf("ShowAt under a hostile environment = %q, %v", got, err)
+		}
+		if present, err := r.TreeEntryAt(ctx, base, "a.txt"); err != nil || !present {
+			t.Errorf("TreeEntryAt under a hostile environment = %v, %v", present, err)
+		}
+	})
+	t.Run("unsafe repository configuration", func(t *testing.T) {
+		r, base := hsRepo(t)
+		marker := filepath.Join(t.TempDir(), "ran")
+		hsAppendConfig(t, filepath.Join(r.Root, ".git", "config"), "[core]\n\tfsmonitor = "+hsProgram(t, marker)+"\n")
+		_, err := r.ShowAt(ctx, base, "a.txt")
+		hsRefused(t, "ShowAt", err)
+		_, err = r.TreeEntryAt(ctx, base, "missing.txt")
+		hsRefused(t, "TreeEntryAt", err)
+		if hsRan(marker) {
+			t.Fatal("the repository's program ran")
+		}
+	})
+	t.Run("redirected candidate pointer", func(t *testing.T) {
+		r, base := hsRepo(t)
+		wt, err := r.CreateWorktreeAt(ctx, "redirect", base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		attacker := filepath.Join(t.TempDir(), "attacker")
+		hsGit(t, filepath.Dir(attacker), "init", "-q", attacker)
+		hsWrite(t, filepath.Join(wt, ".git"), "gitdir: "+filepath.Join(attacker, ".git")+"\n")
+		if out, err := hsPlain(wt, "cat-file", "blob", base+":a.txt"); err == nil {
+			t.Fatalf("premise: plain git in the planted worktree still reads the owner's objects: %q", out)
+		}
+		_, err = (Repo{Root: wt}).ShowAt(ctx, base, "a.txt")
+		hsRefused(t, "ShowAt", err)
+		_, err = (Repo{Root: wt}).TreeEntryAt(ctx, base, "a.txt")
+		hsRefused(t, "TreeEntryAt", err)
+	})
+}
+
+// An object id is full only in the repository's own object format (Codex P1
+// on #298): in a SHA-1 repository 64 hex digits can name a ref, and in a
+// SHA-256 repository 40 are an abbreviation. Plain git resolves both.
+func TestAnObjectIDIsFullInTheRepositorysFormat(t *testing.T) {
+	ctx := context.Background()
+	t.Run("sha1: 64 hex digits that name a ref", func(t *testing.T) {
+		r, base := hsRepo(t)
+		ref := strings.Repeat("f", 64)
+		hsGit(t, r.Root, "update-ref", "refs/heads/"+ref, base)
+		if out, err := hsPlain(r.Root, "cat-file", "blob", ref+":a.txt"); err != nil || out != "one\n" {
+			t.Fatalf("premise: plain git resolves the 64-digit name through the ref: %q, %v", out, err)
+		}
+		if b, err := r.ShowAt(ctx, ref, "a.txt"); err == nil {
+			t.Errorf("ShowAt read through a ref named like an id: %q", b)
+		}
+		if _, err := r.TreeEntryAt(ctx, ref, "a.txt"); err == nil {
+			t.Error("TreeEntryAt answered through a ref named like an id")
+		}
+		if b, err := r.ShowAt(ctx, base, "a.txt"); err != nil || string(b) != "one\n" {
+			t.Errorf("control: the full SHA-1 id reads: %q, %v", b, err)
+		}
+	})
+	t.Run("sha256: 40 hex digits are an abbreviation", func(t *testing.T) {
+		root := filepath.Join(t.TempDir(), "repo")
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		hsGit(t, root, "init", "-q", "--object-format=sha256", "-b", "main")
+		hsGit(t, root, "config", "user.email", "t@example.invalid")
+		hsGit(t, root, "config", "user.name", "T")
+		hsWrite(t, filepath.Join(root, "a.txt"), "two\n")
+		hsGit(t, root, "add", "a.txt")
+		hsGit(t, root, "commit", "-q", "-m", "base")
+		base := hsGit(t, root, "rev-parse", "HEAD")
+		if len(base) != 64 {
+			t.Fatalf("premise: a SHA-256 repository: %q", base)
+		}
+		r := Repo{Root: root}
+		if out, err := hsPlain(root, "cat-file", "blob", base[:40]+":a.txt"); err != nil || out != "two\n" {
+			t.Fatalf("premise: plain git resolves the 40-digit prefix: %q, %v", out, err)
+		}
+		if b, err := r.ShowAt(ctx, base[:40], "a.txt"); err == nil {
+			t.Errorf("ShowAt read an abbreviated id: %q", b)
+		}
+		if _, err := r.TreeEntryAt(ctx, base[:40], "a.txt"); err == nil {
+			t.Error("TreeEntryAt answered for an abbreviated id")
+		}
+		if b, err := r.ShowAt(ctx, base, "a.txt"); err != nil || string(b) != "two\n" {
+			t.Errorf("control: the full SHA-256 id reads: %q, %v", b, err)
+		}
+		if present, err := r.TreeEntryAt(ctx, base, "missing.txt"); err != nil || present {
+			t.Errorf("control: absence in a SHA-256 tree: %v, %v", present, err)
+		}
+	})
+}

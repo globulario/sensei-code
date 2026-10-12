@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -369,6 +370,109 @@ func (r Repo) readOnlyOutput(ctx context.Context, args ...string) (string, error
 		return "", err
 	}
 	return strings.TrimSpace(string(b)), nil
+}
+
+// ShowAt returns the bytes of the blob at path in the tree of rev, exactly as
+// stored: no trimming, no newline or attribute conversion, nothing from the
+// index or the worktree. rev must be a full object id -- the pinned commit or
+// frozen tree the caller holds -- and path an exact, clean repository path.
+// A failure says nothing about whether the path exists; TreeEntryAt answers
+// that.
+func (r Repo) ShowAt(ctx context.Context, rev, path string) ([]byte, error) {
+	if err := r.checkObjectRead(ctx, rev, path); err != nil {
+		return nil, err
+	}
+	return r.readObject(ctx, "cat-file", "blob", rev+":"+path)
+}
+
+// TreeEntryAt reports whether the tree of rev holds an entry at exactly path.
+// false with a nil error is the only answer that establishes absence: the
+// tree was read and listed nothing at the path. Every failure, and any
+// listing that is not exactly one record for exactly that path, is an error.
+func (r Repo) TreeEntryAt(ctx context.Context, rev, path string) (bool, error) {
+	if err := r.checkObjectRead(ctx, rev, path); err != nil {
+		return false, err
+	}
+	out, err := r.readObject(ctx, "ls-tree", "-z", "--full-tree", rev, "--", path)
+	if err != nil {
+		return false, err
+	}
+	present, err := entryListed(out, path)
+	if err != nil {
+		return false, fmt.Errorf("git ls-tree %s: %w", rev, err)
+	}
+	return present, nil
+}
+
+// entryListed reads an ls-tree -z listing for path: no record is absence,
+// exactly one record for exactly path is presence, anything else is an error.
+func entryListed(out []byte, path string) (bool, error) {
+	records := splitZ(string(out))
+	switch {
+	case len(records) == 0:
+		return false, nil
+	case len(records) == 1:
+		meta, at, ok := strings.Cut(records[0], "\t")
+		if ok && at == path && len(strings.Fields(meta)) == 3 {
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("-- %q: not exactly one record for the path: %q", path, out)
+}
+
+// checkObjectRead refuses a read that could select something other than the
+// named object and path: a revision that is not a full object id in this
+// repository's object format (an empty one reads the index; a name resolves
+// through refs; in a SHA-256 repository 40 hex digits are an abbreviation, and
+// in a SHA-1 repository 64 are a ref name) or a path git would resolve
+// relative to the working directory or widen to other entries.
+func (r Repo) checkObjectRead(ctx context.Context, rev, p string) error {
+	if p == "" || p != path.Clean(p) || p == "." || p == ".." || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "../") {
+		return fmt.Errorf("%q is not an exact repository path", p)
+	}
+	if !hexDigits(rev) {
+		return fmt.Errorf("%q is not a full object id", rev)
+	}
+	format, err := r.readObject(ctx, "rev-parse", "--show-object-format")
+	if err != nil {
+		return err
+	}
+	want := map[string]int{"sha1\n": 40, "sha256\n": 64}[string(format)]
+	if want == 0 {
+		return fmt.Errorf("unrecognised object format %q", format)
+	}
+	if len(rev) != want {
+		return fmt.Errorf("%q is not a full %s object id", rev, strings.TrimSpace(string(format)))
+	}
+	return nil
+}
+
+func hexDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// readObject runs a read-only git command whose stdout is data: it is
+// returned byte for byte and never mixed with stderr, which stays diagnostic.
+// Pathspecs are literal.
+func (r Repo) readObject(ctx context.Context, args ...string) ([]byte, error) {
+	cmd, err := r.gitCommand(ctx, r.Root, []string{"GIT_LITERAL_PATHSPECS=1"}, true, args...)
+	if err != nil {
+		return nil, err
+	}
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.Bytes(), nil
 }
 
 // raw runs git and returns stdout exactly as produced. Use it for anything
