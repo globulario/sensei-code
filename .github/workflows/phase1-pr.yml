@@ -86,6 +86,44 @@ jobs:
       - name: Build
         run: go build ./cmd/sensei-code
 
+  # Every release target must still compile. The Linux-only test run above
+  # cannot see a Darwin or Windows build break (N3 merged one, RULING-315), so
+  # this builds the release binary for the release matrix with the release
+  # build configuration, then vets every package, tests included, for that
+  # target. It compiles only; no foreign binary is run here.
+  xbuild:
+    name: Release cross-build ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: go build -trimpath -ldflags "-s -w" -o "$RUNNER_TEMP/sensei-code" ./cmd/sensei-code
+      - name: Vet
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: go vet ./...
+
   sensei:
     name: Sensei architectural gate
     runs-on: ubuntu-latest
