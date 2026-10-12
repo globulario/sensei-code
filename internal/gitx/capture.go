@@ -269,7 +269,7 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 	// so a pathname it misreads is a file excluded or kept by the wrong name.
 	// The exact path set downstream cannot repair a boundary decision already
 	// made against a mangled name.
-	numstatArgs := []string{"diff", "--no-ext-diff", "--no-renames", "--numstat", "-z"}
+	numstatArgs := []string{"diff", "--no-ext-diff", ignoreNested, "--no-renames", "--numstat", "-z"}
 	if b := strings.TrimSpace(base); b != "" {
 		numstatArgs = append(numstatArgs, b)
 	}
@@ -324,7 +324,7 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 	sort.Slice(cap.Excluded, func(i, j int) bool { return cap.Excluded[i].Path < cap.Excluded[j].Path })
 	// The exact path set, taken after exclusions so it names what the reviewer
 	// will actually judge. Same base, same boundary, one authority.
-	nameArgs := []string{"diff", "--no-ext-diff", "--no-renames", "--name-status", "-z"}
+	nameArgs := []string{"diff", "--no-ext-diff", ignoreNested, "--no-renames", "--name-status", "-z"}
 	if b := strings.TrimSpace(base); b != "" {
 		nameArgs = append(nameArgs, b)
 	}
@@ -343,7 +343,7 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 	// for callers that only want to see what a worktree holds, and it keeps the
 	// older worktree rendering.
 	if strings.TrimSpace(base) == "" {
-		diff, err := r.raw(ctx, "diff", "--no-ext-diff", "--")
+		diff, err := r.raw(ctx, "diff", "--no-ext-diff", ignoreNested, "--")
 		if err != nil {
 			return Capture{}, err
 		}

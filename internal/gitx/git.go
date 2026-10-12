@@ -77,7 +77,7 @@ func (r Repo) Branch(ctx context.Context) (string, error) {
 // come back cannot_verify, for weeks of apparent graph trouble that was
 // actually two missing newlines.
 func (r Repo) Diff(ctx context.Context, base string) (string, error) {
-	args := []string{"diff", "--no-ext-diff", "--binary"}
+	args := []string{"diff", "--no-ext-diff", "--binary", ignoreNested}
 	if b := strings.TrimSpace(base); b != "" {
 		args = append(args, b)
 	}
@@ -459,6 +459,11 @@ func (r Repo) OriginURL(ctx context.Context) string {
 // inspection and the run (a candidate test on the host, until N4 confines
 // them), and remote publication, which needs credentials this profile drops.
 
+// ignoreNested keeps a diff or status against the WORKTREE from running git
+// inside a nested repository. Tree-to-tree diffs do not carry it: they enter
+// no repository, and hiding a gitlink there would misreport history.
+const ignoreNested = "--ignore-submodules=all"
+
 // ProfileRefused prefixes every refusal to run git outside the trusted
 // profile.
 const ProfileRefused = "REFUSED_UNSAFE_GIT_PROFILE"
@@ -597,7 +602,9 @@ func (p hostProfile) checkOwnerContent(repoKeys map[string][]configValue) (strin
 					return "", refuseProfile("the environment (%s) sets %s for ordinary git, which the trusted profile does not reproduce", k, key)
 				}
 			}
-			for _, key := range []string{"core.autocrlf", "core.precomposeunicode", "core.ignorecase", "core.excludesfile"} {
+			// include and includeIf pull in a file ordinary git reads and this
+			// scan would not see (Codex r4250927600).
+			for _, key := range []string{"core.autocrlf", "core.precomposeunicode", "core.ignorecase", "core.excludesfile", "include"} {
 				if strings.Contains(low, key) {
 					return "", refuseProfile("the environment (%s) sets %s for ordinary git, which the trusted profile does not reproduce", k, key)
 				}
@@ -685,14 +692,22 @@ func (o *ownerScan) file(f string, depth int, conditional bool) error {
 				if o.excludes == nil {
 					o.excludes = map[string]bool{}
 				}
-				o.excludes[o.p.ownerPath(v.raw, f)] = true
+				path, err := o.p.ownerPath(v.raw, f)
+				if err != nil {
+					return err
+				}
+				o.excludes[path] = true
 			}
 		case k == "include.path" || strings.HasPrefix(k, "includeif.") && strings.HasSuffix(k, ".path"):
 			// Followed as data only, whatever its condition: a file that might
 			// apply is a file whose settings might matter.
 			cond := conditional || strings.HasPrefix(k, "includeif.")
 			for _, v := range vs {
-				if err := o.file(o.p.ownerPath(v.raw, f), depth+1, cond); err != nil {
+				inc, err := o.p.ownerPath(v.raw, f)
+				if err != nil {
+					return err
+				}
+				if err := o.file(inc, depth+1, cond); err != nil {
 					return err
 				}
 			}
@@ -703,14 +718,23 @@ func (o *ownerScan) file(f string, depth int, conditional bool) error {
 
 // ownerPath resolves a path named in the owner's configuration file f: "~/"
 // is the owner's home, a relative path is relative to f.
-func (p hostProfile) ownerPath(v, f string) string {
+//
+// Git also expands "~user/" and "%(prefix)/"; this resolver does not
+// reproduce them, so such a value is refused rather than misread as a
+// relative path and silently skipped (Codex r4250927611).
+func (p hostProfile) ownerPath(v, f string) (string, error) {
 	switch {
 	case strings.HasPrefix(v, "~/"):
-		return filepath.Join(p.ownerHome, v[2:])
+		if !filepath.IsAbs(p.ownerHome) {
+			return "", refuseProfile("%s names a ~/ path and the owner's HOME is not an absolute path", f)
+		}
+		return filepath.Join(p.ownerHome, v[2:]), nil
+	case strings.HasPrefix(v, "~"), strings.HasPrefix(v, "%("):
+		return "", refuseProfile("%s names a path in a form the trusted profile does not resolve exactly as git does", f)
 	case filepath.IsAbs(v):
-		return filepath.Clean(v)
+		return filepath.Clean(v), nil
 	}
-	return filepath.Join(filepath.Dir(f), v)
+	return filepath.Join(filepath.Dir(f), v), nil
 }
 
 // checkOwnerAttributes refuses an owner attributes file with any active rule.
@@ -746,11 +770,24 @@ func (p hostProfile) excludesSnapshot(id gitIdentity, source string) (string, er
 	if !filepath.IsAbs(source) {
 		return "", refuseProfile("the owner's excludes file %q is not an absolute path", source)
 	}
+	// Containment is decided on RESOLVED paths: a symlinked directory
+	// anywhere on the way could otherwise lead a lexically outside path into
+	// the candidate's worktree (Codex r4250927589). The file is then read at
+	// its resolved location.
+	resolved, err := resolveExisting(source)
+	if err != nil {
+		return "", refuseProfile("the owner's excludes file %s cannot be resolved: %v", source, err)
+	}
 	for _, inside := range []string{id.workTree, id.commonDir, id.gitDir} {
-		if rel, err := filepath.Rel(inside, source); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return "", refuseProfile("the owner's excludes file %s lies inside %s, where the candidate or the repository can write it", source, inside)
+		root, err := filepath.EvalSymlinks(inside)
+		if err != nil {
+			return "", refuseProfile("%s cannot be resolved: %v", inside, err)
+		}
+		if rel, err := filepath.Rel(root, resolved); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return "", refuseProfile("the owner's excludes file %s resolves inside %s, where the candidate or the repository can write it", source, inside)
 		}
 	}
+	source = resolved
 	var body []byte
 	fi, err := os.Lstat(source)
 	switch {
@@ -797,6 +834,28 @@ func (p hostProfile) excludesSnapshot(id gitIdentity, source string) (string, er
 		return "", refuseProfile("the excludes snapshot cannot be written: %v", werr)
 	}
 	return snap, nil
+}
+
+// resolveExisting resolves every symlink in p; when p does not exist, its
+// nearest existing ancestor is resolved and the rest appended.
+func resolveExisting(p string) (string, error) {
+	p = filepath.Clean(p)
+	var rest []string
+	for {
+		real, err := filepath.EvalSymlinks(p)
+		if err == nil {
+			return filepath.Join(append([]string{real}, rest...)...), nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return "", err
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return "", err
+		}
+		rest = append([]string{filepath.Base(p)}, rest...)
+		p = parent
+	}
 }
 
 // pinnedExcludes carries one excludes snapshot through a whole operation, so
@@ -929,12 +988,14 @@ func (r Repo) gitCommand(ctx context.Context, dir string, extra []string, readOn
 	if readOnly {
 		full = append(full, noOptionalLocks)
 	}
-	// status and diff look inside a nested repository (a gitlink in the
-	// worktree) by running git THERE, with that repository's configuration and
-	// attributes, which this profile never inspected (independent review, B2).
-	// The flag form wins over any .gitmodules "ignore" setting.
-	if len(args) > 0 && (args[0] == "status" || args[0] == "diff") {
-		args = append([]string{args[0], "--ignore-submodules=all"}, args[1:]...)
+	// status looks inside a nested repository (a gitlink in the worktree) by
+	// running git THERE, with configuration this profile never inspected
+	// (independent review, B2). A diff against the worktree does the same and
+	// carries ignoreNested at its call site; a diff between two trees enters
+	// no repository and keeps reporting gitlinks (Codex r4250927580). The flag
+	// form wins over any .gitmodules "ignore" setting.
+	if len(args) > 0 && args[0] == "status" {
+		args = append([]string{args[0], ignoreNested}, args[1:]...)
 	}
 	cmd := exec.CommandContext(ctx, p.exe, append(full, args...)...)
 	cmd.Dir, cmd.Env = id.workTree, env

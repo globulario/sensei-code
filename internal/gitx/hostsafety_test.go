@@ -1523,3 +1523,151 @@ func TestOwnerDiscoveryAndVersionBoundary(t *testing.T) {
 		}
 	}
 }
+
+// A diff between two commits still reports a gitlink: only diffs against the
+// worktree, which could run git inside a nested repository, ignore them
+// (Codex r4250927580).
+func TestACommitDiffReportsAGitlink(t *testing.T) {
+	ctx := context.Background()
+	r, base := hsRepo(t)
+	hsGit(t, r.Root, "update-index", "--add", "--cacheinfo", "160000,"+base+",mod")
+	hsGit(t, r.Root, "commit", "-q", "-m", "gitlink only")
+	head := hsGit(t, r.Root, "rev-parse", "HEAD")
+	out, err := r.CommitDiff(ctx, head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "mod") || !strings.Contains(out, "Subproject commit") {
+		t.Fatalf("the commit diff hides its gitlink:\n%s", out)
+	}
+	if hidden, _ := hsPlain(r.Root, "diff", "--ignore-submodules=all", head+"^!", "--"); strings.Contains(hidden, "mod") {
+		t.Fatalf("premise: --ignore-submodules=all does not hide the gitlink:\n%s", hidden)
+	}
+}
+
+// Every diff in this package either faces the worktree and carries
+// ignoreNested, or compares two trees and does not: checked at each diff's own
+// argument list, so a function with several diffs cannot hide one unflagged
+// (Codex r4250927580, independent review B2).
+func TestEveryDiffDeclaresWhetherItFacesTheWorktree(t *testing.T) {
+	treeToTree := map[string]bool{"CommitDiff": true, "RenderCandidateDiff": true, "validateBoundaryAgainstTree": true}
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	diffs := 0
+	check := func(fn string, pos token.Pos, elems []ast.Expr) {
+		hasDiff, hasFlag := false, false
+		for _, e := range elems {
+			if lit, ok := e.(*ast.BasicLit); ok && lit.Value == `"diff"` {
+				hasDiff = true
+			}
+			if id, ok := e.(*ast.Ident); ok && id.Name == "ignoreNested" {
+				hasFlag = true
+			}
+		}
+		if !hasDiff {
+			return
+		}
+		diffs++
+		if treeToTree[fn] == hasFlag {
+			t.Errorf("%s (%s): a diff that %s, but its arguments %s ignoreNested", fn, fset.Position(pos),
+				map[bool]string{true: "compares two trees", false: "faces the worktree"}[treeToTree[fn]],
+				map[bool]string{true: "carry", false: "lack"}[hasFlag])
+		}
+	}
+	for _, f := range files {
+		if strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, f, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, d := range file.Decls {
+			fn, ok := d.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				switch x := n.(type) {
+				case *ast.CallExpr:
+					check(fn.Name.Name, x.Pos(), x.Args)
+				case *ast.CompositeLit:
+					check(fn.Name.Name, x.Pos(), x.Elts)
+				}
+				return true
+			})
+		}
+	}
+	if diffs < 7 {
+		t.Fatalf("premise: the census found only %d diff argument lists", diffs)
+	}
+}
+
+// Owner configuration the trusted profile cannot resolve exactly as git does
+// is refused: an include supplied through the environment, an include or
+// excludes path in "~user/" or "%(prefix)/" form, and an excludes path that a
+// symlinked directory leads into the candidate worktree (Codex r4250927589,
+// r4250927600, r4250927611).
+func TestOwnerIndirectionsGitResolvesAreRefused(t *testing.T) {
+	ctx := context.Background()
+	t.Run("an include supplied through the environment", func(t *testing.T) {
+		r, _ := hsRepo(t)
+		home := hsOwner(t, "", "")
+		inc := filepath.Join(home, "env.inc")
+		hsWrite(t, inc, "[core]\n\tautocrlf = true\n")
+		t.Setenv("GIT_CONFIG_COUNT", "1")
+		t.Setenv("GIT_CONFIG_KEY_0", "include.path")
+		t.Setenv("GIT_CONFIG_VALUE_0", inc)
+		_, err := r.Head(ctx)
+		hsRefused(t, "Head", err)
+		// Control: ordinary git with the environment stores different bytes for
+		// a CRLF file than ordinary git without it.
+		body := "one\r\ntwo\r\n"
+		with, err1 := hsOwnerGit(r.Root, body, "hash-object", "--path=a.dat", "--stdin")
+		cmd := exec.Command("git", "-C", r.Root, "hash-object", "--path=a.dat", "--stdin")
+		cmd.Stdin = strings.NewReader(body)
+		for _, e := range os.Environ() {
+			if !strings.HasPrefix(e, "GIT_CONFIG_") {
+				cmd.Env = append(cmd.Env, e)
+			}
+		}
+		without, err2 := cmd.Output()
+		if err1 != nil || err2 != nil || strings.TrimSpace(with) == strings.TrimSpace(string(without)) {
+			t.Fatalf("premise: ordinary git does not follow the environment's include (%v %v)", err1, err2)
+		}
+	})
+	for name, cfg := range map[string]string{
+		"a ~user/ include":     "[include]\n\tpath = ~root/.gitconfig\n",
+		"a %(prefix)/ include": "[include]\n\tpath = %(prefix)/etc/gitconfig\n",
+		"a ~user/ excludes":    "[core]\n\texcludesFile = ~root/ignore\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			r, _ := hsRepo(t)
+			hsOwner(t, cfg, "")
+			_, err := r.Head(ctx)
+			hsRefused(t, "Head", err)
+		})
+	}
+	t.Run("an excludes path through a symlinked directory", func(t *testing.T) {
+		r, base := hsRepo(t)
+		wt, err := r.CreateWorktreeAt(ctx, "linked", base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hsWrite(t, filepath.Join(wt, "ignore"), "hidden.txt\n")
+		hsWrite(t, filepath.Join(wt, "hidden.txt"), "x\n")
+		home := t.TempDir()
+		if err := os.Symlink(wt, filepath.Join(home, "link")); err != nil {
+			t.Fatal(err)
+		}
+		hsOwner(t, "[core]\n\texcludesFile = "+filepath.Join(home, "link", "ignore")+"\n", "")
+		_, err = (Repo{Root: wt}).CandidateCapture(ctx, base, nil)
+		hsRefused(t, "CandidateCapture", err)
+		if strings.HasPrefix(filepath.Join(home, "link", "ignore"), wt) {
+			t.Fatal("premise: the excludes path is lexically inside the worktree")
+		}
+	})
+}
