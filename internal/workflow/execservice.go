@@ -314,13 +314,17 @@ func (s *execService) clientBinding() (*agent.ExecBinding, error) {
 		}
 		shim = self
 	}
-	plugins := s.e.Config.ExecBinding.DisabledPlugins
-	if plugins == nil {
-		plugins = config.DefaultDisabledPlugins
-	}
+	// The mandatory builtin exclusions always apply; configuration can only
+	// add to them. An empty or partial configured list must not re-enable a
+	// builtin plugin the profile requires disabled.
 	enabled := map[string]bool{}
-	for _, p := range plugins {
+	for _, p := range config.DefaultDisabledPlugins {
 		enabled[p] = false
+	}
+	for _, p := range s.e.Config.ExecBinding.DisabledPlugins {
+		if p = strings.TrimSpace(p); p != "" {
+			enabled[p] = false
+		}
 	}
 	settings, err := json.Marshal(map[string]any{"enabledPlugins": enabled})
 	if err != nil {

@@ -288,7 +288,8 @@ type ExecBinding struct {
 	// under. Unset refuses every check; it never means unconfined.
 	Confinement Confinement `json:"confinement,omitzero"`
 	// DisabledPlugins are client plugins the trusted client settings turn
-	// off, so the client's startup inventory carries none.
+	// off IN ADDITION to DefaultDisabledPlugins, which always apply: this
+	// list can narrow the client, never re-enable a mandatory exclusion.
 	DisabledPlugins []string `json:"disabled_plugins,omitempty"`
 }
 

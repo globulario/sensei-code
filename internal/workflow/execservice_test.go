@@ -939,3 +939,45 @@ func TestN3ANonEnforcingRunnerIsRefusedBeforeTheServiceStarts(t *testing.T) {
 	}
 	svc.stop()
 }
+
+// RULING-309 P1. The mandatory builtin exclusions are applied whatever the
+// configuration says: omitted, null, empty, partial and extended lists all
+// yield trusted settings that disable every DefaultDisabledPlugins entry, and
+// an extra configured exclusion is added, never substituted.
+func TestN3MandatoryPluginExclusionsSurviveAnyConfiguredList(t *testing.T) {
+	r := newExecRig(t, "true")
+	cases := map[string]string{
+		"omitted": `{}`,
+		"null":    `{"disabled_plugins":null}`,
+		"empty":   `{"disabled_plugins":[]}`,
+		"partial": `{"disabled_plugins":["cc-plugin-agents-md@builtin"]}`,
+		"extra":   `{"disabled_plugins":["some-user-plugin@market"]}`,
+	}
+	for name, raw := range cases {
+		var x config.ExecBinding
+		if err := json.Unmarshal([]byte(raw), &x); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		r.e.Config.ExecBinding.DisabledPlugins = x.DisabledPlugins
+		b, err := r.svc.clientBinding()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		var got struct {
+			EnabledPlugins map[string]bool `json:"enabledPlugins"`
+		}
+		if err := json.Unmarshal(b.Settings, &got); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		for _, id := range config.DefaultDisabledPlugins {
+			if enabled, ok := got.EnabledPlugins[id]; !ok || enabled {
+				t.Fatalf("%s: the mandatory exclusion %s is missing from %s", name, id, b.Settings)
+			}
+		}
+		if name == "extra" {
+			if enabled, ok := got.EnabledPlugins["some-user-plugin@market"]; !ok || enabled {
+				t.Fatalf("extra: the configured exclusion was not added: %s", b.Settings)
+			}
+		}
+	}
+}
