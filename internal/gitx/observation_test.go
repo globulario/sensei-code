@@ -122,12 +122,38 @@ func TestReadOnlyInspectionsTakeNoOptionalLock(t *testing.T) {
 				"so it may refresh the index it is reading", fn)
 		}
 	}
-	// Discover runs before a Repo exists and spells the flag out itself.
+	// Discover runs before a Repo exists and runs NO git at all (the trusted
+	// profile, RULING-317): it finds .git by reading the filesystem, so it can
+	// neither take a lock nor load the repository's configuration. Pinned in
+	// the source, and in behaviour: with no git executable resolvable, Discover
+	// still answers, which a git process could not.
+	discover := bodyOf(t, src, "func Discover(")
+	for _, launch := range []string{"gitCommand", "exec.", "r.readOnly", ".raw(", ".output("} {
+		if strings.Contains(discover, launch) {
+			t.Errorf("Discover launches git (%s); it must find the repository without running it", launch)
+		}
+	}
+	repo, _ := hsRepo(t)
+	profileMu.Lock()
+	saved, savedProgram := profile, gitProgram
+	profile, gitProgram = nil, "sensei-code-no-such-git"
+	profileMu.Unlock()
+	found, derr := Discover(context.Background(), filepath.Join(repo.Root, "."))
+	profileMu.Lock()
+	profile, gitProgram = saved, savedProgram
+	profileMu.Unlock()
+	if derr != nil || found.Root != repo.Root {
+		t.Errorf("with no git executable, Discover did not find %s (got %q, %v): it needed a git process", repo.Root, found.Root, derr)
+	}
+	// The read path keeps the flag, and only through the one primitive.
 	// Matched on the identifier: the literal lives in exactly one place so a
 	// second spelling cannot drift away from it.
 	const flag = "noOptionalLocks"
-	if !strings.Contains(bodyOf(t, src, "func Discover("), flag) {
-		t.Errorf("Discover reads the repository without %s", noOptionalLocks)
+	if prim := bodyOf(t, src, "func (r Repo) gitCommand("); !strings.Contains(prim, "if readOnly {") || !strings.Contains(prim, flag) {
+		t.Errorf("gitCommand does not add %s for a read-only call", noOptionalLocks)
+	}
+	if !strings.Contains(bodyOf(t, src, "func (r Repo) readOnly("), "r.gitCommand(ctx, dir, nil, true,") {
+		t.Error("readOnly does not ask gitCommand for a read-only call")
 	}
 	// And the writes are left alone. Suppressing the lock a write needs would
 	// be a correctness bug wearing this fix's clothes.
@@ -137,7 +163,7 @@ func TestReadOnlyInspectionsTakeNoOptionalLock(t *testing.T) {
 		"func (r Repo) DeleteBranch(",
 		"func (r Repo) CreateObservationWorktree(",
 	} {
-		if strings.Contains(bodyOf(t, src, fn), flag) {
+		if body := bodyOf(t, src, fn); strings.Contains(body, flag) || strings.Contains(body, "nil, true,") {
 			t.Errorf("%s is a write and must not suppress its locks", fn)
 		}
 	}

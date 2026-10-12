@@ -31,7 +31,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -90,9 +90,30 @@ func (r Repo) CanonicalTree(ctx context.Context, base string, paths []string) (s
 	// capture -- is reinterpreted by `add` as pathspec magic and stages files
 	// the reviewer never named. Exact bytes are not enough if the receiver is
 	// allowed to read them as a pattern.
-	env := append(os.Environ(), "GIT_INDEX_FILE="+indexPath, "GIT_LITERAL_PATHSPECS=1")
+	env := []string{"GIT_INDEX_FILE=" + indexPath, "GIT_LITERAL_PATHSPECS=1"}
 	if _, err := r.envOutput(ctx, env, "read-tree", base); err != nil {
 		return "", fmt.Errorf("read the base tree: %w", err)
+	}
+	// add looks inside a gitlink path by running git THERE (independent
+	// review cycle 2, N-a): no named path may be a gitlink in the base, nor
+	// hold a repository in the worktree.
+	staged, err := r.envOutput(ctx, env, append([]string{"ls-files", "--stage", "-z", "--"}, paths...)...)
+	if err != nil {
+		return "", fmt.Errorf("read the base entries of the reviewed paths: %w", err)
+	}
+	for _, record := range strings.Split(strings.TrimSuffix(staged, "\x00"), "\x00") {
+		if strings.HasPrefix(record, "160000 ") {
+			_, p, _ := strings.Cut(record, "\t")
+			return "", fmt.Errorf("%s: the reviewed path %q is a gitlink; trusted git does not look inside one", ProfileRefused, p)
+		}
+	}
+	for _, p := range paths {
+		if _, err := os.Lstat(filepath.Join(r.Root, filepath.FromSlash(p), ".git")); err == nil {
+			return "", fmt.Errorf("%s: the reviewed path %q holds a repository; trusted git does not look inside one", ProfileRefused, p)
+		}
+	}
+	if err := r.refuseFilterAttributes(ctx, "", paths); err != nil {
+		return "", err
 	}
 	args := append([]string{"add", "--all", "--"}, paths...)
 	if _, err := r.envOutput(ctx, env, args...); err != nil {
@@ -231,13 +252,15 @@ func short12(s string) string {
 	return s
 }
 
-// envOutput runs git with an explicit environment. The environment is the
+// envOutput runs git with extra environment. The environment is the
 // mechanism here rather than a convenience: GIT_INDEX_FILE keeps the canonical
-// tree out of the live index, and the GIT_AUTHOR_/GIT_COMMITTER_ variables are
-// what make the commit a function of its inputs instead of of this machine.
+// tree out of the live index. The extras are added to the trusted profile's
+// environment, never to this process's, and only the ones gitCommand admits.
 func (r Repo) envOutput(ctx context.Context, env []string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", r.Root}, args...)...)
-	cmd.Env = env
+	cmd, err := r.gitCommand(ctx, r.Root, env, false, args...)
+	if err != nil {
+		return "", err
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
@@ -249,9 +272,9 @@ func (r Repo) envOutput(ctx context.Context, env []string, args ...string) (stri
 // stdinOutput runs git with an optional environment and a stdin payload, so
 // that not one byte of the commit object passes through argv quoting.
 func (r Repo) stdinOutput(ctx context.Context, env []string, stdin string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", r.Root}, args...)...)
-	if env != nil {
-		cmd.Env = env
+	cmd, err := r.gitCommand(ctx, r.Root, env, false, args...)
+	if err != nil {
+		return "", err
 	}
 	cmd.Stdin = strings.NewReader(stdin)
 	var stdout, stderr bytes.Buffer
