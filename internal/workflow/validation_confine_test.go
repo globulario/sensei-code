@@ -317,7 +317,10 @@ func derivedFormatRecord(t *testing.T, b validation.Bundle, before, after string
 	if r.Outcome != validation.Errored || r.ExitStatus != -1 || r.DiffDigest != validation.Digest(after) || r.DiffDigest != b.DiffDigest {
 		t.Fatalf("the derived record is not an Errored record bound to the capture it blocks: %+v", r)
 	}
-	if !strings.Contains(r.Detail, string(original)) || !strings.Contains(r.Detail, validation.Digest(before)) || !strings.Contains(r.Detail, "not re-executed") {
+	// A refused original is named by its sandbox-refusal classification rather
+	// than by the outcome word.
+	named := strings.Contains(r.Detail, string(original)) || (original == validation.Errored && strings.HasPrefix(r.Detail, validation.SandboxUnavailable))
+	if !named || !strings.Contains(r.Detail, validation.Digest(before)) || !strings.Contains(r.Detail, "not re-executed") {
 		t.Fatalf("the derived record does not name the original outcome, its binding and the non-execution: %+v", r)
 	}
 	if b.Passed() || !b.Certifies("task-1", validation.Digest(after)) {
@@ -427,6 +430,84 @@ func TestAnErroredFormatterBlocksConfinedValidation(t *testing.T) {
 	}
 	if original.DiffDigest != before {
 		t.Fatal("the original record was rebound")
+	}
+}
+
+// erringCtx reports an error without ever being done: the shape of a
+// context whose deadline expired exactly as a command ended. exec.CommandContext
+// installs no watcher for a context whose Done channel is nil, so commands
+// started under it run to completion, and only the broker's own reading of
+// ctx.Err() changes: a protocol violation it would refuse becomes "the check
+// did not finish", an ordinary error that is not a sandbox refusal.
+type erringCtx struct{ context.Context }
+
+func (erringCtx) Err() error { return context.DeadlineExceeded }
+
+// confinedValidateUnder is confinedValidate under a caller-chosen context.
+func confinedValidateUnder(t *testing.T, ctx context.Context, e *Engine, repo gitx.Repo, base string) (validation.Bundle, string, string) {
+	t.Helper()
+	before, err := repo.CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatalf("capture before validation: %v", err)
+	}
+	b, after, err := e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, before.Diff, nil)
+	if err != nil {
+		t.Fatalf("validate: %v", err)
+	}
+	return b, before.Diff, after
+}
+
+// n4GarbageStatusLauncher runs every execution as n4Launcher does but, for
+// executions whose argv or workspace mode matches `when`, writes a record the
+// broker cannot read instead of the real status.
+func n4GarbageStatusLauncher(when string) string {
+	return "#!/bin/sh\nread nonce <&5\nexec 5<&-\nwhile [ \"$1\" != \"--\" ]; do shift; done\nshift\n\"$@\" 3<&- 4>&-\nrc=$?\n" +
+		"case \"$SENSEI_CONFINE_WORKSPACE_MODE $*\" in " + when + ") echo NOT-A-STATUS >&4; exit $rc;; esac\n" +
+		"echo \"" + validation.StatusProtocol + " $nonce ran $rc\" >&4\nexit $rc\n"
+}
+
+// W3, on the real path. The formatter runs and rewrites the candidate, but
+// its execution ends as an ordinary error (the broker could not read its
+// result and the context had expired): whatever ran is not evidence. The
+// recapture takes what the formatter left, the certifying checks run and
+// pass on it, and the bundle must not pass: the errored formatter blocks the
+// capture after it, named as errored and never as a sandbox refusal.
+func TestAnErroredFormatterBlocksConfinedValidationOnTheRealPath(t *testing.T) {
+	e, repo, base := blockerRig(t, n4GarbageStatusLauncher("rw*"), true)
+	b, before, after := confinedValidateUnder(t, erringCtx{context.Background()}, e, repo, base)
+	if after == before || !strings.Contains(after, formattedMark) {
+		t.Fatalf("the recapture did not take what the formatter left: %q", after)
+	}
+	r := derivedFormatRecord(t, b, before, after, validation.Errored)
+	if strings.HasPrefix(r.Detail, validation.SandboxUnavailable) || !strings.Contains(r.Detail, "did not finish") {
+		t.Fatalf("an ordinary error was relabelled, or lost its reason: %+v", r)
+	}
+	if len(b.Checks) != 4 || b.Checks[1].Outcome != validation.Passed || b.Checks[2].Outcome != validation.Passed || b.Checks[3].Outcome != validation.Passed {
+		t.Fatalf("the other checks did not run and pass beside the blocker: %+v", b)
+	}
+}
+
+// W4, missing profile. Confinement is required and no profile is configured:
+// the runner refuses before executing anything, the formatter's refusal is
+// carried as a sandbox refusal of the capture after it, and nothing passes.
+func TestAFormatterRefusedForWantOfAProfileBlocksConfinedValidation(t *testing.T) {
+	e, repo, base := blockerRig(t, n4Launcher, true)
+	e.Config.Validation.Confinement = config.Confinement{}
+	b, before, after := confinedValidate(t, e, repo, base)
+	if after != before {
+		t.Fatal("a refused formatter changed the candidate")
+	}
+	r := derivedFormatRecord(t, b, before, after, validation.Errored)
+	if !strings.HasPrefix(r.Detail, validation.SandboxUnavailable) || !strings.Contains(r.Detail, "no D2 confinement profile") {
+		t.Fatalf("the refusal for want of a profile lost its classification or reason: %+v", r)
+	}
+	if len(b.Checks) != 4 {
+		t.Fatalf("expected the blocker and three refused checks: %+v", b)
+	}
+	for _, c := range b.Checks[1:] {
+		if c.Outcome != validation.Errored || !strings.HasPrefix(c.Detail, validation.SandboxUnavailable) {
+			t.Fatalf("a check ran without a profile: %+v", c)
+		}
 	}
 }
 

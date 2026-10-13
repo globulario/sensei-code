@@ -13057,7 +13057,9 @@ func formatterBlocks(confined bool, outcome validation.Outcome) bool {
 // outcome is named as what it was and never as a sandbox refusal.
 func formatterBlocker(original validation.Evidence, bundle validation.Bundle) validation.Evidence {
 	var detail string
-	if strings.HasPrefix(original.Detail, validation.SandboxUnavailable) {
+	// Only the formatter's OWN refusal (not a refusal of its baseline, which
+	// means the formatter itself did run) is described as refused before it.
+	if strings.HasPrefix(original.Detail, validation.SandboxUnavailable+": ") {
 		detail = validation.SandboxUnavailable + ": formatting is unsatisfied for this capture because the formatter was refused " +
 			"before it and not attempted on these bytes (not re-executed); the refused execution, bound to " + original.DiffDigest + ": " + original.Detail
 	} else {
