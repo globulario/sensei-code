@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -12969,15 +12970,19 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 
 	// Formatting first, and its evidence is deliberately discarded from the
 	// certifying bundle: it describes the candidate before the rewrite.
-	// A formatter its confinement refused is not a formatter failure, and
-	// it is not discarded with the formatter's evidence: it is carried into
-	// the certifying bundle so the candidate cannot certify without it.
-	var refusedFormat []validation.Evidence
+	// Under required confinement (N4) a formatter that did not pass -- not
+	// permitted, failed, refused, or not run -- is not discarded with the
+	// formatter's evidence: it is carried into the certifying bundle, as a
+	// record about the capture it blocks, so the candidate cannot certify
+	// without it (RULING-340). With neither flag set the legacy behaviour is
+	// kept exactly: the formatter's evidence is discarded whatever it says.
+	confined := validationRequiresConfinement(e.Config)
+	var unsatisfiedFormat []validation.Evidence
 	if formats := checksOf(validation.Format, e.Config.Validation.Format); len(formats) != 0 {
 		before := validation.Digest(diff)
 		for _, c := range runner.Run(ctx, taskID, before, formats).Checks {
-			if c.Outcome == validation.Errored && strings.HasPrefix(c.Detail, validation.SandboxUnavailable) {
-				refusedFormat = append(refusedFormat, c)
+			if formatterBlocks(confined, c.Outcome) {
+				unsatisfiedFormat = append(unsatisfiedFormat, c)
 			}
 		}
 		recapture, err := repo.CandidateCapture(ctx, base, intended)
@@ -13011,29 +13016,71 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	checks = append(checks, checksOf(validation.Build, e.Config.Validation.Build)...)
 	checks = append(checks, checksOf(validation.Test, e.Config.Validation.Test)...)
 	bundle := runner.Run(ctx, taskID, validation.Digest(diff), checks)
-	if len(refusedFormat) != 0 {
-		// Each refusal keeps its own binding -- the bytes the formatter was
+	if len(unsatisfiedFormat) != 0 {
+		// Each original keeps its own binding -- the bytes the formatter was
 		// asked to run against -- and what enters the certifying bundle is a
 		// fresh record about THIS capture: formatting is unsatisfied here
-		// because the formatter was refused before it, and it was never
-		// attempted on these bytes. Errored, so the bundle names these bytes
-		// and still cannot pass; the refused execution is preserved, with its
-		// binding, inside the record rather than rebound to bytes it never saw.
-		derived := make([]validation.Evidence, 0, len(refusedFormat))
-		for _, refused := range refusedFormat {
-			derived = append(derived, validation.Evidence{
-				Kind: refused.Kind, Command: refused.Command, Args: refused.Args,
-				RequestedBy: refused.RequestedBy, ExecutedBy: refused.ExecutedBy + " (not attempted on this capture)",
-				CandidateID: bundle.CandidateID, DiffDigest: bundle.DiffDigest,
-				StartedAt: refused.StartedAt, FinishedAt: refused.FinishedAt,
-				ExitStatus: -1, Outcome: validation.Errored,
-				Detail: validation.SandboxUnavailable + ": formatting is unsatisfied for this capture because the formatter was refused " +
-					"before it and not attempted on these bytes; the refused execution, bound to " + refused.DiffDigest + ": " + refused.Detail,
-			})
+		// because of what the formatter's execution came to before it, and
+		// it was never re-executed on these bytes. Errored, so the bundle
+		// names these bytes and still cannot pass; the original execution is
+		// preserved, with its binding, inside the record rather than rebound
+		// to bytes it never saw.
+		derived := make([]validation.Evidence, 0, len(unsatisfiedFormat))
+		for _, original := range unsatisfiedFormat {
+			derived = append(derived, formatterBlocker(original, bundle))
 		}
 		bundle.Checks = append(derived, bundle.Checks...)
 	}
 	return bundle, diff, nil
+}
+
+// validationRequiresConfinement reports whether validation runs in the
+// required-confinement mode (N4): either flag selects it, and in that mode
+// no required validation evidence may silently disappear.
+func validationRequiresConfinement(c config.Config) bool {
+	return c.Validation.Confined || c.ExecBinding.Enabled
+}
+
+// formatterBlocks decides whether a formatter outcome blocks the capture
+// after it: under required confinement, every outcome but a pass; otherwise
+// none, which is the legacy behaviour the base established.
+func formatterBlocks(confined bool, outcome validation.Outcome) bool {
+	return confined && outcome != validation.Passed
+}
+
+// formatterBlocker derives the record a non-passing formatter execution
+// leaves in the certifying bundle of the capture after it. The original
+// keeps its outcome and its binding, quoted inside; the derived record is
+// Errored (an unsatisfied obligation about these bytes, not an execution on
+// them), bound to the bundle's capture, and says the formatter was not
+// re-executed. A confinement refusal keeps its own classification; any other
+// outcome is named as what it was and never as a sandbox refusal.
+func formatterBlocker(original validation.Evidence, bundle validation.Bundle) validation.Evidence {
+	var detail string
+	if strings.HasPrefix(original.Detail, validation.SandboxUnavailable) {
+		detail = validation.SandboxUnavailable + ": formatting is unsatisfied for this capture because the formatter was refused " +
+			"before it and not attempted on these bytes (not re-executed); the refused execution, bound to " + original.DiffDigest + ": " + original.Detail
+	} else {
+		what := "ended " + string(original.Outcome)
+		if original.ExitStatus >= 0 && (original.Outcome == validation.Failed || original.Outcome == validation.Infrastructure) {
+			what += " (exit " + strconv.Itoa(original.ExitStatus) + ")"
+		}
+		detail = "formatting is unsatisfied for this capture: the configured formatter's execution before it " + what +
+			" and it was not re-executed on these bytes; the original execution, bound to " + original.DiffDigest
+		if original.Detail != "" {
+			detail += ": " + original.Detail
+		}
+		if original.Attribution != "" {
+			detail += " (attribution " + original.Attribution + ")"
+		}
+	}
+	return validation.Evidence{
+		Kind: original.Kind, Command: original.Command, Args: original.Args,
+		RequestedBy: original.RequestedBy, ExecutedBy: original.ExecutedBy + " (not re-executed on this capture)",
+		CandidateID: bundle.CandidateID, DiffDigest: bundle.DiffDigest,
+		StartedAt: original.StartedAt, FinishedAt: original.FinishedAt,
+		ExitStatus: -1, Outcome: validation.Errored, Detail: detail,
+	}
 }
 
 // validationRunner is the one policy every validation Runner the engine

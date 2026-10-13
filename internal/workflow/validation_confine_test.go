@@ -287,6 +287,149 @@ func TestARewriteFollowedByARefusedFormatterKeepsBothObservations(t *testing.T) 
 	}
 }
 
+// RULING-340: under required confinement every configured formatter
+// non-pass blocks certification, as a derived record bound to the capture it
+// blocks; with neither flag set the legacy behaviour is exactly the base's.
+//
+// blockerRig is confinedFormattingRig without the certifying FormatVerify and
+// with passing vet/build/test checks, so that only the formatter's own outcome
+// decides whether the bundle may pass.
+func blockerRig(t *testing.T, launcher string, confined bool) (*Engine, gitx.Repo, string) {
+	t.Helper()
+	e, repo, base := confinedFormattingRig(t, launcher)
+	e.Config.Validation.Confined = confined
+	e.Config.Validation.FormatVerify = nil
+	pass := []config.Command{{Command: "sh", Args: []string{"-c", "true"}}}
+	e.Config.Validation.Vet, e.Config.Validation.Build, e.Config.Validation.Test = pass, pass, pass
+	e.Config.Permissions.RunBuilds, e.Config.Permissions.RunTests = true, true
+	return e, repo, base
+}
+
+// derivedFormatRecord is the one Format record a blocked bundle must open
+// with: Errored, bound to the capture it blocks, naming the original outcome
+// and the original binding, and saying the formatter was not re-executed.
+func derivedFormatRecord(t *testing.T, b validation.Bundle, before, after string, original validation.Outcome) validation.Evidence {
+	t.Helper()
+	if len(b.Checks) == 0 || b.Checks[0].Kind != validation.Format {
+		t.Fatalf("no formatter record opens the bundle: %+v", b)
+	}
+	r := b.Checks[0]
+	if r.Outcome != validation.Errored || r.ExitStatus != -1 || r.DiffDigest != validation.Digest(after) || r.DiffDigest != b.DiffDigest {
+		t.Fatalf("the derived record is not an Errored record bound to the capture it blocks: %+v", r)
+	}
+	if !strings.Contains(r.Detail, string(original)) || !strings.Contains(r.Detail, validation.Digest(before)) || !strings.Contains(r.Detail, "not re-executed") {
+		t.Fatalf("the derived record does not name the original outcome, its binding and the non-execution: %+v", r)
+	}
+	if b.Passed() || !b.Certifies("task-1", validation.Digest(after)) {
+		t.Fatalf("the blocked bundle passes or does not certify the capture: %+v", b)
+	}
+	return r
+}
+
+// W1. A formatter the envelope does not permit, no verifier, every other
+// check passing: the bundle must not pass.
+func TestANotPermittedFormatterBlocksConfinedValidation(t *testing.T) {
+	e, repo, base := blockerRig(t, n4Launcher, true)
+	e.Config.Permissions.RunFormatters = false
+	b, before, after := confinedValidate(t, e, repo, base)
+	if after != before {
+		t.Fatal("a formatter that was not permitted changed the candidate")
+	}
+	r := derivedFormatRecord(t, b, before, after, validation.NotPermitted)
+	if strings.HasPrefix(r.Detail, validation.SandboxUnavailable) {
+		t.Fatalf("a permission refusal was relabelled as a sandbox refusal: %+v", r)
+	}
+	if len(b.Checks) != 4 || b.Checks[1].Outcome != validation.Passed || b.Checks[3].Outcome != validation.Passed {
+		t.Fatalf("the other checks did not run and pass beside the blocker: %+v", b)
+	}
+}
+
+// W2. A formatter that executes and fails on the candidate (the base passes
+// it): the failure is the candidate's, and it blocks the capture after it.
+func TestAFailingFormatterBlocksConfinedValidation(t *testing.T) {
+	e, repo, base := blockerRig(t, n4Launcher, true)
+	e.Config.Validation.Format = []config.Command{{Command: "sh", Args: []string{"-c", "grep -q 'println( 1 )' main.go && exit 3; exit 0"}}}
+	b, before, after := confinedValidate(t, e, repo, base)
+	r := derivedFormatRecord(t, b, before, after, validation.Failed)
+	if !strings.Contains(r.Detail, "exit 3") || strings.HasPrefix(r.Detail, validation.SandboxUnavailable) {
+		t.Fatalf("the derived record does not carry the original exit, or mislabels it: %+v", r)
+	}
+	if len(b.Checks) != 4 || len(b.CandidateFailures()) != 0 {
+		t.Fatalf("the derived blocker is actionable or the other checks are missing: %+v", b)
+	}
+}
+
+// W6. Both flags off: the base's behaviour exactly. A formatter that is not
+// permitted is discarded with its evidence, as it always was, and the bundle
+// of the other checks passes. The gap is the legacy's, preserved on purpose
+// (RULING-340 §5); the confined mode above does not inherit it.
+func TestLegacyValidationStillDiscardsFormatterEvidence(t *testing.T) {
+	e, repo, base := blockerRig(t, n3Wrapper, false)
+	e.Config.Permissions.RunFormatters = false
+	b, before, after := confinedValidate(t, e, repo, base)
+	if after != before || !b.Passed() || len(b.Checks) != 3 {
+		t.Fatalf("legacy validation changed: %+v", b)
+	}
+	for _, c := range b.Checks {
+		if c.Kind == validation.Format || c.ExecutedBy != "sensei-code execution broker" {
+			t.Fatalf("legacy evidence carries a formatter record or a confinement claim: %+v", c)
+		}
+	}
+}
+
+// W7b. A rewriting formatter followed by one that fails on both sides: the
+// rewrite is observed (recapture, verifier passes on it) and the failure,
+// pre-existing as it is, still blocks the new capture with its own binding.
+func TestARewriteFollowedByAFailingFormatterKeepsBothObservations(t *testing.T) {
+	e, repo, base := confinedFormattingRig(t, n4Launcher)
+	e.Config.Validation.Format = append(e.Config.Validation.Format, config.Command{Command: "sh", Args: []string{"-c", "exit 3"}})
+	b, before, after := confinedValidate(t, e, repo, base)
+	if after == before || !strings.Contains(after, formattedMark) {
+		t.Fatalf("the first formatter's rewrite was lost: %q", after)
+	}
+	r := derivedFormatRecord(t, b, before, after, validation.Infrastructure)
+	if len(b.Checks) != 2 || b.Checks[1].Outcome != validation.Passed || !strings.Contains(r.Args[len(r.Args)-1], "exit 3") {
+		t.Fatalf("expected the derived blocker then the passing verifier: %+v", b)
+	}
+}
+
+// W3. A formatter whose execution errored for an ordinary reason (not a
+// sandbox refusal) blocks the capture after it, named as what it was. Under
+// the required-status profile an ordinary error reaches the formatter only
+// through context cancellation, which also ends the recapture every path
+// witness depends on, so this witness drives the derivation directly with
+// the record such an execution leaves (Runner.one: Errored, exit -1, the
+// context error as detail) and the bundle of the capture after it.
+func TestAnErroredFormatterBlocksConfinedValidation(t *testing.T) {
+	before, after := validation.Digest("before"), validation.Digest("after")
+	original := validation.Evidence{Kind: validation.Format, Command: "gofmt", Args: []string{"-w", "main.go"},
+		RequestedBy: "sensei-code workflow", ExecutedBy: "sensei-code execution broker under confinement profile d2-test",
+		CandidateID: "task-1", DiffDigest: before, ExitStatus: -1, Outcome: validation.Errored,
+		Detail: "the check did not finish: context deadline exceeded"}
+	if !formatterBlocks(true, original.Outcome) || formatterBlocks(false, original.Outcome) || formatterBlocks(true, validation.Passed) {
+		t.Fatal("an ordinary error does not block under confinement, or blocks in legacy mode, or a pass blocks")
+	}
+	for _, o := range []validation.Outcome{validation.NotPermitted, validation.Failed, validation.Infrastructure, validation.Errored} {
+		if !formatterBlocks(true, o) {
+			t.Fatalf("%s does not block under confinement", o)
+		}
+	}
+	b := validation.Bundle{CandidateID: "task-1", DiffDigest: after, Checks: []validation.Evidence{{Kind: validation.Vet, Outcome: validation.Passed, CandidateID: "task-1", DiffDigest: after}}}
+	r := formatterBlocker(original, b)
+	b.Checks = append([]validation.Evidence{r}, b.Checks...)
+	if r.Outcome != validation.Errored || r.ExitStatus != -1 || r.DiffDigest != after || r.CandidateID != "task-1" ||
+		strings.HasPrefix(r.Detail, validation.SandboxUnavailable) || !strings.Contains(r.Detail, string(validation.Errored)) ||
+		!strings.Contains(r.Detail, before) || !strings.Contains(r.Detail, "not re-executed") || !strings.Contains(r.Detail, original.Detail) {
+		t.Fatalf("the derived record misnames the errored execution: %+v", r)
+	}
+	if b.Passed() || !b.Certifies("task-1", after) || len(b.CandidateFailures()) != 0 || len(b.Unactionable()) != 1 {
+		t.Fatalf("the derived blocker does not block, or is actionable: %+v", b)
+	}
+	if original.DiffDigest != before {
+		t.Fatal("the original record was rebound")
+	}
+}
+
 // A6. Default-off parity: no confinement selected, the unconfined broker,
 // claiming nothing about confinement.
 func TestDefaultOffValidationIsUnchanged(t *testing.T) {
