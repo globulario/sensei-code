@@ -11,6 +11,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -252,7 +253,10 @@ func TestAnOversizedStatusCannotWaitForItsWriter(t *testing.T) {
 	if x.refused == "" || !strings.Contains(x.refused, "too large") || x.err != nil {
 		t.Fatalf("an oversized status was not refused as too large: %+v", x)
 	}
-	if took > 3*time.Second {
+	// The wrapper is terminated at the bound; its pipeline children may keep
+	// the output pipe for one grace. The regression signature is the
+	// fixture's own eight-second ceiling.
+	if took > 2*statusGrace+time.Second {
 		t.Fatalf("the oversized status took %s to refuse: the broker waited for the blocked writer", took)
 	}
 }
@@ -339,5 +343,67 @@ func TestAnIncompleteCaptureIsNotAResultWhateverTheExit(t *testing.T) {
 	e := confinedRun(t, wrapper(t, body), t.TempDir(), Check{Kind: Test, Command: "true"})
 	if !refused(e) || e.Outcome == Failed {
 		t.Fatalf("an incomplete capture became evidence: %+v", e)
+	}
+}
+
+// RULING-343 (Codex P2 on 8d9acdf). A status past its bound can never be a
+// record: the invocation is over the moment the bound is crossed. The broker
+// ends it there -- it terminates the wrapper it started, stops reading, and
+// refuses -- rather than draining a stream that may never end.
+
+// unboundedStatus is a launcher that reads the nonce and then writes to the
+// status descriptor forever. It never exits on its own: only the broker's
+// termination, or the test's context, ends it.
+const unboundedStatus = "#!/bin/sh\nread nonce <&5\nexec 5<&-\nwhile :; do echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; done >&4\n"
+
+// B1-D. The infinite status writer is refused as oversized promptly, by the
+// broker's own action: the context is still live when the result returns,
+// so the completion is overflow-triggered, not the test's deadline.
+func TestAnUnboundedStatusWriterIsTerminatedAndRefused(t *testing.T) {
+	x, _, took := boundedExecute(t, wrapper(t, unboundedStatus), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+	if x.err != nil {
+		t.Fatalf("the broker did not end the invocation itself; only the context did after %s: %+v", took, x)
+	}
+	if x.refused == "" || !strings.Contains(x.refused, "too large") {
+		t.Fatalf("an unbounded status writer was not refused as too large: %+v", x)
+	}
+	if took > 2*statusGrace+time.Second {
+		t.Fatalf("the oversized-status refusal took %s", took)
+	}
+}
+
+// A record of exactly the bound, malformed: read whole, refused on its
+// parsing, never as oversized.
+func TestAnExactlyBoundedMalformedRecordIsRefusedOnItsParsing(t *testing.T) {
+	body := "#!/bin/sh\nread nonce <&5\nexec 5<&-\nhead -c " + strconv.Itoa(maxStatus) + " /dev/zero | tr '\\0' x >&4\nexit 0\n"
+	x, _, took := boundedExecute(t, wrapper(t, body), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+	if x.err != nil || x.refused == "" || strings.Contains(x.refused, "too large") || !strings.Contains(x.refused, "not exactly one record") {
+		t.Fatalf("a bounded malformed record was not refused on its parsing: %+v (%s)", x, took)
+	}
+}
+
+// A descendant keeps the status descriptor after the wrapper has written a
+// valid record and exited: bounded by the grace, and not a result.
+func TestAStatusDescriptorHeldByADescendantIsBounded(t *testing.T) {
+	body := "#!/bin/sh\nread nonce <&5\nexec 5<&-\n( exec 3<&- 5<&- 1>&- 2>&-; sleep 8 ) &\necho \"" + StatusProtocol + " $nonce ran 0\" >&4\nexit 0\n"
+	x, _, took := boundedExecute(t, wrapper(t, body), t.TempDir(), Check{Kind: Test, Command: "true"}, 20*time.Second, nil)
+	if took > 2*statusGrace+time.Second {
+		t.Fatalf("the broker waited %s for a descendant holding the status descriptor", took)
+	}
+	if x.refused == "" || x.err != nil || !strings.Contains(x.refused, "held open") {
+		t.Fatalf("a status descriptor held past the exit was accepted: %+v", x)
+	}
+}
+
+// An ordinary valid check that runs longer than the grace is never touched
+// by it: the grace starts at the wrapper's exit, not at the start.
+func TestALongRunningValidCheckIsNotCutByTheGrace(t *testing.T) {
+	long := 2*statusGrace + 500*time.Millisecond
+	x, _, took := boundedExecute(t, wrapper(t, passThrough), t.TempDir(), Check{Kind: Test, Command: "sh", Args: []string{"-c", "sleep " + strconv.FormatFloat(long.Seconds(), 'f', 1, 64) + "; echo done"}}, 30*time.Second, nil)
+	if x.refused != "" || x.err != nil || x.exit != 0 || !strings.Contains(string(x.output), "done") {
+		t.Fatalf("a long-running valid check was cut or misread: %+v", x)
+	}
+	if took < long {
+		t.Fatalf("the check returned after %s, before it could have finished", took)
 	}
 }

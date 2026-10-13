@@ -393,7 +393,10 @@ type Confinement struct {
 // and, for "ran", exits with that same status. Anything else -- no record, two
 // records, a wrong nonce, a status the wrapper's own exit contradicts, a
 // descriptor still held open after the exit -- is a refusal: whatever ran is
-// not evidence about the candidate.
+// not evidence about the candidate. A record past its bound ends the
+// execution: the broker terminates the wrapper the moment the bound is
+// crossed and refuses, so a launcher cannot hold validation by writing
+// without end.
 //
 // The nonce binds a record to this execution; it does not by itself
 // authenticate the writer in a process view the confined command shares. A
@@ -535,7 +538,8 @@ func exited(err error, out []byte) execution {
 // violation, and what was read by then is not a result.
 const statusGrace = 2 * time.Second
 
-// maxStatus bounds the status record.
+// maxStatus bounds the status record: past it the record can never be valid
+// and the invocation is terminated.
 const maxStatus = 4096
 
 // launch runs the check through the wrapper open() verified, and owns it.
@@ -604,12 +608,16 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 	}
 	got, captured := make(chan read, 1), make(chan read, 1)
 	go func() {
-		// Read to the bound, then keep draining: a writer past the bound is
-		// never read as a record, and it is never left blocked on a pipe
-		// this broker stopped reading while it waits for that writer to exit.
+		// Read to the bound and no further. A status past the bound can
+		// never be a record, so the invocation is over the moment the bound
+		// is crossed: the wrapper this broker started is terminated here,
+		// while it may still be running and before Wait could return, and
+		// nothing more is read. Draining a stream that may never end has no
+		// evidentiary value and is exactly how a malformed launcher would
+		// hold validation forever (RULING-343).
 		b, err := io.ReadAll(io.LimitReader(statusR, maxStatus+1))
 		if err == nil && len(b) > maxStatus {
-			_, err = io.Copy(io.Discard, statusR)
+			_ = cmd.Process.Kill()
 		}
 		got <- read{b, err}
 	}()
@@ -635,6 +643,10 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 		return execution{refused: "the confinement wrapper reported no valid launcher status (" + StatusProtocol + "): " + why + "; whatever ran is not evidence"}
 	}
 	switch {
+	case len(rec.b) > maxStatus:
+		// The violation that ended the invocation: named first, whatever the
+		// terminated wrapper's exit or its descendants left behind.
+		return refuse("the status record is too large, so the wrapper was terminated")
 	case capture.err != nil:
 		// The wrapper exited but something it started kept the output pipe
 		// past the grace: the capture ends where the broker cut it, and an
@@ -643,8 +655,6 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 		return refuse("an output descriptor was still held open after the wrapper exited, so the capture is incomplete")
 	case rec.err != nil:
 		return refuse("the status descriptor was still held open after the wrapper exited")
-	case len(rec.b) > maxStatus:
-		return refuse("the status record is too large")
 	}
 	ran, status, reason, perr := parseStatus(rec.b, token)
 	if perr != nil {
