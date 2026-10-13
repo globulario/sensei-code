@@ -31,13 +31,16 @@ package validation
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -329,6 +332,10 @@ type Runner struct {
 	// with SandboxUnavailable, and the check is never run on the host instead.
 	// Nil is the unconfined broker every existing caller uses.
 	Confine *Confinement
+	// Refusal, when set, refuses every check with SandboxUnavailable and
+	// this reason before anything runs. It is how a caller that requires
+	// confinement it cannot establish says so without a host fallback.
+	Refusal string
 	// RequestedBy overrides the requesting party recorded on evidence. Empty
 	// is the workflow.
 	RequestedBy string
@@ -353,12 +360,60 @@ type Confinement struct {
 	// FailureExit is the exit status by which the wrapper reports that IT
 	// failed rather than the confined command. Zero means 125, the
 	// convention env, podman and docker use for the same distinction.
+	// Under RequireStatus it is not consulted.
 	FailureExit int
+	// RequireStatus selects the launcher status protocol (StatusProtocol):
+	// the wrapper's own record on a status descriptor, never an exit code,
+	// says whether the confined command ran and how it exited. A wrapper that
+	// writes no valid record is refused, so one that does not speak the
+	// protocol fails closed. Validation of a candidate always sets it; false
+	// is the N3 tool-time exit-code convention.
+	RequireStatus bool
 }
+
+// StatusProtocol is the launcher status protocol a RequireStatus wrapper
+// speaks. The wrapper is started with:
+//
+//   - fd 3: the verified wrapper itself (what the kernel executes);
+//   - fd 4: the status descriptor, write-only;
+//   - fd 5: the nonce descriptor, one line holding this execution's nonce;
+//   - an environment of exactly PATH and the SENSEI_CONFINE_* variables
+//     (statusEnv), which name the protocol, the workspace, its role
+//     (candidate or baseline), whether it is writable, and the check kind.
+//
+// The wrapper is the supervisor of the confined command, and the two
+// capabilities are its alone: it reads the nonce from fd 5, keeps the status
+// descriptor fd 4 for itself, and starts the confined command with fds 3, 4
+// and 5 closed, so the command can neither learn the nonce nor write a status.
+// After the command ends the supervisor writes exactly one line to fd 4:
+//
+//	sensei-confine-status/1 <nonce> ran <exit 0-255>
+//	sensei-confine-status/1 <nonce> refused <reason>
+//
+// and, for "ran", exits with that same status. Anything else -- no record, two
+// records, a wrong nonce, a status the wrapper's own exit contradicts, a
+// descriptor still held open after the exit -- is a refusal: whatever ran is
+// not evidence about the candidate.
+//
+// The nonce binds a record to this execution; it does not by itself
+// authenticate the writer in a process view the confined command shares. A
+// command in the supervisor's pid namespace with the same uid could reach the
+// supervisor's open descriptors through /proc. It still cannot forge a pass
+// (it does not know the nonce, and a second record refuses), but it could turn
+// its own failure into a refusal. Pid and descriptor isolation of the confined
+// command from its supervisor is therefore a required property of the real
+// execution profile, as are the interpreter the wrapper's shebang names and
+// the tools its PATH resolves: the pinned digest proves the wrapper's bytes,
+// not what those bytes run.
+const StatusProtocol = "sensei-confine-status/1"
 
 // Describe names the profile as evidence records it.
 func (c Confinement) Describe() string {
-	return fmt.Sprintf("profile %s via %s (sha256:%s)", c.Profile, c.Command, strings.TrimPrefix(strings.ToLower(strings.TrimSpace(c.SHA256)), "sha256:"))
+	d := fmt.Sprintf("profile %s via %s (sha256:%s)", c.Profile, c.Command, strings.TrimPrefix(strings.ToLower(strings.TrimSpace(c.SHA256)), "sha256:"))
+	if c.RequireStatus {
+		d += " with launcher status " + StatusProtocol
+	}
+	return d
 }
 
 func (c Confinement) failureExit() int {
@@ -418,19 +473,251 @@ func (c Confinement) commandFor(ctx context.Context, wrapper *os.File, dir strin
 	return cmd
 }
 
-// command builds the process for one check, confined when the runner is.
-// An error means nothing may run. The caller releases it once it has run.
-func (r Runner) command(ctx context.Context, dir string, check Check) (*exec.Cmd, error) {
+// role is whose bytes an execution runs against. The baseline is never the
+// candidate's workspace, and the launcher is told which one it is given.
+type role string
+
+const (
+	candidateRole role = "candidate"
+	baselineRole  role = "baseline"
+)
+
+// execution is the typed result of running one check: exactly one of a
+// refusal, a process that could not be run, or the command's own exit status.
+//
+// refused is launcher-originated only -- the broker's own pre-run checks, or
+// under RequireStatus the launcher's record or the absence of a valid one. No
+// exit status the candidate can produce is read as a refusal under the status
+// protocol, so a candidate exiting 125 is a candidate exiting 125.
+type execution struct {
+	refused string
+	err     error
+	exit    int
+	output  []byte
+}
+
+// execute is the one execution primitive: every candidate check and every
+// baseline attribution runs through it, confined exactly as the runner is.
+func (r Runner) execute(ctx context.Context, dir string, who role, check Check) execution {
+	if r.Refusal != "" {
+		return execution{refused: r.Refusal}
+	}
 	if r.Confine == nil {
 		cmd := exec.CommandContext(ctx, check.Command, check.Args...)
 		cmd.Dir = dir
-		return cmd, nil
+		var out bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &out, &out
+		return exited(cmd.Run(), out.Bytes())
 	}
 	wrapper, err := r.Confine.open()
 	if err != nil {
-		return nil, err
+		return execution{refused: err.Error()}
 	}
-	return r.Confine.commandFor(ctx, wrapper, dir, check), nil
+	return r.Confine.launch(ctx, wrapper, dir, who, check)
+}
+
+// exited reads a finished unconfined (or legacy-confined) process.
+func exited(err error, out []byte) execution {
+	x := execution{output: out}
+	if err != nil {
+		var exitErr *exec.ExitError
+		if asExitError(err, &exitErr) {
+			x.exit = exitErr.ExitCode()
+		} else {
+			x.err = err
+		}
+	}
+	return x
+}
+
+// statusGrace bounds how long the status and output descriptors may stay open
+// after the wrapper exits: one held open by anything else is a protocol
+// violation, and what was read by then is not a result.
+const statusGrace = 2 * time.Second
+
+// maxStatus bounds the status record.
+const maxStatus = 4096
+
+// launch runs the check through the wrapper open() verified, and owns it.
+func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, who role, check Check) execution {
+	cmd := c.commandFor(ctx, wrapper, dir, check)
+	defer release(cmd)
+	var out bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &out
+	if !c.RequireStatus {
+		err := cmd.Run()
+		var exitErr *exec.ExitError
+		// A wrapper killed by a signal has no exit status (ExitCode -1): it
+		// is the wrapper's failure as much as its own failure exit is, and
+		// fails closed rather than becoming the candidate's.
+		if err != nil && (!asExitError(err, &exitErr) || exitErr.ExitCode() < 0 || exitErr.ExitCode() == c.failureExit()) {
+			return execution{refused: "the confinement wrapper failed: " + err.Error()}
+		}
+		return exited(err, out.Bytes())
+	}
+
+	nonce := make([]byte, 16)
+	if _, err := rand.Read(nonce); err != nil {
+		return execution{refused: "no status nonce could be drawn: " + err.Error()}
+	}
+	token := hex.EncodeToString(nonce)
+	statusR, statusW, err := os.Pipe()
+	if err != nil {
+		return execution{refused: "no status descriptor: " + err.Error()}
+	}
+	defer statusR.Close()
+	nonceR, nonceW, err := os.Pipe()
+	if err != nil {
+		statusW.Close()
+		return execution{refused: "no nonce descriptor: " + err.Error()}
+	}
+	cmd.ExtraFiles = append(cmd.ExtraFiles, statusW, nonceR)
+	cmd.Env = c.statusEnv(dir, who, check)
+	_, werr := io.WriteString(nonceW, token+"\n")
+	nonceW.Close()
+	if werr != nil {
+		return execution{refused: "the nonce could not be written: " + werr.Error()}
+	}
+	// The output pipe is the broker's own, like the status pipe: Wait then
+	// returns as soon as the wrapper has exited (or been killed), and every
+	// read after that is bounded by the grace rather than by whatever the
+	// wrapper left holding a descriptor. A running build is never subject to
+	// the grace: the bound starts at the exit.
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		return execution{refused: "no output descriptor: " + err.Error()}
+	}
+	defer outR.Close()
+	cmd.Stdout, cmd.Stderr = outW, outW
+	if err := cmd.Start(); err != nil {
+		outW.Close()
+		return execution{refused: "the confinement wrapper could not be started: " + err.Error()}
+	}
+	// Only the wrapper and what it starts hold the write ends now: EOF is
+	// the last close.
+	statusW.Close()
+	nonceR.Close()
+	outW.Close()
+	type read struct {
+		b   []byte
+		err error
+	}
+	got, captured := make(chan read, 1), make(chan read, 1)
+	go func() {
+		// Read to the bound, then keep draining: a writer past the bound is
+		// never read as a record, and it is never left blocked on a pipe
+		// this broker stopped reading while it waits for that writer to exit.
+		b, err := io.ReadAll(io.LimitReader(statusR, maxStatus+1))
+		if err == nil && len(b) > maxStatus {
+			_, err = io.Copy(io.Discard, statusR)
+		}
+		got <- read{b, err}
+	}()
+	go func() {
+		b, err := io.ReadAll(outR)
+		captured <- read{b, err}
+	}()
+	waitErr := cmd.Wait()
+	// The wrapper is gone. Anything it left holding the status or the output
+	// descriptor now has the grace, after which the record is read as
+	// whatever it was and the capture is what it is: incomplete.
+	deadline := time.Now().Add(statusGrace)
+	_ = statusR.SetReadDeadline(deadline)
+	_ = outR.SetReadDeadline(deadline)
+	rec, capture := <-got, <-captured
+	out.Reset()
+	out.Write(capture.b)
+
+	refuse := func(why string) execution {
+		if ctx.Err() != nil {
+			return execution{err: fmt.Errorf("the check did not finish: %w", ctx.Err()), output: out.Bytes()}
+		}
+		return execution{refused: "the confinement wrapper reported no valid launcher status (" + StatusProtocol + "): " + why + "; whatever ran is not evidence"}
+	}
+	switch {
+	case capture.err != nil:
+		// The wrapper exited but something it started kept the output pipe
+		// past the grace: the capture ends where the broker cut it, and an
+		// incomplete capture is not a result, whatever the status and the
+		// exit say.
+		return refuse("an output descriptor was still held open after the wrapper exited, so the capture is incomplete")
+	case rec.err != nil:
+		return refuse("the status descriptor was still held open after the wrapper exited")
+	case len(rec.b) > maxStatus:
+		return refuse("the status record is too large")
+	}
+	ran, status, reason, perr := parseStatus(rec.b, token)
+	if perr != nil {
+		return refuse(perr.Error())
+	}
+	if !ran {
+		return execution{refused: "the confinement launcher refused: " + reason}
+	}
+	wrapperExit := 0
+	if waitErr != nil {
+		var exitErr *exec.ExitError
+		if !asExitError(waitErr, &exitErr) || exitErr.ExitCode() < 0 {
+			return refuse("the wrapper recorded exit " + strconv.Itoa(status) + " but itself ended: " + waitErr.Error())
+		}
+		wrapperExit = exitErr.ExitCode()
+	}
+	if wrapperExit != status {
+		return refuse(fmt.Sprintf("the wrapper recorded exit %d but exited %d", status, wrapperExit))
+	}
+	return execution{exit: status, output: out.Bytes()}
+}
+
+// parseStatus reads exactly one StatusProtocol record bound to nonce.
+func parseStatus(b []byte, nonce string) (ran bool, exit int, reason string, err error) {
+	s := string(b)
+	if s == "" {
+		return false, 0, "", errors.New("no status record was written")
+	}
+	if !strings.HasSuffix(s, "\n") || strings.Count(s, "\n") != 1 {
+		return false, 0, "", errors.New("the status is not exactly one record")
+	}
+	f := strings.SplitN(strings.TrimSuffix(s, "\n"), " ", 4)
+	if len(f) < 3 || f[0] != StatusProtocol {
+		return false, 0, "", errors.New("the status record is not " + StatusProtocol)
+	}
+	if f[1] != nonce {
+		return false, 0, "", errors.New("the status record is not bound to this execution's nonce")
+	}
+	switch {
+	case f[2] == "ran" && len(f) == 4:
+		n, cerr := strconv.Atoi(f[3])
+		if cerr != nil || n < 0 || n > 255 || strconv.Itoa(n) != f[3] {
+			return false, 0, "", errors.New("the status record has no valid exit status")
+		}
+		return true, n, "", nil
+	case f[2] == "refused":
+		reason = "no reason given"
+		if len(f) == 4 && strings.TrimSpace(f[3]) != "" {
+			reason = strings.TrimSpace(f[3])
+		}
+		return false, 0, reason, nil
+	}
+	return false, 0, "", errors.New("the status record is neither ran nor refused")
+}
+
+// statusEnv is the whole environment a RequireStatus wrapper is started with:
+// nothing of the host's but PATH, and nothing the repository controls.
+func (c Confinement) statusEnv(dir string, who role, check Check) []string {
+	mode := "ro"
+	if check.Mutates {
+		mode = "rw"
+	}
+	return []string{
+		"PATH=" + os.Getenv("PATH"),
+		"SENSEI_CONFINE_PROTOCOL=" + StatusProtocol,
+		"SENSEI_CONFINE_PROFILE=" + c.Profile,
+		"SENSEI_CONFINE_STATUS_FD=4",
+		"SENSEI_CONFINE_NONCE_FD=5",
+		"SENSEI_CONFINE_ROLE=" + string(who),
+		"SENSEI_CONFINE_WORKSPACE=" + dir,
+		"SENSEI_CONFINE_WORKSPACE_MODE=" + mode,
+		"SENSEI_CONFINE_CHECK=" + string(check.Kind),
+	}
 }
 
 // release closes the descriptors a command was given.
@@ -488,37 +775,22 @@ func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check C
 		// The executor actually used, with the pinned profile it ran under:
 		// carried in a field every ValidationRun record already declares.
 		e.ExecutedBy = "sensei-code execution broker under confinement " + r.Confine.Describe()
+	} else if r.Refusal != "" {
+		e.ExecutedBy = "sensei-code execution broker (confinement required and unavailable; nothing executed)"
 	}
-	cmd, cerr := r.command(ctx, r.Workspace, check)
-	if cerr != nil {
-		// Refused before anything ran: there is no unconfined fallback.
-		e.FinishedAt = now().UTC()
+	x := r.execute(ctx, r.Workspace, candidateRole, check)
+	e.FinishedAt = now().UTC()
+	if x.refused != "" {
+		// Refused, by the broker or the launcher: there is no unconfined
+		// fallback, and whatever the confined command did or did not do,
+		// nothing here is evidence about the candidate.
 		e.Outcome = Errored
 		e.ExitStatus = -1
-		e.Detail = SandboxUnavailable + ": " + cerr.Error() + "; the check was not run"
+		e.Detail = SandboxUnavailable + ": " + x.refused + "; the check was not run as evidence"
 		return e, ""
 	}
-	var out bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &out
-	err := cmd.Run()
-	release(cmd)
-	e.FinishedAt = now().UTC()
-	if r.Confine != nil && err != nil {
-		var exitErr *exec.ExitError
-		// A wrapper killed by a signal has no exit status (ExitCode -1): it
-		// is the wrapper's failure as much as its own failure exit is, and
-		// fails closed rather than becoming the candidate's.
-		if !asExitError(err, &exitErr) || exitErr.ExitCode() < 0 || exitErr.ExitCode() == r.Confine.failureExit() {
-			// The wrapper itself failed. Whatever the confined command did or
-			// did not do, nothing here is evidence about the candidate.
-			e.Outcome = Errored
-			e.ExitStatus = -1
-			e.Detail = SandboxUnavailable + ": the confinement wrapper failed: " + err.Error()
-			return e, ""
-		}
-	}
 
-	body := out.String()
+	body := string(x.output)
 	full := body
 	sum := sha256.Sum256([]byte(body))
 	e.OutputDigest = "sha256:" + hex.EncodeToString(sum[:])
@@ -528,25 +800,23 @@ func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check C
 	e.Output = body
 
 	switch {
-	case err == nil && check.FailIfOutput && strings.TrimSpace(body) != "":
-		// Exited zero but reported a problem on stdout.
-		e.Outcome = Failed
-		e.Detail = "the check exited zero but reported output, which this check treats as failure"
-		return r.attribute(ctx, check, e), full
-	case err == nil:
-		e.Outcome = Passed
-	default:
-		var exitErr *exec.ExitError
-		if ok := asExitError(err, &exitErr); ok {
-			e.ExitStatus = exitErr.ExitCode()
-			e.Outcome = Failed
-			return r.attribute(ctx, check, e), full
-		}
+	case x.err != nil:
 		// Could not run at all: missing binary, deadline, permission. Not a
 		// failure of the candidate and definitely not a pass.
 		e.ExitStatus = -1
 		e.Outcome = Errored
-		e.Detail = err.Error()
+		e.Detail = x.err.Error()
+	case x.exit == 0 && check.FailIfOutput && strings.TrimSpace(body) != "":
+		// Exited zero but reported a problem on stdout.
+		e.Outcome = Failed
+		e.Detail = "the check exited zero but reported output, which this check treats as failure"
+		return r.attribute(ctx, check, e), full
+	case x.exit == 0:
+		e.Outcome = Passed
+	default:
+		e.ExitStatus = x.exit
+		e.Outcome = Failed
+		return r.attribute(ctx, check, e), full
 	}
 	return e, full
 }
@@ -581,16 +851,19 @@ func (r Runner) attribute(ctx context.Context, check Check, e Evidence) Evidence
 		return e
 	}
 
-	cmd, cerr := r.command(ctx, base, check)
-	if cerr != nil {
+	x := r.execute(ctx, base, baselineRole, check)
+	if x.refused != "" {
+		// The base's own confinement failed. That says nothing about the
+		// candidate, so the failure is neither the candidate's nor
+		// pre-existing: it is unattributed and certifies nothing, and it is
+		// an environment problem no revision of the candidate can fix.
+		e.Outcome = Errored
 		e.Attribution = "unattributed"
-		e.Detail = "the base could not be run under the same confinement, so this failure could not be attributed: " + cerr.Error()
+		e.Detail = SandboxUnavailable + " (baseline): the base could not be run under the same confinement, so this failure (exit " +
+			strconv.Itoa(e.ExitStatus) + ") was not attributed to the candidate or to the base: " + x.refused
 		return e
 	}
-	var out bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &out
-	baseErr := cmd.Run()
-	release(cmd)
+	out := bytes.NewBuffer(x.output)
 
 	// The base is judged under the same Check semantics as the candidate, and
 	// "the same way" means the same exit status and the same complete combined
@@ -598,19 +871,27 @@ func (r Runner) attribute(ctx context.Context, check Check, e Evidence) Evidence
 	// reproduced.
 	baseStatus := 0
 	switch {
-	case baseErr == nil:
+	case x.err != nil:
+		e.Attribution = "unattributed"
+		e.Detail = "the check could not be run against the base commit, so this failure could not be attributed: " + x.err.Error()
+		if r.Confine != nil && r.Confine.RequireStatus {
+			// Under the required-status profile a baseline that was interrupted
+			// or could not run is an environment outcome: the candidate's own
+			// exit stays recorded as the observation it is, but the failure is
+			// nobody's to act on and certifies nothing. The legacy convention
+			// keeps its reading of the same case.
+			e.Outcome = Errored
+			e.Detail = "the baseline execution did not complete under the required confinement, so this failure (exit " +
+				strconv.Itoa(e.ExitStatus) + ") was not attributed to the candidate or to the base: " + x.err.Error()
+		}
+		return e
+	case x.exit == 0:
 		if !check.FailIfOutput || strings.TrimSpace(out.String()) == "" {
 			e.Attribution = "candidate"
 			return e
 		}
 	default:
-		var exitErr *exec.ExitError
-		if !asExitError(baseErr, &exitErr) {
-			e.Attribution = "unattributed"
-			e.Detail = "the check could not be run against the base commit, so this failure could not be attributed: " + baseErr.Error()
-			return e
-		}
-		baseStatus = exitErr.ExitCode()
+		baseStatus = x.exit
 	}
 	sum := sha256.Sum256(out.Bytes())
 	if baseStatus == e.ExitStatus && "sha256:"+hex.EncodeToString(sum[:]) == e.OutputDigest {

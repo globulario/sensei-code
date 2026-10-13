@@ -232,6 +232,17 @@ type Validation struct {
 	Vet   []Command `json:"vet"`
 	Build []Command `json:"build"`
 	Test  []Command `json:"test"`
+	// Confined selects confined validation (N4): every command above, the
+	// formatter included, and every baseline attribution and named required
+	// test runs under the pinned D2 profile through the launcher status
+	// protocol, or is refused. ExecBinding.Enabled makes it mandatory
+	// whatever this says. False with ExecBinding off is the unconfined
+	// broker, and its evidence never claims confinement.
+	Confined bool `json:"confined,omitempty"`
+	// Confinement is the pinned D2 profile confined validation runs under.
+	// Unset is ExecBinding.Confinement; with neither, every check is refused.
+	// It never means unconfined.
+	Confinement Confinement `json:"confinement,omitzero"`
 }
 
 // ReviewRoster is the bounded set of independent reviewers, in fallback order.
