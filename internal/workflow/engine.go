@@ -12987,7 +12987,7 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	// execution after them and published as nothing else.
 	confined := validationRequiresConfinement(e.Config)
 	var unsatisfiedFormat []validation.Evidence
-	if formats := checksOf(validation.Format, e.Config.Validation.Format); len(formats) != 0 {
+	if formats := phaseChecks(validation.Format, e.Config.Validation.Format, true); len(formats) != 0 {
 		before := validation.Digest(diff)
 		var stages [][]validation.Check
 		if confined {
@@ -13033,10 +13033,10 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	var checks []validation.Check
 	// The formatter's own evidence was discarded above; this proves formatting
 	// holds for the bytes about to be reviewed, bound to the final digest.
-	checks = append(checks, checksOf(validation.Format, e.Config.Validation.FormatVerify)...)
-	checks = append(checks, checksOf(validation.Vet, e.Config.Validation.Vet)...)
-	checks = append(checks, checksOf(validation.Build, e.Config.Validation.Build)...)
-	checks = append(checks, checksOf(validation.Test, e.Config.Validation.Test)...)
+	checks = append(checks, phaseChecks(validation.Format, e.Config.Validation.FormatVerify, false)...)
+	checks = append(checks, phaseChecks(validation.Vet, e.Config.Validation.Vet, false)...)
+	checks = append(checks, phaseChecks(validation.Build, e.Config.Validation.Build, false)...)
+	checks = append(checks, phaseChecks(validation.Test, e.Config.Validation.Test, false)...)
 	bundle := runner.Run(ctx, taskID, validation.Digest(diff), checks)
 	if len(unsatisfiedFormat) != 0 {
 		// Each original keeps its own binding -- the bytes the formatter was
@@ -13054,6 +13054,24 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 		bundle.Checks = append(derived, bundle.Checks...)
 	}
 	return bundle, diff, nil
+}
+
+// phaseChecks builds the checks of one validation phase with the write
+// authority that phase has, which is the phase's and never the command's:
+// the formatter phase rewrites the candidate; the verifier, vet, build and
+// test phases do not. Under confinement that authority is the workspace mode
+// the launcher is asked for, so a verifier that reports by its exit status
+// must not be handed a writable candidate, and a formatter that reports by
+// its output must not be refused one. FailIfOutput says how a command's
+// output is read and nothing about what it may write (RULING-346).
+// checksOf's own inference is left to its one caller outside validation
+// (the N3 tool-time check), whose contract this does not decide.
+func phaseChecks(kind validation.CheckKind, commands []config.Command, mutates bool) []validation.Check {
+	checks := checksOf(kind, commands)
+	for i := range checks {
+		checks[i].Mutates = mutates
+	}
+	return checks
 }
 
 // validationRequiresConfinement reports whether validation runs in the

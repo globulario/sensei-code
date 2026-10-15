@@ -563,6 +563,127 @@ func TestLegacyRunsTheFormatterListAsOneExecution(t *testing.T) {
 	}
 }
 
+// RULING-346: the write authority a check asks of the launcher (the
+// workspace mode) follows the validation PHASE, never how the command's
+// output is read. The formatter phase mutates; the verifier, vet, build and
+// test phases do not. FailIfOutput says how to read output and nothing else.
+//
+// modeWitness is a command that leaves the workspace mode the launcher gave
+// it in a file outside the worktree (the launcher hands its environment to
+// the command), so the mode a fixture actually received is what is asserted,
+// not a locally built Check.
+func modeWitness(t *testing.T, name, extra string) (config.Command, func() string) {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), name)
+	cmd := config.Command{Command: "sh", Args: []string{"-c", "printf '%s' \"$SENSEI_CONFINE_WORKSPACE_MODE\" > " + p + "; " + extra}}
+	return cmd, func() string {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return "(not run)"
+		}
+		return string(b)
+	}
+}
+
+// W12. A verifier that reports by its exit status (FailIfOutput false) asks
+// for a read-only workspace: under a launcher that refuses every rw request
+// it still runs, passes, and saw "ro". On a head that infers mutability from
+// FailIfOutput the verifier asks for rw and is refused.
+func TestAFormatVerifierAsksForAReadOnlyWorkspace(t *testing.T) {
+	e, repo, base := blockerRig(t, n4RefusingLauncher("rw*"), true)
+	verify, mode := modeWitness(t, "verify-mode", "exit 0")
+	e.Config.Validation.Format = nil
+	e.Config.Validation.FormatVerify = []config.Command{verify}
+	b, before, after := confinedValidate(t, e, repo, base)
+	if after != before {
+		t.Fatal("a verifier changed the candidate")
+	}
+	if got := mode(); got != "ro" {
+		t.Fatalf("the verifier was given workspace mode %q, not ro: %+v", got, b)
+	}
+	if len(b.Checks) != 4 || b.Checks[0].Kind != validation.Format || b.Checks[0].Outcome != validation.Passed ||
+		!strings.Contains(b.Checks[0].ExecutedBy, validation.StatusProtocol) {
+		t.Fatalf("the read-only verifier did not run and pass under the launcher: %+v", b)
+	}
+	if !b.Passed() || !b.Certifies("task-1", validation.Digest(after)) {
+		t.Fatalf("the bundle with a read-only verifier does not pass: %+v", b)
+	}
+}
+
+// W13. A formatter that reports by its output (FailIfOutput true) asks for a
+// writable workspace: under a launcher that refuses a read-only request for
+// it, it runs with "rw", rewrites the candidate, and its silence is read as
+// a pass. On a head that infers mutability from FailIfOutput the formatter
+// asks for ro and is refused.
+func TestAFormatterAsksForAWritableWorkspace(t *testing.T) {
+	e, repo, base := confinedFormattingRig(t, n4RefusingLauncher("ro*format-mode*"))
+	format, mode := modeWitness(t, "format-mode", "gofmt -w main.go")
+	format.FailIfOutput = true
+	e.Config.Validation.Format = []config.Command{format}
+	b, before, after := confinedValidate(t, e, repo, base)
+	if got := mode(); got != "rw" {
+		t.Fatalf("the formatter was given workspace mode %q, not rw: %+v", got, b)
+	}
+	if after == before || !strings.Contains(after, formattedMark) {
+		t.Fatalf("the writable formatter did not rewrite the candidate: %q", after)
+	}
+	if len(b.Checks) != 1 || b.Checks[0].Outcome != validation.Passed || !b.Passed() || !b.Certifies("task-1", validation.Digest(after)) {
+		t.Fatalf("expected the passing verifier on the rewrite and nothing else: %+v", b)
+	}
+}
+
+// W14. Vet, build and test ask for a read-only workspace whatever their
+// output handling says.
+func TestCertifyingChecksAskForAReadOnlyWorkspace(t *testing.T) {
+	e, repo, base := blockerRig(t, n4RefusingLauncher("rw*"), true)
+	e.Config.Validation.Format = nil
+	vet, vetMode := modeWitness(t, "vet-mode", "exit 0")
+	build, buildMode := modeWitness(t, "build-mode", "exit 0")
+	build.FailIfOutput = true
+	test, testMode := modeWitness(t, "test-mode", "exit 0")
+	e.Config.Validation.Vet, e.Config.Validation.Build, e.Config.Validation.Test = []config.Command{vet}, []config.Command{build}, []config.Command{test}
+	b, _, _ := confinedValidate(t, e, repo, base)
+	for name, mode := range map[string]func() string{"vet": vetMode, "build": buildMode, "test": testMode} {
+		if got := mode(); got != "ro" {
+			t.Fatalf("%s was given workspace mode %q, not ro: %+v", name, got, b)
+		}
+	}
+	if !b.Passed() || len(b.Checks) != 3 {
+		t.Fatalf("the certifying checks did not all run and pass: %+v", b)
+	}
+}
+
+// W15. The ordinary configuration: gofmt -w asks for rw and gofmt -l (which
+// reports by output) asks for ro; a launcher refusing the other mode for each
+// refuses neither, and the rewrite is certified.
+func TestTheOrdinaryFormatterAndVerifierAskForTheirOwnModes(t *testing.T) {
+	e, repo, base := confinedFormattingRig(t, n4RefusingLauncher("ro*gofmt*-w*|rw*gofmt*-l*"))
+	b, before, after := confinedValidate(t, e, repo, base)
+	if after == before || !strings.Contains(after, formattedMark) {
+		t.Fatalf("the formatter did not rewrite the candidate: %q", after)
+	}
+	if len(b.Checks) != 1 || b.Checks[0].Outcome != validation.Passed || !b.Passed() || !b.Certifies("task-1", validation.Digest(after)) {
+		t.Fatalf("the ordinary formatter or verifier was refused for its mode: %+v", b)
+	}
+}
+
+// W16. Both flags off: the unconfined broker hands no workspace mode to
+// anything, and a verifier that reports by its exit status runs and passes
+// exactly as before.
+func TestLegacyHandsNoWorkspaceMode(t *testing.T) {
+	e, repo, base := blockerRig(t, n3Wrapper, false)
+	verify, mode := modeWitness(t, "legacy-verify-mode", "exit 0")
+	e.Config.Validation.Format = nil
+	e.Config.Validation.FormatVerify = []config.Command{verify}
+	b, before, after := confinedValidate(t, e, repo, base)
+	if got := mode(); after != before || got != "" {
+		t.Fatalf("legacy validation changed the candidate or handed a workspace mode %q: %+v", got, b)
+	}
+	if !b.Passed() || len(b.Checks) != 4 || b.Checks[0].Kind != validation.Format || b.Checks[0].ExecutedBy != "sensei-code execution broker" {
+		t.Fatalf("legacy validation changed: %+v", b)
+	}
+}
+
 // W3. A formatter whose execution errored for an ordinary reason (not a
 // sandbox refusal) blocks the capture after it, named as what it was. Under
 // the required-status profile an ordinary error reaches the formatter only
