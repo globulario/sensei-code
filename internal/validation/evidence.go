@@ -399,7 +399,9 @@ type Confinement struct {
 // newline. The broker terminates the wrapper at that byte and refuses, so a
 // launcher cannot hold validation by writing without end, or by writing what
 // can never be read and then waiting. A record still being written, short of
-// the bound, is waited for however slow the wrapper is.
+// the bound, is waited for however slow the wrapper is; a record written is
+// the end of the command, and the wrapper then has the grace to exit and let
+// the stream end, or the invocation is ended and the record is not evidence.
 //
 // The nonce binds a record to this execution; it does not by itself
 // authenticate the writer in a process view the confined command shares. A
@@ -538,7 +540,10 @@ func exited(err error, out []byte) execution {
 
 // statusGrace bounds how long the status and output descriptors may stay open
 // after the wrapper exits: one held open by anything else is a protocol
-// violation, and what was read by then is not a result.
+// violation, and what was read by then is not a result. It also bounds how
+// long the wrapper may take to exit once it has written its record: the
+// record comes after the command has ended, so a wrapper still there past
+// the grace is not finishing a check, and its status is not evidence.
 const statusGrace = 2 * time.Second
 
 // maxStatus bounds the status record: past it, or at it without the record's
@@ -613,6 +618,10 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 		ended string
 	}
 	got, captured := make(chan read, 1), make(chan read, 1)
+	// Closed once Wait has returned: the one fact the status reader needs
+	// when a completion bound expires, which it must learn without a second
+	// Wait of its own (RULING-349).
+	exited := make(chan struct{})
 	go func() {
 		// Read as the bytes come, and stop at the first byte after which
 		// nothing further could make the status a record: the bound reached
@@ -630,6 +639,12 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 		// in order, never on how many one read returned (RULING-348).
 		var b []byte
 		chunk := make([]byte, maxStatus+1)
+		// A complete line opens the completion phase: the wrapper writes its
+		// record after the command has ended, so what remains is for it to
+		// exit and the stream to end, and that has the grace, armed here
+		// without waiting for Wait (RULING-349). Before the line nothing is
+		// bounded by elapsed time: the check may still be running.
+		completing := false
 		for {
 			n, err := statusR.Read(chunk[:maxStatus+1-len(b)])
 			b = append(b, chunk[:n]...)
@@ -641,12 +656,37 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 				got <- read{b: b, ended: why}
 				return
 			}
+			if err == io.EOF {
+				got <- read{b: b}
+				return
+			}
 			if err != nil {
-				if err == io.EOF {
-					err = nil
+				if completing && errors.Is(err, os.ErrDeadlineExceeded) {
+					select {
+					case <-exited:
+						// The wrapper is gone and something it started holds
+						// the descriptor: the post-exit handling names that.
+						got <- read{b: b, err: err}
+					default:
+						// The record is complete and the wrapper has not
+						// completed: whether it is still running or exited in
+						// this very instant is not known here, and need not be;
+						// termination is requested of the one process this
+						// invocation started, and its status is not evidence.
+						_ = cmd.Process.Kill()
+						got <- read{b: b, ended: "the wrapper did not complete within the post-record grace; its status is not evidence"}
+					}
+					return
 				}
 				got <- read{b: b, err: err}
 				return
+			}
+			if !completing && len(b) > 0 && b[len(b)-1] == '\n' {
+				// Any complete line, whatever the parser will make of it: a
+				// malformed line followed by a wrapper that never exits would
+				// otherwise hold validation exactly as a valid one would.
+				completing = true
+				_ = statusR.SetReadDeadline(time.Now().Add(statusGrace))
 			}
 		}
 	}()
@@ -655,6 +695,7 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 		captured <- read{b: b, err: err}
 	}()
 	waitErr := cmd.Wait()
+	close(exited)
 	// The wrapper is gone. Anything it left holding the status or the output
 	// descriptor now has the grace, after which the record is read as
 	// whatever it was and the capture is what it is: incomplete.

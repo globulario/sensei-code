@@ -478,6 +478,89 @@ func TestAValidRecordWithANonZeroExitStaysTheCandidates(t *testing.T) {
 	}
 }
 
+// RULING-349 (Codex P2 on 884119c). A complete line, whatever the parser
+// will make of it, ends the command: the wrapper writes its record after the
+// command has ended, so what remains is for it to exit and the stream to
+// end, and that has the grace. A wrapper alive past it has not completed and
+// its status is not evidence; a wrapper that exited while something it
+// started holds the descriptor is the held-open case it always was. Before
+// the line nothing is bounded by elapsed time.
+
+// completingLauncher writes `status` (printf %b) to the status descriptor,
+// then runs `then` (shell), then exits 0: the shape of a wrapper that has
+// written its record and does something other than exit.
+func completingLauncher(status, then string) string {
+	return "#!/bin/sh\nread nonce <&5\nexec 5<&-\nprintf '%b' \"" + status + "\" >&4\n" + then + "\nexit 0\n"
+}
+
+// F3. A valid record, then the wrapper stays alive holding the descriptor:
+// on the uncorrected head the broker waits for the next byte, and Wait for
+// the wrapper, until the context ends; corrected, the post-record grace ends
+// the invocation by the broker's own act (x.err nil), never as a result.
+func TestAWrapperAliveAfterItsRecordIsTerminated(t *testing.T) {
+	x, _, took := boundedExecute(t, wrapper(t, completingLauncher(StatusProtocol+" $nonce ran 0\\n", "sleep 20")), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+	if x.err != nil {
+		t.Fatalf("the broker did not end the invocation itself; only the context did after %s: %+v", took, x)
+	}
+	if x.refused == "" || !strings.Contains(x.refused, "post-record grace") {
+		t.Fatalf("a wrapper alive after its record was not refused for not completing: %+v", x)
+	}
+	if took > 2*statusGrace+time.Second {
+		t.Fatalf("the refusal took %s", took)
+	}
+}
+
+// W26. A valid record then the exit, at once and after a second: the
+// ordinary result, untouched by the grace.
+func TestAWrapperThatExitsAfterItsRecordKeepsItsResult(t *testing.T) {
+	for _, then := range []string{":", "sleep 1"} {
+		x, _, took := boundedExecute(t, wrapper(t, completingLauncher(StatusProtocol+" $nonce ran 0\\n", then)), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+		if x.err != nil || x.refused != "" || x.exit != 0 {
+			t.Fatalf("a wrapper exiting after its record (%q) lost its result: %+v (%s)", then, x, took)
+		}
+	}
+}
+
+// W27. A valid record, the exit a second later, and a descendant keeping the
+// status descriptor: the held-open refusal it always was, bounded.
+func TestADescendantHoldingTheDescriptorAfterADelayedExitIsBounded(t *testing.T) {
+	body := "#!/bin/sh\nread nonce <&5\nexec 5<&-\n( exec 3<&- 5<&- 1>&- 2>&-; sleep 8 ) &\necho \"" + StatusProtocol + " $nonce ran 0\" >&4\nsleep 1\nexit 0\n"
+	x, _, took := boundedExecute(t, wrapper(t, body), t.TempDir(), Check{Kind: Test, Command: "true"}, 20*time.Second, nil)
+	if x.refused == "" || x.err != nil || !strings.Contains(x.refused, "held open") {
+		t.Fatalf("a status descriptor held past a delayed exit was accepted, or misnamed: %+v", x)
+	}
+	if took > 2*statusGrace+2*time.Second {
+		t.Fatalf("the broker waited %s for a descendant holding the status descriptor", took)
+	}
+}
+
+// W28. A complete launcher refusal, then the wrapper stays alive: the
+// post-record refusal, never the launcher's own unconfirmed reason.
+func TestARefusalRecordFromAWrapperThatStaysAliveIsNotTheLaunchers(t *testing.T) {
+	x, _, took := boundedExecute(t, wrapper(t, completingLauncher(StatusProtocol+" $nonce refused no executor here\\n", "sleep 20")), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+	if x.err != nil {
+		t.Fatalf("the broker did not end the invocation itself; only the context did after %s: %+v", took, x)
+	}
+	if x.refused == "" || !strings.Contains(x.refused, "post-record grace") || strings.Contains(x.refused, "launcher refused") || strings.Contains(x.refused, "no executor here") {
+		t.Fatalf("the launcher's unconfirmed refusal was reported, or the wrapper was waited for: %+v", x)
+	}
+}
+
+// W29. A complete line the parser will reject, then the wrapper stays alive:
+// bounded all the same, by the completion phase and not by the parser.
+func TestAMalformedCompleteLineFromAWrapperThatStaysAliveIsBounded(t *testing.T) {
+	x, _, took := boundedExecute(t, wrapper(t, completingLauncher("NOT-A-STATUS\\n", "sleep 20")), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+	if x.err != nil {
+		t.Fatalf("the broker did not end the invocation itself; only the context did after %s: %+v", took, x)
+	}
+	if x.refused == "" || !strings.Contains(x.refused, "post-record grace") {
+		t.Fatalf("a malformed complete line from a wrapper that stayed alive was not refused for not completing: %+v", x)
+	}
+	if took > 2*statusGrace+time.Second {
+		t.Fatalf("the refusal took %s", took)
+	}
+}
+
 // A descendant keeps the status descriptor after the wrapper has written a
 // valid record and exited: bounded by the grace, and not a result.
 func TestAStatusDescriptorHeldByADescendantIsBounded(t *testing.T) {
