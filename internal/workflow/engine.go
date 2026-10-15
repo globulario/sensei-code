@@ -12976,34 +12976,56 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	// record about the capture it blocks, so the candidate cannot certify
 	// without it (RULING-340). With neither flag set the legacy behaviour is
 	// kept exactly: the formatter's evidence is discarded whatever it says.
+	//
+	// Under required confinement the list also runs one formatter at a time,
+	// and the candidate is captured again between them: a formatter after a
+	// rewrite ran on the rewritten bytes, and its record is bound to those,
+	// never to the bytes before every formatter (RULING-345). Legacy keeps
+	// the base's one execution over the whole list, bound to the bytes before
+	// it. The capture after the last execution is the one that stands for the
+	// formatting phase; the ones between are measured for the binding of the
+	// execution after them and published as nothing else.
 	confined := validationRequiresConfinement(e.Config)
 	var unsatisfiedFormat []validation.Evidence
 	if formats := checksOf(validation.Format, e.Config.Validation.Format); len(formats) != 0 {
 		before := validation.Digest(diff)
-		for _, c := range runner.Run(ctx, taskID, before, formats).Checks {
-			if formatterBlocks(confined, c.Outcome) {
-				unsatisfiedFormat = append(unsatisfiedFormat, c)
+		var stages [][]validation.Check
+		if confined {
+			for _, f := range formats {
+				stages = append(stages, []validation.Check{f})
 			}
+		} else {
+			stages = [][]validation.Check{formats}
 		}
-		recapture, err := repo.CandidateCapture(ctx, base, intended)
-		if err != nil {
-			// The formatter may have rewritten the candidate, and nobody could
-			// measure what it left: recorded before the return, as UNKNOWN
-			// rather than as the identity captured before the rewrite.
-			e.noteCandidateCaptureFailed(taskID, postFormatCapture, err)
-			return validation.Bundle{}, diff, err
+		var recapture gitx.Capture
+		for _, stage := range stages {
+			for _, c := range runner.Run(ctx, taskID, validation.Digest(diff), stage).Checks {
+				if formatterBlocks(confined, c.Outcome) {
+					unsatisfiedFormat = append(unsatisfiedFormat, c)
+				}
+			}
+			var err error
+			recapture, err = repo.CandidateCapture(ctx, base, intended)
+			if err != nil {
+				// The formatter may have rewritten the candidate, and nobody could
+				// measure what it left: recorded before the return, as UNKNOWN
+				// rather than as the identity captured before the rewrite. No
+				// formatter after this one runs: it would be bound to a capture
+				// nobody took.
+				e.noteCandidateCaptureFailed(taskID, postFormatCapture, err)
+				return validation.Bundle{}, diff, err
+			}
+			diff = recapture.Diff
 		}
 		// Recorded at once, empty as no current candidate: the capture after
 		// this one can still fail, and its failure must be judged against what
 		// the formatter left, not against the candidate before it (DF-41A4).
 		e.noteCurrentCapture(taskID, postFormatCapture, base, recapture.Tree, recapture.Diff)
-		reread := recapture.Diff
 		// The formatter's own evidence is discarded above, but WHETHER IT
 		// REWROTE ANYTHING is not the formatter's evidence -- it is a fact
 		// about the candidate, and later identity reasoning depends on it.
 		// Measured here because this is the only point where both sides exist.
-		e.noteFormatterMutation(taskID, before != validation.Digest(reread))
-		diff = reread
+		e.noteFormatterMutation(taskID, before != validation.Digest(diff))
 	} else {
 		e.noteNoFormatterConfigured(taskID)
 	}

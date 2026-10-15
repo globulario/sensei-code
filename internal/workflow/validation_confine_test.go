@@ -11,6 +11,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -264,8 +265,10 @@ func TestAConfinedFormatterRewriteIsRecapturedAndCertified(t *testing.T) {
 
 // (iii) One formatter rewrites the bytes and a later one is refused: the
 // rewrite is observed (the capture moved and the certifying check passes on
-// it) and the refusal blocks that new capture, preserving its own pre-format
-// binding rather than taking the new one.
+// it) and the refusal blocks that new capture, preserving its own binding: the
+// bytes it was refused on, which are the rewritten ones -- the second
+// formatter was asked to run after the first, never on the bytes before it
+// (RULING-345).
 func TestARewriteFollowedByARefusedFormatterKeepsBothObservations(t *testing.T) {
 	e, repo, base := confinedFormattingRig(t, n4RefusingLauncher("*second-formatter*"))
 	e.Config.Validation.Format = append(e.Config.Validation.Format, config.Command{Command: "sh", Args: []string{"-c", ": second-formatter"}})
@@ -278,9 +281,10 @@ func TestARewriteFollowedByARefusedFormatterKeepsBothObservations(t *testing.T) 
 		t.Fatalf("expected the refusal then the passing verifier: %+v", b)
 	}
 	refusal := b.Checks[0]
-	if refusal.DiffDigest != validation.Digest(after) || !strings.Contains(refusal.Detail, validation.Digest(before)) ||
+	if refusal.DiffDigest != validation.Digest(after) || !strings.Contains(refusal.Detail, "bound to "+validation.Digest(after)) ||
+		strings.Contains(refusal.Detail, validation.Digest(before)) ||
 		!strings.Contains(refusal.Detail, "not attempted") || !strings.Contains(refusal.Args[len(refusal.Args)-1], "second-formatter") {
-		t.Fatalf("the refusal lost its original binding or names the wrong formatter: %+v", refusal)
+		t.Fatalf("the refusal is not bound to the bytes it was refused on, or names the wrong formatter: %+v", refusal)
 	}
 	if b.Passed() || !b.Certifies("task-1", validation.Digest(after)) {
 		t.Fatalf("the refusal does not block the rewritten capture: %+v", b)
@@ -306,9 +310,11 @@ func blockerRig(t *testing.T, launcher string, confined bool) (*Engine, gitx.Rep
 }
 
 // derivedFormatRecord is the one Format record a blocked bundle must open
-// with: Errored, bound to the capture it blocks, naming the original outcome
-// and the original binding, and saying the formatter was not re-executed.
-func derivedFormatRecord(t *testing.T, b validation.Bundle, before, after string, original validation.Outcome) validation.Evidence {
+// with: Errored, bound to the capture it blocks (after), naming the original
+// outcome and the original binding (boundTo: the capture the formatter was run
+// on, which is the one before it, not necessarily the one before every
+// formatter), and saying the formatter was not re-executed.
+func derivedFormatRecord(t *testing.T, b validation.Bundle, boundTo, after string, original validation.Outcome) validation.Evidence {
 	t.Helper()
 	if len(b.Checks) == 0 || b.Checks[0].Kind != validation.Format {
 		t.Fatalf("no formatter record opens the bundle: %+v", b)
@@ -320,7 +326,7 @@ func derivedFormatRecord(t *testing.T, b validation.Bundle, before, after string
 	// A refused original is named by its sandbox-refusal classification rather
 	// than by the outcome word.
 	named := strings.Contains(r.Detail, string(original)) || (original == validation.Errored && strings.HasPrefix(r.Detail, validation.SandboxUnavailable))
-	if !named || !strings.Contains(r.Detail, validation.Digest(before)) || !strings.Contains(r.Detail, "not re-executed") {
+	if !named || !strings.Contains(r.Detail, "bound to "+validation.Digest(boundTo)) || !strings.Contains(r.Detail, "not re-executed") {
 		t.Fatalf("the derived record does not name the original outcome, its binding and the non-execution: %+v", r)
 	}
 	if b.Passed() || !b.Certifies("task-1", validation.Digest(after)) {
@@ -382,7 +388,8 @@ func TestLegacyValidationStillDiscardsFormatterEvidence(t *testing.T) {
 
 // W7b. A rewriting formatter followed by one that fails on both sides: the
 // rewrite is observed (recapture, verifier passes on it) and the failure,
-// pre-existing as it is, still blocks the new capture with its own binding.
+// pre-existing as it is, still blocks the new capture with its own binding:
+// the rewritten bytes it ran on, not the bytes before the rewrite (RULING-345).
 func TestARewriteFollowedByAFailingFormatterKeepsBothObservations(t *testing.T) {
 	e, repo, base := confinedFormattingRig(t, n4Launcher)
 	e.Config.Validation.Format = append(e.Config.Validation.Format, config.Command{Command: "sh", Args: []string{"-c", "exit 3"}})
@@ -390,9 +397,169 @@ func TestARewriteFollowedByAFailingFormatterKeepsBothObservations(t *testing.T) 
 	if after == before || !strings.Contains(after, formattedMark) {
 		t.Fatalf("the first formatter's rewrite was lost: %q", after)
 	}
-	r := derivedFormatRecord(t, b, before, after, validation.Infrastructure)
+	r := derivedFormatRecord(t, b, after, after, validation.Infrastructure)
+	if strings.Contains(r.Detail, validation.Digest(before)) {
+		t.Fatalf("the failing formatter is bound to bytes it never ran on: %+v", r)
+	}
 	if len(b.Checks) != 2 || b.Checks[1].Outcome != validation.Passed || !strings.Contains(r.Args[len(r.Args)-1], "exit 3") {
 		t.Fatalf("expected the derived blocker then the passing verifier: %+v", b)
+	}
+}
+
+// RULING-345: under required confinement every formatter execution is bound
+// to the capture it was run on. The list runs one formatter at a time, and the
+// candidate is captured again between them, so a formatter after a rewrite is
+// recorded on the rewritten bytes (S1), not on the bytes before every
+// formatter (S0). Legacy keeps the base's one execution over the whole list.
+
+// stageBinding checks a derived blocker: Errored, bound to the final capture,
+// quoting an original execution bound to exactly the stage it ran on and to
+// no other stage named here.
+func stageBinding(t *testing.T, r validation.Evidence, ranOn, final string, others ...string) {
+	t.Helper()
+	if r.Kind != validation.Format || r.Outcome != validation.Errored || r.ExitStatus != -1 || r.DiffDigest != final ||
+		!strings.Contains(r.Detail, "bound to "+ranOn) || !strings.Contains(r.Detail, "not re-executed") {
+		t.Fatalf("the derived blocker is not bound to the final capture, or its original is not bound to the stage it ran on (%s): %+v", ranOn, r)
+	}
+	for _, o := range others {
+		if o != ranOn && strings.Contains(r.Detail, o) {
+			t.Fatalf("the original is bound to a stage it did not run on (%s): %+v", o, r)
+		}
+	}
+}
+
+// W8. Two formatters: A rewrites S0 -> S1 and does not pass; B runs after it,
+// receives S1 (it finds the formatted statement), and fails. A's original is
+// bound to S0, B's to S1 and never to S0; both derived blockers are bound to
+// the final capture, which is S1, and the bundle cannot pass. A head that
+// runs the list as one execution bound to S0 records B on bytes it never saw.
+func TestEachFormatterIsBoundToTheCaptureItRanOn(t *testing.T) {
+	e, repo, base := confinedFormattingRig(t, n4Launcher)
+	saw := filepath.Join(t.TempDir(), "b-saw-s1")
+	e.Config.Validation.Format = []config.Command{
+		{Command: "sh", Args: []string{"-c", "gofmt -w main.go; exit 3"}},
+		{Command: "sh", Args: []string{"-c", "grep -q 'println(1)' main.go && touch " + saw + "; exit 3"}},
+	}
+	b, before, after := confinedValidate(t, e, repo, base)
+	s0, s1 := validation.Digest(before), validation.Digest(after)
+	if s0 == s1 || !strings.Contains(after, formattedMark) {
+		t.Fatalf("the first formatter did not rewrite the candidate: %q", after)
+	}
+	if _, err := os.Stat(saw); err != nil {
+		t.Fatal("the second formatter did not receive the rewritten candidate")
+	}
+	if len(b.Checks) != 3 || b.Checks[2].Kind != validation.Format || b.Checks[2].Outcome != validation.Passed {
+		t.Fatalf("expected two derived blockers then the passing verifier: %+v", b)
+	}
+	stageBinding(t, b.Checks[0], s0, s1, s1)
+	stageBinding(t, b.Checks[1], s1, s1, s0)
+	if b.Passed() || !b.Certifies("task-1", s1) {
+		t.Fatalf("the blockers do not block the final capture: %+v", b)
+	}
+}
+
+// W9. Three formatters, each stage its own: A rewrites S0 -> S1, B rewrites
+// S1 -> S2, C fails on S2. S1 is measured by the test itself, through the
+// same capture boundary, before validation runs. The bindings are A -> S0,
+// B -> S1, C -> S2, and every derived blocker names the final capture S2: the
+// correction is sequential, not a special case for two formatters.
+func TestEveryFormatterStageKeepsItsOwnBinding(t *testing.T) {
+	e, repo, base := confinedFormattingRig(t, n4Launcher)
+	ctx := context.Background()
+	main := filepath.Join(repo.Root, "main.go")
+	if out, err := exec.Command("gofmt", "-w", main).CombinedOutput(); err != nil {
+		t.Fatalf("gofmt: %v\n%s", err, out)
+	}
+	stage1, err := repo.CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatalf("capture of the formatted stage: %v", err)
+	}
+	if err := os.WriteFile(main, []byte(unformatted), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.Config.Validation.Format = []config.Command{
+		{Command: "sh", Args: []string{"-c", "gofmt -w main.go; exit 3"}},
+		{Command: "sh", Args: []string{"-c", "sed -i 's/println(1)/println(2)/' main.go; exit 3"}},
+		{Command: "sh", Args: []string{"-c", "exit 3"}},
+	}
+	b, before, after := confinedValidate(t, e, repo, base)
+	s0, s1, s2 := validation.Digest(before), validation.Digest(stage1.Diff), validation.Digest(after)
+	if s0 == s1 || s1 == s2 || s0 == s2 || !strings.Contains(stage1.Diff, formattedMark) || !strings.Contains(after, "println(2)") {
+		t.Fatalf("the stages are not three distinct captures: %q", after)
+	}
+	if len(b.Checks) != 4 || b.Checks[3].Kind != validation.Format || b.Checks[3].Outcome != validation.Passed {
+		t.Fatalf("expected three derived blockers then the passing verifier: %+v", b)
+	}
+	stageBinding(t, b.Checks[0], s0, s2, s1, s2)
+	stageBinding(t, b.Checks[1], s1, s2, s0, s2)
+	stageBinding(t, b.Checks[2], s2, s2, s0, s1)
+	if b.Passed() || !b.Certifies("task-1", s2) {
+		t.Fatalf("the blockers do not block the final capture: %+v", b)
+	}
+}
+
+// W10. The capture after a formatter fails (the formatter left a nested
+// repository, which the boundary refuses): no later formatter runs on bytes
+// nobody measured, validation returns the failure, and no bundle certifies
+// anything. A head that runs the list before capturing anything has already
+// run the later formatter when the capture fails.
+func TestAFailedIntermediateRecaptureRunsNoLaterFormatter(t *testing.T) {
+	e, repo, base := confinedFormattingRig(t, n4Launcher)
+	ran := filepath.Join(t.TempDir(), "b-ran")
+	e.Config.Validation.Format = []config.Command{
+		{Command: "sh", Args: []string{"-c", "gofmt -w main.go; mkdir -p nested/.git/objects nested/.git/refs; printf 'ref: refs/heads/main\\n' > nested/.git/HEAD; : > nested/file"}},
+		{Command: "sh", Args: []string{"-c", "touch " + ran + "; exit 3"}},
+	}
+	ctx := context.Background()
+	before, err := repo.CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatalf("capture before validation: %v", err)
+	}
+	b, _, err := e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, before.Diff, nil)
+	if err == nil {
+		t.Fatalf("the capture after the first formatter did not fail: %+v", b)
+	}
+	if len(b.Checks) != 0 || b.DiffDigest != "" {
+		t.Fatalf("a bundle was returned beside the capture failure: %+v", b)
+	}
+	if _, statErr := os.Stat(ran); statErr == nil {
+		t.Fatal("a later formatter ran after the capture before it had failed")
+	}
+}
+
+// W11. One successful formatter under required confinement is the single
+// stage it always was: the rewrite is recaptured, exactly the certifying
+// verifier is bound to it, no record is derived, and every execution ran
+// under the launcher.
+func TestOneSuccessfulFormatterIsTheSingleStagePath(t *testing.T) {
+	e, repo, base := confinedFormattingRig(t, n4Launcher)
+	b, before, after := confinedValidate(t, e, repo, base)
+	if after == before || !strings.Contains(after, formattedMark) {
+		t.Fatalf("the formatter did not rewrite the candidate: %q", after)
+	}
+	if len(b.Checks) != 1 || b.Checks[0].Kind != validation.Format || b.Checks[0].Outcome != validation.Passed ||
+		b.Checks[0].DiffDigest != validation.Digest(after) || !strings.Contains(b.Checks[0].ExecutedBy, validation.StatusProtocol) {
+		t.Fatalf("expected exactly the passing verifier, bound to the rewrite, under the launcher: %+v", b)
+	}
+	if !b.Passed() || b.DiffDigest != validation.Digest(after) || !b.Certifies("task-1", validation.Digest(after)) {
+		t.Fatalf("the single-formatter bundle does not certify the rewrite: %+v", b)
+	}
+}
+
+// W8b. Both flags off, two formatters: the base's one execution over the
+// list, whose evidence is discarded whatever it says. The rewrite is observed
+// and the bundle of the other checks passes without a formatter record.
+func TestLegacyRunsTheFormatterListAsOneExecution(t *testing.T) {
+	e, repo, base := blockerRig(t, n3Wrapper, false)
+	e.Config.Validation.Format = append(e.Config.Validation.Format, config.Command{Command: "sh", Args: []string{"-c", "exit 3"}})
+	b, before, after := confinedValidate(t, e, repo, base)
+	if after == before || !strings.Contains(after, formattedMark) || !b.Passed() || len(b.Checks) != 3 {
+		t.Fatalf("legacy validation changed: %+v", b)
+	}
+	for _, c := range b.Checks {
+		if c.Kind == validation.Format || c.ExecutedBy != "sensei-code execution broker" {
+			t.Fatalf("legacy evidence carries a formatter record or a confinement claim: %+v", c)
+		}
 	}
 }
 
