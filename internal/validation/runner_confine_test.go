@@ -561,6 +561,90 @@ func TestAMalformedCompleteLineFromAWrapperThatStaysAliveIsBounded(t *testing.T)
 	}
 }
 
+// RULING-350 (Codex P2 on 33b44b9). The end of the status stream opens the
+// completion phase just as a complete line does: nothing more can arrive,
+// only the exit remains, and it has the grace. The earlier of the two owns
+// the one deadline; the other never restarts it. A wrapper that exits in
+// time keeps its ordinary result; one that does not is terminated and its
+// status is not evidence, record or no record.
+
+// closingLauncher writes `status` (printf %b; empty writes nothing), closes
+// the status descriptor, then runs `then` (shell), then exits 0.
+func closingLauncher(status, then string) string {
+	return "#!/bin/sh\nread nonce <&5\nexec 5<&-\nprintf '%b' \"" + status + "\" >&4\nexec 4>&-\n" + then + "\nexit 0\n"
+}
+
+// F4 / W34. A valid record, the descriptor closed, the wrapper alive: on the
+// uncorrected head the reader returns at EOF and Wait waits until the
+// context ends; corrected, the completion grace ends the invocation by the
+// broker's own act (x.err nil), and the record is not a result.
+func TestAWrapperAliveAfterClosingItsStatusIsTerminated(t *testing.T) {
+	x, _, took := boundedExecute(t, wrapper(t, closingLauncher(StatusProtocol+" $nonce ran 0\\n", "sleep 20")), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+	if x.err != nil {
+		t.Fatalf("the broker did not end the invocation itself; only the context did after %s: %+v", took, x)
+	}
+	if x.refused == "" || !strings.Contains(x.refused, "stream ended before the wrapper completed") {
+		t.Fatalf("a wrapper alive after closing its status was not refused for not completing: %+v", x)
+	}
+	if took > 2*statusGrace+time.Second {
+		t.Fatalf("the refusal took %s", took)
+	}
+}
+
+// F5 / W34. No record, the descriptor closed, the wrapper alive: the same
+// completion refusal, never a wait for the exit.
+func TestAWrapperAliveAfterClosingAnEmptyStatusIsTerminated(t *testing.T) {
+	x, _, took := boundedExecute(t, wrapper(t, closingLauncher("", "sleep 20")), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+	if x.err != nil {
+		t.Fatalf("the broker did not end the invocation itself; only the context did after %s: %+v", took, x)
+	}
+	if x.refused == "" || !strings.Contains(x.refused, "stream ended before the wrapper completed") {
+		t.Fatalf("a wrapper alive after closing an empty status was not refused for not completing: %+v", x)
+	}
+	if took > 2*statusGrace+time.Second {
+		t.Fatalf("the refusal took %s", took)
+	}
+}
+
+// W32. A valid record, the descriptor closed, then the exit at once and
+// after a second: the ordinary result, untouched by the grace.
+func TestAWrapperThatExitsAfterClosingItsStatusKeepsItsResult(t *testing.T) {
+	for _, then := range []string{":", "sleep 1"} {
+		x, _, took := boundedExecute(t, wrapper(t, closingLauncher(StatusProtocol+" $nonce ran 0\\n", then)), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+		if x.err != nil || x.refused != "" || x.exit != 0 {
+			t.Fatalf("a wrapper exiting after closing its status (%q) lost its result: %+v (%s)", then, x, took)
+		}
+	}
+}
+
+// W33. No record, the descriptor closed, a prompt exit: refused for the
+// record it never wrote, as always, and never a success.
+func TestAnEmptyClosedStatusWithAPromptExitIsRefusedOnItsParsing(t *testing.T) {
+	x, _, took := boundedExecute(t, wrapper(t, closingLauncher("", ":")), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+	if x.err != nil || x.refused == "" || !strings.Contains(x.refused, "no status record was written") || strings.Contains(x.refused, "stream ended") {
+		t.Fatalf("an empty closed status with a prompt exit was not refused on its parsing: %+v (%s)", x, took)
+	}
+}
+
+// W35. A complete line, then the descriptor closed a second and a half
+// later, then the wrapper alive: the deadline the line established is the
+// one that fires; the end of the stream does not grant another grace. The
+// refusal is the post-record one, at the line's deadline, within the same
+// ceiling as F3 (a restarted grace would take one grace longer).
+func TestTheEndOfTheStreamDoesNotRestartTheCompletionGrace(t *testing.T) {
+	body := "#!/bin/sh\nread nonce <&5\nexec 5<&-\necho \"" + StatusProtocol + " $nonce ran 0\" >&4\nsleep 1.5\nexec 4>&-\nsleep 20\nexit 0\n"
+	x, _, took := boundedExecute(t, wrapper(t, body), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+	if x.err != nil {
+		t.Fatalf("the broker did not end the invocation itself; only the context did after %s: %+v", took, x)
+	}
+	if x.refused == "" || !strings.Contains(x.refused, "did not complete") {
+		t.Fatalf("a wrapper alive after its record and the end of its stream was not refused for not completing: %+v", x)
+	}
+	if took > 2*statusGrace+time.Second {
+		t.Fatalf("the refusal took %s: the end of the stream restarted the grace the line had established", took)
+	}
+}
+
 // A descendant keeps the status descriptor after the wrapper has written a
 // valid record and exited: bounded by the grace, and not a result.
 func TestAStatusDescriptorHeldByADescendantIsBounded(t *testing.T) {

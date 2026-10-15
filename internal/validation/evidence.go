@@ -399,9 +399,10 @@ type Confinement struct {
 // newline. The broker terminates the wrapper at that byte and refuses, so a
 // launcher cannot hold validation by writing without end, or by writing what
 // can never be read and then waiting. A record still being written, short of
-// the bound, is waited for however slow the wrapper is; a record written is
-// the end of the command, and the wrapper then has the grace to exit and let
-// the stream end, or the invocation is ended and the record is not evidence.
+// the bound, is waited for however slow the wrapper is; a record written, or
+// a status stream ended, is the end of the command, and the wrapper then has
+// the grace to exit, or the invocation is ended and its status is not
+// evidence.
 //
 // The nonce binds a record to this execution; it does not by itself
 // authenticate the writer in a process view the confined command shares. A
@@ -541,9 +542,11 @@ func exited(err error, out []byte) execution {
 // statusGrace bounds how long the status and output descriptors may stay open
 // after the wrapper exits: one held open by anything else is a protocol
 // violation, and what was read by then is not a result. It also bounds how
-// long the wrapper may take to exit once it has written its record: the
-// record comes after the command has ended, so a wrapper still there past
-// the grace is not finishing a check, and its status is not evidence.
+// long the wrapper may take to exit once it has written its record, or once
+// its status stream has ended: the record comes after the command has ended,
+// and a stream that has ended can carry nothing more, so a wrapper still
+// there past the grace is not finishing a check, and its status is not
+// evidence.
 const statusGrace = 2 * time.Second
 
 // maxStatus bounds the status record: past it, or at it without the record's
@@ -642,9 +645,13 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 		// A complete line opens the completion phase: the wrapper writes its
 		// record after the command has ended, so what remains is for it to
 		// exit and the stream to end, and that has the grace, armed here
-		// without waiting for Wait (RULING-349). Before the line nothing is
-		// bounded by elapsed time: the check may still be running.
-		completing := false
+		// without waiting for Wait (RULING-349). The end of the stream opens
+		// it just the same, record or no record: nothing more can arrive,
+		// and only the exit remains (RULING-350). Whichever comes first owns
+		// the one deadline, completeBy; the other never restarts it. Before
+		// either, nothing is bounded by elapsed time: the check may still be
+		// running.
+		var completeBy time.Time
 		for {
 			n, err := statusR.Read(chunk[:maxStatus+1-len(b)])
 			b = append(b, chunk[:n]...)
@@ -657,11 +664,31 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 				return
 			}
 			if err == io.EOF {
-				got <- read{b: b}
+				// The stream has ended. The bytes are handed over when the
+				// wrapper has exited (Wait is where the main goroutine is in
+				// the meantime, so a wrapper that exits sees no delay), or at
+				// the deadline, when the one process this invocation started
+				// is terminated and its status is not evidence.
+				if completeBy.IsZero() {
+					completeBy = time.Now().Add(statusGrace)
+				}
+				select {
+				case <-exited:
+					got <- read{b: b}
+					return
+				case <-time.After(time.Until(completeBy)):
+				}
+				select {
+				case <-exited:
+					got <- read{b: b}
+				default:
+					_ = cmd.Process.Kill()
+					got <- read{b: b, ended: "the status stream ended before the wrapper completed; the wrapper did not complete within the completion grace; its status is not evidence"}
+				}
 				return
 			}
 			if err != nil {
-				if completing && errors.Is(err, os.ErrDeadlineExceeded) {
+				if !completeBy.IsZero() && errors.Is(err, os.ErrDeadlineExceeded) {
 					select {
 					case <-exited:
 						// The wrapper is gone and something it started holds
@@ -681,12 +708,12 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 				got <- read{b: b, err: err}
 				return
 			}
-			if !completing && len(b) > 0 && b[len(b)-1] == '\n' {
+			if completeBy.IsZero() && len(b) > 0 && b[len(b)-1] == '\n' {
 				// Any complete line, whatever the parser will make of it: a
 				// malformed line followed by a wrapper that never exits would
 				// otherwise hold validation exactly as a valid one would.
-				completing = true
-				_ = statusR.SetReadDeadline(time.Now().Add(statusGrace))
+				completeBy = time.Now().Add(statusGrace)
+				_ = statusR.SetReadDeadline(completeBy)
 			}
 		}
 	}()
