@@ -356,29 +356,125 @@ func TestAnIncompleteCaptureIsNotAResultWhateverTheExit(t *testing.T) {
 // termination, or the test's context, ends it.
 const unboundedStatus = "#!/bin/sh\nread nonce <&5\nexec 5<&-\nwhile :; do echo xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx; done >&4\n"
 
-// B1-D. The infinite status writer is refused as oversized promptly, by the
-// broker's own action: the context is still live when the result returns,
-// so the completion is overflow-triggered, not the test's deadline.
+// B1-D. The infinite status writer is refused promptly, by the broker's own
+// action: the context is still live when the result returns, so the
+// completion is protocol-triggered, not the test's deadline. Its lines make
+// it invalid at its second line, data after its first newline, long before
+// the bound (RULING-348: the earlier violation in stream order).
 func TestAnUnboundedStatusWriterIsTerminatedAndRefused(t *testing.T) {
 	x, _, took := boundedExecute(t, wrapper(t, unboundedStatus), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
 	if x.err != nil {
 		t.Fatalf("the broker did not end the invocation itself; only the context did after %s: %+v", took, x)
 	}
-	if x.refused == "" || !strings.Contains(x.refused, "too large") {
-		t.Fatalf("an unbounded status writer was not refused as too large: %+v", x)
+	if x.refused == "" || !strings.Contains(x.refused, "after its record terminator") {
+		t.Fatalf("an unbounded status writer was not refused for the data after its record: %+v", x)
 	}
 	if took > 2*statusGrace+time.Second {
 		t.Fatalf("the oversized-status refusal took %s", took)
 	}
 }
 
-// A record of exactly the bound, malformed: read whole, refused on its
-// parsing, never as oversized.
+// W20 (RULING-347/348). A status of exactly the bound with no record
+// terminator, then an ordinary EOF: no record could ever have fit, so it is
+// refused for its size bound the moment the bound is reached, before the EOF
+// and whatever the wrapper does next.
 func TestAnExactlyBoundedMalformedRecordIsRefusedOnItsParsing(t *testing.T) {
 	body := "#!/bin/sh\nread nonce <&5\nexec 5<&-\nhead -c " + strconv.Itoa(maxStatus) + " /dev/zero | tr '\\0' x >&4\nexit 0\n"
 	x, _, took := boundedExecute(t, wrapper(t, body), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
-	if x.err != nil || x.refused == "" || strings.Contains(x.refused, "too large") || !strings.Contains(x.refused, "not exactly one record") {
-		t.Fatalf("a bounded malformed record was not refused on its parsing: %+v (%s)", x, took)
+	if x.err != nil || x.refused == "" || !strings.Contains(x.refused, "too large") || !strings.Contains(x.refused, "size bound") || strings.Contains(x.refused, "after its record terminator") {
+		t.Fatalf("a bounded unterminated status was not refused for its bound: %+v (%s)", x, took)
+	}
+}
+
+// RULING-347/348 (Codex P2 on 337c611). A status becomes terminally invalid
+// at the first byte after which no further byte can make it a record: the
+// bound reached without the newline every record must end with (no record
+// can fit: "too large"), or anything after the first newline, which must end
+// the whole record ("after its record terminator"). The earlier in stream
+// order is the violation, whatever one read returned. The broker ends the
+// invocation there, terminating the wrapper it started, and reads no
+// further. Below the bound without a newline the record may still complete:
+// that stream is waited for, as a running build is, however slow it is.
+
+// terminalStatusLauncher writes `status` to the status descriptor (printf
+// %b, so \n is a newline) and then stays alive, holding the descriptor, for
+// `alive` seconds: its own finite ceiling, so a broker that waits for it
+// costs that long and never the suite.
+func terminalStatusLauncher(status string, alive int) string {
+	return "#!/bin/sh\nread nonce <&5\nexec 5<&-\nprintf '%b' \"" + status + "\" >&4\nsleep " + strconv.Itoa(alive) + "\nexit 0\n"
+}
+
+// F1 / W17. Exactly the bound, no terminator, the wrapper alive with the
+// descriptor open: on the uncorrected head the broker waits for a byte that
+// never comes until the context ends; corrected, it refuses for the size
+// bound at once, by its own action (x.err nil: the context is still live).
+func TestAStatusAtTheBoundWithoutATerminatorIsTerminated(t *testing.T) {
+	status := strings.Repeat("x", maxStatus)
+	x, _, took := boundedExecute(t, wrapper(t, terminalStatusLauncher(status, 20)), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+	if x.err != nil {
+		t.Fatalf("the broker did not end the invocation itself; only the context did after %s: %+v", took, x)
+	}
+	if x.refused == "" || !strings.Contains(x.refused, "too large") || !strings.Contains(x.refused, "size bound") || strings.Contains(x.refused, "after its record terminator") {
+		t.Fatalf("a status at the bound without a terminator was not refused for its bound: %+v", x)
+	}
+	if took > 2*statusGrace+time.Second {
+		t.Fatalf("the refusal took %s", took)
+	}
+}
+
+// F2 / W18. A valid record and then one more byte, the wrapper alive with the
+// descriptor open: the status can never again be exactly one record. Same
+// shape of failure on the uncorrected head; corrected, refused for the data
+// after its terminator at once.
+func TestAStatusWithDataAfterItsRecordIsTerminated(t *testing.T) {
+	status := StatusProtocol + " $nonce ran 0\\ny"
+	x, _, took := boundedExecute(t, wrapper(t, terminalStatusLauncher(status, 20)), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+	if x.err != nil {
+		t.Fatalf("the broker did not end the invocation itself; only the context did after %s: %+v", took, x)
+	}
+	if x.refused == "" || !strings.Contains(x.refused, "after its record terminator") || strings.Contains(x.refused, "too large") {
+		t.Fatalf("a status with data after its record was not refused as such: %+v", x)
+	}
+	if took > 2*statusGrace+time.Second {
+		t.Fatalf("the refusal took %s", took)
+	}
+}
+
+// W21. A record of exactly the bound that ENDS in its newline is not
+// terminated for reaching the bound: it is read as the record it is (here a
+// launcher refusal with a long reason) and judged on its ordinary path.
+func TestARecordOfExactlyTheBoundEndingInItsTerminatorIsRead(t *testing.T) {
+	// proto + space + 32-hex nonce + space + "refused" + space + reason + newline == maxStatus.
+	reason := strings.Repeat("r", maxStatus-(len(StatusProtocol)+1+32+1+len("refused")+1+1))
+	body := "#!/bin/sh\nread nonce <&5\nexec 5<&-\nprintf '%s %s refused %s\\n' \"" + StatusProtocol + "\" \"$nonce\" \"" + reason + "\" >&4\nexit 0\n"
+	x, _, took := boundedExecute(t, wrapper(t, body), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+	if x.err != nil || x.refused == "" || !strings.Contains(x.refused, "launcher refused") || !strings.Contains(x.refused, reason[:64]) ||
+		strings.Contains(x.refused, "size bound") || strings.Contains(x.refused, "too large") {
+		t.Fatalf("a record of exactly the bound was not read as the record it is: %+v (%s)", x, took)
+	}
+}
+
+// W22. A partial record, far under the bound, that stays open longer than the
+// grace and then completes: never terminated for elapsed time, and read as the
+// record it becomes.
+func TestAPartialRecordUnderTheBoundIsWaitedFor(t *testing.T) {
+	body := "#!/bin/sh\nread nonce <&5\nexec 5<&-\nprintf '%s %s ran' \"" + StatusProtocol + "\" \"$nonce\" >&4\nsleep 3\nprintf ' 0\\n' >&4\nexit 0\n"
+	x, _, took := boundedExecute(t, wrapper(t, body), t.TempDir(), Check{Kind: Test, Command: "true"}, 20*time.Second, nil)
+	if x.err != nil || x.refused != "" || x.exit != 0 {
+		t.Fatalf("a slow but valid record was not accepted: %+v (%s)", x, took)
+	}
+	if took < 3*time.Second {
+		t.Fatalf("the record completed in %s, before the fixture's delay: the witness did not wait past the grace", took)
+	}
+}
+
+// W23. A valid record with a non-zero exit keeps its ordinary semantics: the
+// candidate's own exit, not a refusal.
+func TestAValidRecordWithANonZeroExitStaysTheCandidates(t *testing.T) {
+	body := "#!/bin/sh\nread nonce <&5\nexec 5<&-\necho \"" + StatusProtocol + " $nonce ran 3\" >&4\nexit 3\n"
+	x, _, took := boundedExecute(t, wrapper(t, body), t.TempDir(), Check{Kind: Test, Command: "true"}, 8*time.Second, nil)
+	if x.err != nil || x.refused != "" || x.exit != 3 {
+		t.Fatalf("a valid failing record changed: %+v (%s)", x, took)
 	}
 }
 

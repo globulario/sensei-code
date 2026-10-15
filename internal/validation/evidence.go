@@ -393,10 +393,13 @@ type Confinement struct {
 // and, for "ran", exits with that same status. Anything else -- no record, two
 // records, a wrong nonce, a status the wrapper's own exit contradicts, a
 // descriptor still held open after the exit -- is a refusal: whatever ran is
-// not evidence about the candidate. A record past its bound ends the
-// execution: the broker terminates the wrapper the moment the bound is
-// crossed and refuses, so a launcher cannot hold validation by writing
-// without end.
+// not evidence about the candidate. A status that can no longer become a
+// record ends the execution at the byte that made it so: the bound reached
+// without the newline that ends every record, or anything after that
+// newline. The broker terminates the wrapper at that byte and refuses, so a
+// launcher cannot hold validation by writing without end, or by writing what
+// can never be read and then waiting. A record still being written, short of
+// the bound, is waited for however slow the wrapper is.
 //
 // The nonce binds a record to this execution; it does not by itself
 // authenticate the writer in a process view the confined command shares. A
@@ -538,8 +541,8 @@ func exited(err error, out []byte) execution {
 // violation, and what was read by then is not a result.
 const statusGrace = 2 * time.Second
 
-// maxStatus bounds the status record: past it the record can never be valid
-// and the invocation is terminated.
+// maxStatus bounds the status record: past it, or at it without the record's
+// terminator, the record can never be valid and the invocation is ended.
 const maxStatus = 4096
 
 // launch runs the check through the wrapper open() verified, and owns it.
@@ -605,25 +608,51 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 	type read struct {
 		b   []byte
 		err error
+		// ended names the violation that made the status terminally invalid,
+		// after which the reader stopped and ended the invocation.
+		ended string
 	}
 	got, captured := make(chan read, 1), make(chan read, 1)
 	go func() {
-		// Read to the bound and no further. A status past the bound can
-		// never be a record, so the invocation is over the moment the bound
-		// is crossed: the wrapper this broker started is terminated here,
-		// while it may still be running and before Wait could return, and
-		// nothing more is read. Draining a stream that may never end has no
-		// evidentiary value and is exactly how a malformed launcher would
-		// hold validation forever (RULING-343).
-		b, err := io.ReadAll(io.LimitReader(statusR, maxStatus+1))
-		if err == nil && len(b) > maxStatus {
-			_ = cmd.Process.Kill()
+		// Read as the bytes come, and stop at the first byte after which
+		// nothing further could make the status a record: the bound reached
+		// without the newline a record must end with, or anything after the
+		// first newline, which must end the whole record. The invocation is
+		// over at that byte: the wrapper this broker started is terminated
+		// here, while it may still be running and before Wait could return,
+		// and nothing more is read. Draining a stream that may never end has
+		// no evidentiary value and is exactly how a malformed launcher would
+		// hold validation forever (RULING-343, RULING-347). Below the bound
+		// without a newline the record may still complete, and the stream is
+		// waited for as a running build is, however slow. Each read takes at
+		// most what the bound still allows plus one byte, so no more is read
+		// than the violation needs, and the violation is judged on the bytes
+		// in order, never on how many one read returned (RULING-348).
+		var b []byte
+		chunk := make([]byte, maxStatus+1)
+		for {
+			n, err := statusR.Read(chunk[:maxStatus+1-len(b)])
+			b = append(b, chunk[:n]...)
+			if why := terminallyInvalid(b); why != "" {
+				// Termination is requested of the one process this invocation
+				// started; a wrapper that has already exited is no less
+				// refused, and the request is not reported as more than it is.
+				_ = cmd.Process.Kill()
+				got <- read{b: b, ended: why}
+				return
+			}
+			if err != nil {
+				if err == io.EOF {
+					err = nil
+				}
+				got <- read{b: b, err: err}
+				return
+			}
 		}
-		got <- read{b, err}
 	}()
 	go func() {
 		b, err := io.ReadAll(outR)
-		captured <- read{b, err}
+		captured <- read{b: b, err: err}
 	}()
 	waitErr := cmd.Wait()
 	// The wrapper is gone. Anything it left holding the status or the output
@@ -643,10 +672,10 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 		return execution{refused: "the confinement wrapper reported no valid launcher status (" + StatusProtocol + "): " + why + "; whatever ran is not evidence"}
 	}
 	switch {
-	case len(rec.b) > maxStatus:
+	case rec.ended != "":
 		// The violation that ended the invocation: named first, whatever the
 		// terminated wrapper's exit or its descendants left behind.
-		return refuse("the status record is too large, so the wrapper was terminated")
+		return refuse(rec.ended + "; the invocation was ended as invalid")
 	case capture.err != nil:
 		// The wrapper exited but something it started kept the output pipe
 		// past the grace: the capture ends where the broker cut it, and an
@@ -675,6 +704,29 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 		return refuse(fmt.Sprintf("the wrapper recorded exit %d but exited %d", status, wrapperExit))
 	}
 	return execution{exit: status, output: out.Bytes()}
+}
+
+// terminallyInvalid names the violation after which no further byte could
+// make b a status record, or is empty while one still could. A record is at
+// most maxStatus bytes and ends with its only newline, so b is beyond repair
+// the moment it holds maxStatus bytes without that newline (no record can
+// fit: RULING-343, RULING-347) or any byte after its first newline
+// (RULING-347). The earlier of the two in stream order is the violation,
+// whatever one Read happened to return (RULING-348): a newline within the
+// bound rules out the first, and its absence rules out the second. Short of
+// the bound and without a newline, b is a record still being written.
+func terminallyInvalid(b []byte) string {
+	i := bytes.IndexByte(b, '\n')
+	if i < 0 || i >= maxStatus {
+		if len(b) >= maxStatus {
+			return "the status record is too large: it cannot fit within its size bound; no valid record is possible"
+		}
+		return ""
+	}
+	if len(b) > i+1 {
+		return "the status contains data after its record terminator; no valid record is possible"
+	}
+	return ""
 }
 
 // parseStatus reads exactly one StatusProtocol record bound to nonce.
