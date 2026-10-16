@@ -134,26 +134,85 @@ func TestAnUnreadableRecordIsNotOverwritten(t *testing.T) {
 	}
 }
 
-// The baseline workspace is named on the in-flight record, and never
-// without an execution in flight.
+// The baseline workspace is named on the in-flight record of exactly the
+// invocation that runs it, never without an execution in flight and never on
+// the strength of another invocation's binding (RULING-360 §4).
 func TestTheBaselineIsBoundToTheInFlightRecord(t *testing.T) {
 	root, _ := recorded(t)
-	if err := NoteBaseline(root, "task-1", "/base"); err == nil {
+	if err := NoteBaseline(root, "task-1", "exec-1", "/base"); err == nil {
 		t.Fatal("a baseline was bound with no execution in flight")
 	}
 	if _, err := BeginExecution(root, "task-1", inflight("exec-1")); err != nil {
 		t.Fatal(err)
 	}
-	if err := NoteBaseline(root, "task-1", "/base"); err != nil {
+	if err := NoteBaseline(root, "task-1", "exec-other", "/base"); err == nil {
+		t.Fatal("a baseline was bound to an invocation that is not in flight")
+	}
+	if err := NoteBaseline(root, "task-1", "exec-1", "/base"); err != nil {
 		t.Fatal(err)
 	}
 	if fresh, _, _ := Load(root, "task-1"); fresh.InFlight == nil || fresh.InFlight.Baseline != "/base" {
 		t.Fatalf("the baseline is not on the durable record: %+v", fresh)
 	}
+	// A later invocation's record does not inherit the earlier binding.
+	if _, err := SettleExecution(root, "task-1", "exec-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := BeginExecution(root, "task-1", inflight("exec-2")); err != nil {
+		t.Fatal(err)
+	}
+	if fresh, _, _ := Load(root, "task-1"); fresh.InFlight.Baseline != "" {
+		t.Fatalf("a new invocation inherited an earlier baseline binding: %+v", fresh.InFlight)
+	}
+}
+
+// W3 in one process: a stale copy with the same invocation but without the
+// baseline the record now names, and a quarantine in an older representation,
+// are both refused (RULING-360 §11).
+func TestTheWholeSafetyStateIsMonotonic(t *testing.T) {
+	root, _ := recorded(t)
+	if _, err := BeginExecution(root, "task-1", inflight("exec-1")); err != nil {
+		t.Fatal(err)
+	}
+	stale, _, _ := Load(root, "task-1")
+	if err := NoteBaseline(root, "task-1", "exec-1", "/base"); err != nil {
+		t.Fatal(err)
+	}
+	if err := stale.Save(root); err == nil {
+		t.Fatal("a stale copy with the same invocation dropped the baseline binding")
+	}
+	if _, err := QuarantineExecution(root, "task-1", Resolution{Reason: "first"}); err != nil {
+		t.Fatal(err)
+	}
+	older, _, _ := Load(root, "task-1")
+	older.Resolution.Reason = "an older representation"
+	if err := older.Save(root); err == nil {
+		t.Fatal("a quarantine was rewritten with another representation")
+	}
+	if fresh, _, _ := Load(root, "task-1"); fresh.Resolution.Reason != "first" || fresh.InFlight.Baseline != "/base" {
+		t.Fatalf("the durable safety state changed: %+v", fresh)
+	}
+}
+
+// An ordinary resolution is refused while an execution is in flight, not only
+// over a quarantine (defence in depth below the workflow's disposal gate).
+func TestNoOrdinaryResolutionWhileAnExecutionIsInFlight(t *testing.T) {
+	root, stale := recorded(t)
+	inFlight, err := BeginExecution(root, "task-1", inflight("exec-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []Identity{stale, inFlight} {
+		var q *ErrQuarantined
+		if _, err := id.Resolve(root, Resolution{Disposition: Disposed, Reason: "x", Evidence: Evidence{BaseSHA: id.BaseSHA, ProducedNoWork: true}}); !errors.As(err, &q) {
+			t.Fatalf("an ordinary resolution was recorded over an execution in flight: %v", err)
+		}
+	}
 }
 
 // The record is replaced atomically: no temporary file is left beside it,
-// and the listing sees exactly the one record.
+// and the listing sees exactly the one record (the record's lock file is
+// beside it and is not a record).
 func TestTheRecordIsReplacedAtomically(t *testing.T) {
 	root, _ := recorded(t)
 	if _, err := BeginExecution(root, "task-1", inflight("exec-1")); err != nil {
@@ -166,7 +225,13 @@ func TestTheRecordIsReplacedAtomically(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Name() != "task-1.json" {
+	var names []string
+	for _, e := range entries {
+		if e.Name() != "task-1.json.lock" {
+			names = append(names, e.Name())
+		}
+	}
+	if len(names) != 1 || names[0] != "task-1.json" {
 		t.Fatalf("the replacement left more than the record: %v", entries)
 	}
 	if list, err := List(root); err != nil || len(list) != 1 {

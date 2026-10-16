@@ -177,8 +177,22 @@ func (i Identity) Resolve(repoRoot string, r Resolution) (Identity, error) {
 	if strings.TrimSpace(r.Evidence.BaseSHA) == "" {
 		r.Evidence.BaseSHA = i.BaseSHA
 	}
-	i.Resolution = &r
-	if err := i.Save(repoRoot); err != nil {
+	// One transaction against the durable record (RULING-360 §10): no ordinary
+	// resolution is recorded over a record that is unsettled -- an execution
+	// in flight or a quarantine -- whatever the caller's copy says.
+	target := path(repoRoot, i.TaskID)
+	err := withRecord(target, func() error {
+		onDisk, ok, err := load(target, i.TaskID)
+		if err != nil {
+			return fmt.Errorf("the existing candidate record of %s cannot be read, so it is not overwritten: %w", i.TaskID, err)
+		}
+		if ok && onDisk.Unsettled() {
+			return onDisk.Quarantine()
+		}
+		i.Resolution = &r
+		return writeRecord(target, i)
+	})
+	if err != nil {
 		return i, err
 	}
 	return i, nil
@@ -192,35 +206,40 @@ func (i Identity) Resolve(repoRoot string, r Resolution) (Identity, error) {
 // execution is the one a settlement must answer). The disposition keeps the
 // candidate and every workspace named in the reason.
 func QuarantineExecution(repoRoot, taskID string, r Resolution) (Identity, error) {
-	recordMu.Lock()
-	defer recordMu.Unlock()
 	target := path(repoRoot, taskID)
-	id, ok, err := load(target, taskID)
-	if err != nil {
-		return Identity{}, err
-	}
-	if !ok {
-		return Identity{}, ErrNoIdentity
-	}
-	if id.Resolution != nil && id.Resolution.Disposition == Quarantined {
-		return id, nil
-	}
-	r.Disposition = Quarantined
-	if err := r.Validate(); err != nil {
-		return id, err
-	}
-	if r.DecidedAt.IsZero() {
-		r.DecidedAt = time.Now().UTC()
-	}
-	if strings.TrimSpace(r.Evidence.BaseSHA) == "" {
-		r.Evidence.BaseSHA = id.BaseSHA
-	}
-	r.WorktreeRemoved, r.BranchRemoved = false, false
-	id.Resolution = &r
-	if err := writeRecord(target, id); err != nil {
-		return Identity{}, err
-	}
-	return id, nil
+	var out Identity
+	err := withRecord(target, func() error {
+		id, ok, err := load(target, taskID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrNoIdentity
+		}
+		out = id
+		if id.Resolution != nil && id.Resolution.Disposition == Quarantined {
+			return nil
+		}
+		r.Disposition = Quarantined
+		if err := r.Validate(); err != nil {
+			return err
+		}
+		if r.DecidedAt.IsZero() {
+			r.DecidedAt = time.Now().UTC()
+		}
+		if strings.TrimSpace(r.Evidence.BaseSHA) == "" {
+			r.Evidence.BaseSHA = id.BaseSHA
+		}
+		r.WorktreeRemoved, r.BranchRemoved = false, false
+		id.Resolution = &r
+		if err := writeRecord(target, id); err != nil {
+			out = Identity{}
+			return err
+		}
+		out = id
+		return nil
+	})
+	return out, err
 }
 
 // Unresolved reports whether this candidate is still in the state this whole

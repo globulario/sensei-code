@@ -137,6 +137,101 @@ func TestTheEntryGatesPrecedeWorktreeUse(t *testing.T) {
 	}
 }
 
+// C1-F1, F4 (RULING-360). A failing formatter creates the baseline under the
+// format invocation, which settles; certification reuses the cached baseline
+// and that baseline execution is unresolved. The certify invocation's durable
+// in-flight record must name the baseline before it ran, and the baseline
+// survives for a fresh engine.
+func TestACachedBaselineIsBoundToTheCurrentInvocation(t *testing.T) {
+	e, repo, base := confinedFormattingRig(t, n4SilentLauncher("baseline\\ ro*"))
+	e.Config.Validation.Format = []config.Command{{Command: "sh", Args: []string{"-c", "exit 1"}}}
+	e.Config.Validation.FormatVerify = nil
+	e.Config.Validation.Test = []config.Command{{Command: "sh", Args: []string{"-c", "exit 1"}}}
+	e.Config.Permissions.RunTests = true
+	ctx := context.Background()
+	before, err := repo.CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, before.Diff, nil)
+	var u *WorkspaceUnsettled
+	if !errors.As(err, &u) || u.Phase != "certify" || u.Baseline == "" {
+		t.Fatalf("premise: the reused baseline's unresolved execution did not quarantine certify: %v", err)
+	}
+	id := quarantinedRecord(t, repo.Root)
+	if id.InFlight.Invocation != u.Invocation || id.InFlight.Baseline != u.Baseline {
+		t.Fatalf("the certify invocation's durable record does not name the reused baseline: in-flight %+v, unsettled %s at %s",
+			id.InFlight, u.Invocation, u.Baseline)
+	}
+	if st, statErr := os.Stat(u.Baseline); statErr != nil || !st.IsDir() {
+		t.Fatalf("the reused baseline workspace was removed: %v", statErr)
+	}
+	refusesEverything(t, repo.Root, repo.Root)
+}
+
+// n4MarkingLauncher is n4Launcher that also leaves a marker whenever it runs a
+// baseline execution, so a witness can tell whether one ran.
+func n4MarkingLauncher(marker string) string {
+	return "#!/bin/sh\nread nonce <&5\nexec 5<&-\nif [ \"$SENSEI_CONFINE_ROLE\" = baseline ]; then touch '" + marker + "'; fi\n" +
+		"while [ \"$1\" != \"--\" ]; do shift; done\nshift\n\"$@\" 3<&- 4>&-\nrc=$?\necho \"" + validation.StatusProtocol + " $nonce ran $rc\" >&4\nexit $rc\n"
+}
+
+// C1-F2 (RULING-360 §5). The baseline cannot be bound to the in-flight
+// invocation (the candidate record's directory refuses the write): no
+// baseline execution runs -- not on the first request and not on a later
+// one through a cached path -- and validation ends on a typed safety stop.
+func TestABaselineThatCannotBeBoundNeverRuns(t *testing.T) {
+	marker := t.TempDir() + "/baseline-ran"
+	e, repo, base := confinedFormattingRig(t, n4MarkingLauncher(marker))
+	candidates := repo.Root + "/.sensei-code/candidates"
+	t.Cleanup(func() { _ = os.Chmod(candidates, 0o755) })
+	e.Config.Validation.FormatVerify = nil
+	e.Config.Validation.Vet = []config.Command{{Command: "sh", Args: []string{"-c", "chmod 555 .sensei-code/candidates; exit 1"}}}
+	e.Config.Validation.Test = []config.Command{{Command: "sh", Args: []string{"-c", "exit 1"}}}
+	e.Config.Permissions.RunBuilds, e.Config.Permissions.RunTests = true, true
+	ctx := context.Background()
+	before, err := repo.CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, before.Diff, nil)
+	if !isWorkspaceSafetyStop(err) {
+		t.Fatalf("a failed baseline binding did not end on a typed safety stop: %v", err)
+	}
+	if _, statErr := os.Stat(marker); statErr == nil {
+		t.Fatal("a baseline execution ran without a durable binding to the in-flight invocation")
+	}
+}
+
+// C1-F3. A baseline created in one bounded invocation and correctly rebound
+// in the next keeps ordinary attribution: the certify failure that the base
+// reproduces is pre-existing, both executions are proven, and the record is
+// settled.
+func TestARebindedCachedBaselineKeepsOrdinaryAttribution(t *testing.T) {
+	e, repo, base := confinedFormattingRig(t, n4Launcher)
+	e.Config.Validation.Format = []config.Command{{Command: "sh", Args: []string{"-c", "exit 1"}}}
+	e.Config.Validation.FormatVerify = nil
+	e.Config.Validation.Test = []config.Command{{Command: "sh", Args: []string{"-c", "exit 1"}}}
+	e.Config.Permissions.RunTests = true
+	ctx := context.Background()
+	before, err := repo.CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _, err := e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, before.Diff, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last := b.Checks[len(b.Checks)-1]
+	if last.Kind != validation.Test || last.Attribution != "pre-existing" ||
+		last.Teardown != validation.TeardownProven || last.BaselineTeardown != validation.TeardownProven {
+		t.Fatalf("the rebound cached baseline did not attribute normally: %+v", last)
+	}
+	if id, _, _ := candidate.Load(repo.Root, "task-1"); id.Unsettled() {
+		t.Fatalf("a proven validation left the record unsettled: %+v", id)
+	}
+}
+
 // countingRunner answers like answeringRunner and counts the review turns.
 type countingRunner struct {
 	answeringRunner

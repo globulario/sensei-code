@@ -12990,31 +12990,42 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	// is a workspace of the task that execution may still be writing
 	// (RULING-358 §10).
 	var keepBaseline bool
+	// currentInvocation is the bounded invocation now in flight (boundedRun):
+	// a baseline execution is bound to it, never to an earlier one. A failed
+	// binding is kept in bindFailure and ends the batch as a boundary failure.
+	var currentInvocation string
+	var bindFailure error
 	runner := e.validationRunner(repo.Root, permits)
 	runner.Baseline = func() (string, error) {
-		if baselinePath != "" {
-			return baselinePath, nil
+		if baselinePath == "" {
+			if strings.TrimSpace(base) == "" {
+				return "", errors.New("no recorded base commit to compare against")
+			}
+			// Detached: a named branch would outlive this call's removal of
+			// the worktree and refuse the next cycle's checkout, leaving every
+			// later failure unattributed.
+			path, err := e.Repo.CreateObservationWorktree(ctx, taskID+"-baseline", base)
+			if err != nil {
+				return "", err
+			}
+			// The worktree exists from here on, and is retained or removed as
+			// a workspace of the task; it is not yet eligible to run in.
+			baselinePath = path
 		}
-		if strings.TrimSpace(base) == "" {
-			return "", errors.New("no recorded base commit to compare against")
-		}
-		// Detached: a named branch would outlive this call's removal of the
-		// worktree and refuse the next cycle's checkout, leaving every
-		// later failure unattributed.
-		path, err := e.Repo.CreateObservationWorktree(ctx, taskID+"-baseline", base)
-		if err != nil {
-			return "", err
-		}
-		baselinePath = path
 		if requiresExecutionBoundary(runner) {
-			// The baseline is a workspace of the task: named durably on the
-			// in-flight record before its execution starts (RULING-358 §10).
-			// Unrecorded, no baseline runs; attribution reports it unavailable.
-			if err := candidate.NoteBaseline(e.Repo.Root, taskID, path); err != nil {
+			// EVERY baseline execution -- in a newly created worktree or a
+			// cached one -- is first bound durably to the CURRENT invocation's
+			// in-flight record (RULING-358 §10, RULING-360 §4-§5). Unbound, it
+			// does not run, now or through a later call: the binding is
+			// attempted again each time and never remembered as done.
+			if err := candidate.NoteBaseline(e.Repo.Root, taskID, currentInvocation, baselinePath); err != nil {
+				if bindFailure == nil {
+					bindFailure = err
+				}
 				return "", fmt.Errorf("the baseline workspace could not be bound to the in-flight execution, so it is not run: %w", err)
 			}
 		}
-		return path, nil
+		return baselinePath, nil
 	}
 	defer func() {
 		if baselinePath != "" && !keepBaseline {
@@ -13027,10 +13038,19 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	// capture of the workspace it may still be writing.
 	bounded := func(phase string, checks []validation.Check) (validation.Bundle, error) {
 		var b validation.Bundle
-		err := e.boundedRun(ctx, taskID, phase, repo.Root, runner, func() []validation.Evidence {
+		bindFailure = nil
+		err := e.boundedRun(ctx, taskID, phase, repo.Root, runner, func(invocation string) []validation.Evidence {
+			currentInvocation = invocation
 			b = runner.Run(ctx, taskID, validation.Digest(diff), checks)
 			return b.Checks
 		}, func() string { return baselinePath })
+		currentInvocation = ""
+		if err == nil && bindFailure != nil {
+			// No baseline ran unbound; the batch still ends on the typed
+			// safety stop, with the baseline worktree kept (RULING-360 §5).
+			err = &ExecutionBoundaryFailure{TaskID: taskID, Phase: phase,
+				Err: fmt.Errorf("a baseline execution could not be bound to the in-flight invocation, so it did not run: %w", bindFailure)}
+		}
 		if err != nil {
 			keepBaseline = true
 		}
@@ -13337,9 +13357,9 @@ func requiresExecutionBoundary(r validation.Runner) bool {
 // *WorkspaceUnsettled. run is the broker call; it stops by itself at an
 // unsettled execution (validation.Runner). baseline names the baseline
 // workspace the run may have created.
-func (e *Engine) boundedRun(ctx context.Context, taskID, phase, workspace string, r validation.Runner, run func() []validation.Evidence, baseline func() string) error {
+func (e *Engine) boundedRun(ctx context.Context, taskID, phase, workspace string, r validation.Runner, run func(invocation string) []validation.Evidence, baseline func() string) error {
 	if !requiresExecutionBoundary(r) {
-		run()
+		run("")
 		return nil
 	}
 	invocation, err := newExecutionInvocation()
@@ -13356,7 +13376,9 @@ func (e *Engine) boundedRun(ctx context.Context, taskID, phase, workspace string
 		return &ExecutionBoundaryFailure{TaskID: taskID, Phase: phase,
 			Err: fmt.Errorf("the execution did not start: %w", err)}
 	}
-	checks := run()
+	// run learns the invocation now in flight, so every baseline execution it
+	// starts is bound to this one (RULING-360 §4).
+	checks := run(invocation)
 	var unsettled []validation.Evidence
 	for _, c := range checks {
 		if c.Unsettled() {
@@ -13486,7 +13508,7 @@ func (e *Engine) requiredTestEvidence(ctx context.Context, taskID string, envelo
 	var runs []requiredTestRun
 	if len(ids) != 0 {
 		runner := e.validationRunner(repo.Root, validationPermits(envelope))
-		if err := e.boundedRun(ctx, taskID, "required-tests", repo.Root, runner, func() []validation.Evidence {
+		if err := e.boundedRun(ctx, taskID, "required-tests", repo.Root, runner, func(string) []validation.Evidence {
 			runs = runner.RunRequiredTests(ctx, taskID, digest, ids)
 			var checks []validation.Evidence
 			for _, r := range runs {
