@@ -123,6 +123,94 @@ type Evidence struct {
 	// Unattributed is reported rather than guessed, because guessing in either
 	// direction is worse than saying which question was not asked.
 	Attribution string `json:"attribution,omitempty"`
+
+	// Teardown is the trusted execution boundary's statement about the
+	// confined execution behind this record: whether it is known to have
+	// ended (N5, RULING-358 §6). It is set by the broker for every record it
+	// produces, from the execution mode it ran in and the verified status
+	// record -- never from Detail, the output, or anything the candidate
+	// wrote.
+	Teardown Teardown `json:"teardown,omitempty"`
+	// BaselineTeardown is the same statement about the baseline execution
+	// attribution ran against the base, when one ran. An unresolved baseline
+	// leaves a workspace of the task possibly written as surely as an
+	// unresolved candidate execution does (RULING-358 §10).
+	BaselineTeardown Teardown `json:"baseline_teardown,omitempty"`
+}
+
+// Teardown is what the trusted execution boundary established about whether
+// an execution ended. Three states, and the empty value is none of them.
+type Teardown string
+
+const (
+	// TeardownNotApplicable: no required-status confined execution acquired
+	// workspace authority -- the unconfined or legacy broker the
+	// configuration selected, or a refusal the broker or the pinned launcher
+	// made before anything was started. Never read as proven.
+	TeardownNotApplicable Teardown = "not-applicable"
+	// TeardownProven: the pinned launcher wrote its one valid nonce-bound
+	// record of the command's exit, consistent with its own exit; under the
+	// status protocol that record is written only after the confined job's
+	// teardown.
+	TeardownProven Teardown = "proven"
+	// TeardownUnresolved: a confined execution may have started and the
+	// completion fact is missing or contradicted -- no valid record, a
+	// record held or overrun, an interrupted or cancelled invocation, a
+	// contradicted exit, the launcher's own teardown-unresolved refusal, or a
+	// refusal reason this broker cannot classify.
+	TeardownUnresolved Teardown = "unresolved"
+)
+
+// Unsettled reports whether this record leaves a workspace of the task
+// possibly written by an execution nobody proved ended. A record with no
+// teardown statement from a required-status executor is unsettled: the
+// missing statement is not a fourth state, and it fails closed.
+func (e Evidence) Unsettled() bool {
+	if e.Teardown == TeardownUnresolved || e.BaselineTeardown == TeardownUnresolved {
+		return true
+	}
+	return e.Teardown == "" && strings.Contains(e.ExecutedBy, " with launcher status "+StatusProtocol)
+}
+
+// Unsettled lists the records of this bundle whose execution may still hold
+// write authority over a workspace of the task.
+func (b Bundle) Unsettled() []Evidence {
+	var out []Evidence
+	for _, c := range b.Checks {
+		if c.Unsettled() {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// preStartRefusals is the closed set of launcher refusal reasons the pinned
+// N5 launcher emits only before any confined process can exist: argument,
+// manifest, profile-pin, workspace, run-state and status-channel validation,
+// all of which it completes before it starts bubblewrap (the token-emission
+// census, RULING-358 §8-§9). A refusal with one of these reasons acquired no
+// workspace authority. Every other reason -- including one the launcher
+// emits after it may have started the sandbox (sandbox-did-not-start,
+// sandbox-identity, sandbox-status-disagreement, teardown-unresolved) and any
+// reason this broker does not know -- is unresolved.
+var preStartRefusals = map[string]bool{
+	"usage": true, "manifest-missing": true, "manifest-path": true, "manifest-digest": true, "manifest-grammar": true,
+	"bwrap-digest": true, "bwrap-dep-digest": true, "seccomp-missing": true, "seccomp-digest": true,
+	"toolchain-digest": true, "runtime-digest": true, "gomodcache-missing": true,
+	"run-root": true, "run-dir-exists": true, "no-status-channel": true, "bad-nonce": true,
+	"bad-role": true, "bad-workspace": true, "bad-mode": true,
+	"protocol-mismatch": true, "profile-mismatch": true, "subreaper": true,
+}
+
+// teardownOfRefusal classifies a launcher refusal from its parsed reason, an
+// exact token of the verified record: a listed pre-start reason acquired no
+// workspace authority; anything else is unresolved. No post-cleanup reason is
+// classified as proven (RULING-358 §9).
+func teardownOfRefusal(reason string) Teardown {
+	if preStartRefusals[reason] {
+		return TeardownNotApplicable
+	}
+	return TeardownUnresolved
 }
 
 // CandidateFailures lists only the failures the worker can actually act on.
@@ -503,26 +591,42 @@ type execution struct {
 	err     error
 	exit    int
 	output  []byte
+	// teardown is set by the one function that saw how the execution ended.
+	// Left empty it is read as unresolved (execute fails it closed).
+	teardown Teardown
+}
+
+// notStarted is a refusal made before anything was started.
+func notStarted(refused string) execution {
+	return execution{refused: refused, teardown: TeardownNotApplicable}
 }
 
 // execute is the one execution primitive: every candidate check and every
 // baseline attribution runs through it, confined exactly as the runner is.
 func (r Runner) execute(ctx context.Context, dir string, who role, check Check) execution {
 	if r.Refusal != "" {
-		return execution{refused: r.Refusal}
+		return notStarted(r.Refusal)
 	}
 	if r.Confine == nil {
 		cmd := exec.CommandContext(ctx, check.Command, check.Args...)
 		cmd.Dir = dir
 		var out bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &out
-		return exited(cmd.Run(), out.Bytes())
+		x := exited(cmd.Run(), out.Bytes())
+		// The unconfined broker the configuration selected: no confined
+		// execution, so nothing for a teardown statement to be about.
+		x.teardown = TeardownNotApplicable
+		return x
 	}
 	wrapper, err := r.Confine.open()
 	if err != nil {
-		return execution{refused: err.Error()}
+		return notStarted(err.Error())
 	}
-	return r.Confine.launch(ctx, wrapper, dir, who, check)
+	x := r.Confine.launch(ctx, wrapper, dir, who, check)
+	if x.teardown == "" {
+		x.teardown = TeardownUnresolved
+	}
+	return x
 }
 
 // exited reads a finished unconfined (or legacy-confined) process.
@@ -566,32 +670,36 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 		// is the wrapper's failure as much as its own failure exit is, and
 		// fails closed rather than becoming the candidate's.
 		if err != nil && (!asExitError(err, &exitErr) || exitErr.ExitCode() < 0 || exitErr.ExitCode() == c.failureExit()) {
-			return execution{refused: "the confinement wrapper failed: " + err.Error()}
+			return execution{refused: "the confinement wrapper failed: " + err.Error(), teardown: TeardownNotApplicable}
 		}
-		return exited(err, out.Bytes())
+		// The legacy (N3 tool-time) convention the configuration selected:
+		// no status protocol, so no teardown statement is made either way.
+		x := exited(err, out.Bytes())
+		x.teardown = TeardownNotApplicable
+		return x
 	}
 
 	nonce := make([]byte, 16)
 	if _, err := rand.Read(nonce); err != nil {
-		return execution{refused: "no status nonce could be drawn: " + err.Error()}
+		return notStarted("no status nonce could be drawn: " + err.Error())
 	}
 	token := hex.EncodeToString(nonce)
 	statusR, statusW, err := os.Pipe()
 	if err != nil {
-		return execution{refused: "no status descriptor: " + err.Error()}
+		return notStarted("no status descriptor: " + err.Error())
 	}
 	defer statusR.Close()
 	nonceR, nonceW, err := os.Pipe()
 	if err != nil {
 		statusW.Close()
-		return execution{refused: "no nonce descriptor: " + err.Error()}
+		return notStarted("no nonce descriptor: " + err.Error())
 	}
 	cmd.ExtraFiles = append(cmd.ExtraFiles, statusW, nonceR)
 	cmd.Env = c.statusEnv(dir, who, check)
 	_, werr := io.WriteString(nonceW, token+"\n")
 	nonceW.Close()
 	if werr != nil {
-		return execution{refused: "the nonce could not be written: " + werr.Error()}
+		return notStarted("the nonce could not be written: " + werr.Error())
 	}
 	// The output pipe is the broker's own, like the status pipe: Wait then
 	// returns as soon as the wrapper has exited (or been killed), and every
@@ -600,13 +708,13 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 	// the grace: the bound starts at the exit.
 	outR, outW, err := os.Pipe()
 	if err != nil {
-		return execution{refused: "no output descriptor: " + err.Error()}
+		return notStarted("no output descriptor: " + err.Error())
 	}
 	defer outR.Close()
 	cmd.Stdout, cmd.Stderr = outW, outW
 	if err := cmd.Start(); err != nil {
 		outW.Close()
-		return execution{refused: "the confinement wrapper could not be started: " + err.Error()}
+		return notStarted("the confinement wrapper could not be started: " + err.Error())
 	}
 	// Only the wrapper and what it starts hold the write ends now: EOF is
 	// the last close.
@@ -733,11 +841,13 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 	out.Reset()
 	out.Write(capture.b)
 
+	// Every path below the start has no completion proof except a valid,
+	// consistent record: each refusal here is unresolved, cancelled or not.
 	refuse := func(why string) execution {
 		if ctx.Err() != nil {
-			return execution{err: fmt.Errorf("the check did not finish: %w", ctx.Err()), output: out.Bytes()}
+			return execution{err: fmt.Errorf("the check did not finish: %w", ctx.Err()), output: out.Bytes(), teardown: TeardownUnresolved}
 		}
-		return execution{refused: "the confinement wrapper reported no valid launcher status (" + StatusProtocol + "): " + why + "; whatever ran is not evidence"}
+		return execution{refused: "the confinement wrapper reported no valid launcher status (" + StatusProtocol + "): " + why + "; whatever ran is not evidence", teardown: TeardownUnresolved}
 	}
 	switch {
 	case rec.ended != "":
@@ -758,7 +868,9 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 		return refuse(perr.Error())
 	}
 	if !ran {
-		return execution{refused: "the confinement launcher refused: " + reason}
+		// Classified from the verified record's parsed reason, before any of
+		// it is flattened into prose.
+		return execution{refused: "the confinement launcher refused: " + reason, teardown: teardownOfRefusal(reason)}
 	}
 	wrapperExit := 0
 	if waitErr != nil {
@@ -771,7 +883,10 @@ func (c Confinement) launch(ctx context.Context, wrapper *os.File, dir string, w
 	if wrapperExit != status {
 		return refuse(fmt.Sprintf("the wrapper recorded exit %d but exited %d", status, wrapperExit))
 	}
-	return execution{exit: status, output: out.Bytes()}
+	// The one valid, nonce-bound, consistent record: written by the launcher
+	// after the confined job's teardown, and the proof survives a context
+	// cancelled after it was written.
+	return execution{exit: status, output: out.Bytes(), teardown: TeardownProven}
 }
 
 // terminallyInvalid names the violation after which no further byte could
@@ -873,6 +988,13 @@ func (r Runner) Run(ctx context.Context, candidateID, diffDigest string, checks 
 	for _, check := range checks {
 		e, _ := r.one(ctx, candidateID, diffDigest, check, now)
 		bundle.Checks = append(bundle.Checks, e)
+		if e.Unsettled() {
+			// A workspace of the task may still be written by this
+			// execution: no further check starts on it, and none is
+			// recorded as if it had (RULING-358 §11). The partial bundle is
+			// returned as it is for the caller's quarantine.
+			break
+		}
 	}
 	return bundle
 }
@@ -897,6 +1019,7 @@ func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check C
 			e.Outcome = NotPermitted
 			e.ExitStatus = -1
 			e.Detail = reason
+			e.Teardown = TeardownNotApplicable
 			return e, ""
 		}
 	}
@@ -910,6 +1033,7 @@ func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check C
 	}
 	x := r.execute(ctx, r.Workspace, candidateRole, check)
 	e.FinishedAt = now().UTC()
+	e.Teardown = x.teardown
 	if x.refused != "" {
 		// Refused, by the broker or the launcher: there is no unconfined
 		// fallback, and whatever the confined command did or did not do,
@@ -982,6 +1106,7 @@ func (r Runner) attribute(ctx context.Context, check Check, e Evidence) Evidence
 	}
 
 	x := r.execute(ctx, base, baselineRole, check)
+	e.BaselineTeardown = x.teardown
 	if x.refused != "" {
 		// The base's own confinement failed. That says nothing about the
 		// candidate, so the failure is neither the candidate's nor
@@ -1137,7 +1262,7 @@ func (r Runner) RunRequiredTests(ctx context.Context, candidateID, diffDigest st
 			rec.Evidence = Evidence{
 				Kind: Test, RequestedBy: "sensei-code workflow", ExecutedBy: "sensei-code execution broker",
 				CandidateID: candidateID, DiffDigest: diffDigest, StartedAt: at, FinishedAt: at,
-				ExitStatus: -1, Outcome: Errored,
+				ExitStatus: -1, Outcome: Errored, Teardown: TeardownNotApplicable,
 				Detail: "not a canonical required-test id (path/to/file_test.go:TestName), so nothing was run",
 			}
 			out = append(out, rec)
@@ -1152,6 +1277,11 @@ func (r Runner) RunRequiredTests(ctx context.Context, candidateID, diffDigest st
 			rec.Evidence.Detail = "the command exited zero but " + name + " reported no verdict of its own, so it did not execute"
 		}
 		out = append(out, rec)
+		if e.Unsettled() {
+			// No later named test starts on a workspace an earlier one may
+			// still be writing (RULING-358 §11).
+			break
+		}
 	}
 	return out
 }

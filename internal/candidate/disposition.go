@@ -59,17 +59,25 @@ const (
 	// Disposed means the worktree and branch have been removed and only the
 	// evidence remains.
 	Disposed Disposition = "disposed"
+	// Quarantined means a confined execution against this candidate (or a
+	// baseline of it) ended without an established teardown, so its
+	// workspaces may still be written: they are kept, and nothing ordinary
+	// may reuse, observe, recapture, review, publish or remove them until a
+	// trusted settlement of that exact invocation (N5, RULING-358). It is a
+	// candidate disposition, distinct from the session store's quarantine of
+	// a torn task-history record.
+	Quarantined Disposition = "quarantined"
 )
 
 // Keeps reports whether this disposition retains the worktree and branch.
 func (d Disposition) Keeps() bool {
-	return d == Retained || d == Resumable
+	return d == Retained || d == Resumable || d == Quarantined
 }
 
 // Valid reports whether this is a disposition at all.
 func (d Disposition) Valid() bool {
 	switch d {
-	case Retained, Adopted, Rejected, Superseded, Resumable, Disposed:
+	case Retained, Adopted, Rejected, Superseded, Resumable, Disposed, Quarantined:
 		return true
 	}
 	return false
@@ -158,6 +166,11 @@ func (i Identity) Resolve(repoRoot string, r Resolution) (Identity, error) {
 	if err := r.Validate(); err != nil {
 		return i, err
 	}
+	if r.Disposition == Quarantined {
+		// A quarantine binds the durable in-flight record; it is written by
+		// QuarantineExecution, never by an ordinary resolution.
+		return i, fmt.Errorf("a quarantine is recorded by QuarantineExecution, not by an ordinary resolution")
+	}
 	if r.DecidedAt.IsZero() {
 		r.DecidedAt = time.Now().UTC()
 	}
@@ -169,6 +182,45 @@ func (i Identity) Resolve(repoRoot string, r Resolution) (Identity, error) {
 		return i, err
 	}
 	return i, nil
+}
+
+// QuarantineExecution durably records that the task's confined execution
+// ended without an established teardown (RULING-358 §10-§13). It is written
+// over the durable record, never over a stale in-memory copy: an in-flight
+// record on disk is kept as the identity of the invocation the quarantine is
+// bound to, and an existing quarantine is kept as it is (the first unresolved
+// execution is the one a settlement must answer). The disposition keeps the
+// candidate and every workspace named in the reason.
+func QuarantineExecution(repoRoot, taskID string, r Resolution) (Identity, error) {
+	recordMu.Lock()
+	defer recordMu.Unlock()
+	target := path(repoRoot, taskID)
+	id, ok, err := load(target, taskID)
+	if err != nil {
+		return Identity{}, err
+	}
+	if !ok {
+		return Identity{}, ErrNoIdentity
+	}
+	if id.Resolution != nil && id.Resolution.Disposition == Quarantined {
+		return id, nil
+	}
+	r.Disposition = Quarantined
+	if err := r.Validate(); err != nil {
+		return id, err
+	}
+	if r.DecidedAt.IsZero() {
+		r.DecidedAt = time.Now().UTC()
+	}
+	if strings.TrimSpace(r.Evidence.BaseSHA) == "" {
+		r.Evidence.BaseSHA = id.BaseSHA
+	}
+	r.WorktreeRemoved, r.BranchRemoved = false, false
+	id.Resolution = &r
+	if err := writeRecord(target, id); err != nil {
+		return Identity{}, err
+	}
+	return id, nil
 }
 
 // Unresolved reports whether this candidate is still in the state this whole

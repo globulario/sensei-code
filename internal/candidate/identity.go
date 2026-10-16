@@ -40,10 +40,13 @@ package candidate
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -71,7 +74,80 @@ type Identity struct {
 	// is live, and absent afterwards is the defect it exists to remove: a
 	// worktree nobody resolved means nothing in particular.
 	Resolution *Resolution `json:"resolution,omitempty"`
+	// InFlight is a confined execution started against this candidate whose
+	// teardown has not been established (N5, RULING-358 §12). It is written
+	// durably BEFORE the execution can acquire write authority over any
+	// workspace of the task, and cleared only when the trusted execution
+	// boundary has proven the teardown. A record that still carries it --
+	// after a crash, an interruption or a restart -- describes an execution
+	// that may still hold write authority, and is read exactly as a
+	// quarantine: nothing ordinary may reuse, observe, recapture or dispose of
+	// the candidate (Unsettled).
+	InFlight *InFlight `json:"in_flight,omitempty"`
 }
+
+// InFlight identifies one confined execution of a task by nonsecret facts
+// only: never the status nonce or any credential.
+type InFlight struct {
+	// Invocation is a random identifier of this execution, the binding a
+	// settlement or a quarantine is checked against.
+	Invocation string `json:"invocation"`
+	// Phase names the validation phase that started it.
+	Phase string `json:"phase"`
+	// Workspace is the candidate workspace the execution runs against; a
+	// baseline observation worktree the same execution may create is part of
+	// the same boundary.
+	Workspace string `json:"workspace"`
+	// Profile is the pinned confinement profile the execution runs under.
+	Profile   string    `json:"profile,omitempty"`
+	StartedAt time.Time `json:"started_at"`
+}
+
+// Unsettled reports whether this candidate may still be written by an
+// execution nobody has proven ended: a quarantined disposition, or a confined
+// execution recorded as started and never settled. Every ordinary use of the
+// candidate -- worktree creation or reuse, observation, recapture, execution,
+// review, publication, removal, resume -- refuses on it.
+func (i Identity) Unsettled() bool {
+	return i.InFlight != nil || (i.Resolution != nil && i.Resolution.Disposition == Quarantined)
+}
+
+// Quarantine returns the typed refusal for an unsettled candidate, or nil.
+func (i Identity) Quarantine() *ErrQuarantined {
+	if !i.Unsettled() {
+		return nil
+	}
+	q := &ErrQuarantined{TaskID: i.TaskID, Workspace: i.Worktree}
+	switch {
+	case i.Resolution != nil && i.Resolution.Disposition == Quarantined:
+		q.Reason = i.Resolution.Reason
+	case i.InFlight != nil:
+		q.Workspace = i.InFlight.Workspace
+		q.Reason = fmt.Sprintf("confined execution %s (%s) was started at %s and its teardown was never established",
+			i.InFlight.Invocation, i.InFlight.Phase, i.InFlight.StartedAt.UTC().Format(time.RFC3339))
+	}
+	return q
+}
+
+// ErrQuarantined refuses an ordinary operation on a candidate whose confined
+// execution may still hold write authority. Only a trusted settlement of the
+// exact invocation may release it; none is implemented here (RULING-358 §21).
+type ErrQuarantined struct {
+	TaskID    string
+	Workspace string
+	Reason    string
+}
+
+func (e *ErrQuarantined) Error() string {
+	return fmt.Sprintf("candidate %s is quarantined: %s; its workspace %s may still be written by a confined execution, "+
+		"so it is not reused, observed, recaptured, reviewed, published or removed until a trusted settlement establishes that the execution ended",
+		e.TaskID, strings.TrimSpace(e.Reason), e.Workspace)
+}
+
+// ErrNoIdentity refuses to bind a confined execution to a task with no
+// recorded candidate identity: the in-flight boundary has nowhere durable to
+// live, so the execution must not start.
+var ErrNoIdentity = errors.New("no candidate identity is recorded for this task, so a confined execution cannot be bound to it")
 
 // Summary is the one-line form for a transcript or a pull request body.
 func (i Identity) Summary() string {
@@ -124,7 +200,11 @@ func path(repoRoot, taskID string) string {
 
 // Load reads a previously established identity.
 func Load(repoRoot, taskID string) (Identity, bool, error) {
-	body, err := os.ReadFile(path(repoRoot, taskID))
+	return load(path(repoRoot, taskID), taskID)
+}
+
+func load(target, taskID string) (Identity, bool, error) {
+	body, err := os.ReadFile(target)
 	if os.IsNotExist(err) {
 		return Identity{}, false, nil
 	}
@@ -141,17 +221,155 @@ func Load(repoRoot, taskID string) (Identity, bool, error) {
 	return id, true, nil
 }
 
+// recordMu serializes every write of a candidate record in this process, so a
+// read-check-write of the record is one step: a stale in-memory Identity can
+// never replace a newer durable in-flight or quarantine state between the
+// check and the write.
+var recordMu sync.Mutex
+
 // Save writes the identity down.
+//
+// An ordinary save never removes an unsettled state the durable record holds:
+// a record whose in-flight execution or quarantine is on disk is replaced only
+// by one that keeps it (the in-flight boundary is settled by SettleExecution,
+// and nothing here releases a quarantine). The write is atomic and durable:
+// a crash leaves either the previous record or this one, never a torn file.
 func (i Identity) Save(repoRoot string) error {
+	recordMu.Lock()
+	defer recordMu.Unlock()
 	target := path(repoRoot, i.TaskID)
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	if onDisk, ok, err := load(target, i.TaskID); err == nil && ok && onDisk.Unsettled() {
+		if q := dropsUnsettled(onDisk, i); q != nil {
+			return q
+		}
+	}
+	return writeRecord(target, i)
+}
+
+// dropsUnsettled reports the refusal for a write of next over a durable record
+// that is unsettled, or nil when next keeps that state.
+func dropsUnsettled(onDisk, next Identity) *ErrQuarantined {
+	if onDisk.InFlight != nil && (next.InFlight == nil || next.InFlight.Invocation != onDisk.InFlight.Invocation) {
+		return onDisk.Quarantine()
+	}
+	if onDisk.Resolution != nil && onDisk.Resolution.Disposition == Quarantined &&
+		(next.Resolution == nil || next.Resolution.Disposition != Quarantined) {
+		return onDisk.Quarantine()
+	}
+	return nil
+}
+
+// writeRecord replaces target atomically and durably: a temporary file in the
+// same directory is written and synced, renamed over the target, and the
+// directory is synced so the rename itself survives a crash.
+func writeRecord(target string, i Identity) error {
+	dir := filepath.Dir(target)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	body, err := json.MarshalIndent(i, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(target, append(body, '\n'), 0o644)
+	tmp, err := os.CreateTemp(dir, filepath.Base(target)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.Write(append(body, '\n')); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, target); err != nil {
+		return err
+	}
+	return syncDir(dir)
+}
+
+// syncDir makes a rename in dir durable. Windows cannot sync a directory
+// handle; there the file's own sync before the rename is what is available.
+func syncDir(dir string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	d, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer d.Close()
+	return d.Sync()
+}
+
+// BeginExecution durably records that a confined execution is about to start
+// against the task's candidate (RULING-358 §12). It is called BEFORE the
+// execution can acquire write authority over any workspace of the task, and
+// it refuses -- so the execution must not start -- when no identity is
+// recorded, when the candidate is already unsettled, or when the record
+// cannot be written.
+func BeginExecution(repoRoot, taskID string, f InFlight) (Identity, error) {
+	recordMu.Lock()
+	defer recordMu.Unlock()
+	target := path(repoRoot, taskID)
+	id, ok, err := load(target, taskID)
+	if err != nil {
+		return Identity{}, err
+	}
+	if !ok {
+		return Identity{}, ErrNoIdentity
+	}
+	if q := id.Quarantine(); q != nil {
+		return id, q
+	}
+	if strings.TrimSpace(f.Invocation) == "" || strings.TrimSpace(f.Workspace) == "" {
+		return id, errors.New("an in-flight execution must name its invocation and its workspace")
+	}
+	if f.StartedAt.IsZero() {
+		f.StartedAt = time.Now().UTC()
+	}
+	id.InFlight = &f
+	if err := writeRecord(target, id); err != nil {
+		return Identity{}, err
+	}
+	return id, nil
+}
+
+// SettleExecution clears the in-flight record of exactly this invocation once
+// the trusted execution boundary has proven its teardown (or proven that it
+// never acquired workspace authority). A quarantined candidate is never
+// settled here.
+func SettleExecution(repoRoot, taskID, invocation string) (Identity, error) {
+	recordMu.Lock()
+	defer recordMu.Unlock()
+	target := path(repoRoot, taskID)
+	id, ok, err := load(target, taskID)
+	if err != nil {
+		return Identity{}, err
+	}
+	if !ok {
+		return Identity{}, ErrNoIdentity
+	}
+	if id.Resolution != nil && id.Resolution.Disposition == Quarantined {
+		return id, id.Quarantine()
+	}
+	if id.InFlight == nil || id.InFlight.Invocation != invocation {
+		return id, fmt.Errorf("candidate %s records no in-flight execution %s to settle", taskID, invocation)
+	}
+	id.InFlight = nil
+	if err := writeRecord(target, id); err != nil {
+		return Identity{}, err
+	}
+	return id, nil
 }
 
 // Repo is the git surface Establish needs, kept narrow so the policy is

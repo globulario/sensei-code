@@ -7,6 +7,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -16,8 +17,10 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/globulario/sensei-code/internal/broker"
+	"github.com/globulario/sensei-code/internal/candidate"
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/gitx"
@@ -42,7 +45,40 @@ func n4Engine(t *testing.T) (*Engine, string) {
 		Build: []config.Command{{Command: "sh", Args: []string{"-c", "touch build-ran"}}},
 		Test:  []config.Command{{Command: "sh", Args: []string{"-c", "touch test-ran"}}},
 	}
+	recordCandidate(t, repo, "", work)
 	return e, work
+}
+
+// recordCandidate records task-1's candidate identity, as the run's start
+// gate does: the durable in-flight boundary of a confined execution binds to
+// it and refuses to start without one (RULING-358 §12). The record lives
+// beside the repository's configuration; where root is itself the fixture's
+// candidate repository it is excluded from the candidate's capture, as the
+// canonical checkout's record is never part of a candidate.
+func recordCandidate(t *testing.T, root, base, worktree string) {
+	t.Helper()
+	if base == "" {
+		base = strings.Repeat("0", 40)
+	}
+	id := candidate.Identity{TaskID: "task-1", Repository: root, BaseSHA: base, Worktree: worktree, CreatedAt: time.Now().UTC()}
+	if err := id.Save(root); err != nil {
+		t.Fatal(err)
+	}
+	if info := filepath.Join(root, ".git", "info"); dirExists(info) {
+		f, err := os.OpenFile(filepath.Join(info, "exclude"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer f.Close()
+		if _, err := f.WriteString(".sensei-code/\n"); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func dirExists(p string) bool {
+	st, err := os.Stat(p)
+	return err == nil && st.IsDir()
 }
 
 func (e *Engine) n4Validate(t *testing.T, work string) (validation.Bundle, error) {
@@ -143,6 +179,19 @@ func TestConfinedValidationHasNoUnconfinedFallback(t *testing.T) {
 		e, work := n4Engine(t)
 		set(&e.Config)
 		b, err := e.n4Validate(t, work)
+		if name == "status-less wrapper" || name == "N3 enabled, N3's wrapper" {
+			// A status-less wrapper started the command and wrote no record:
+			// the execution's teardown is unresolved (RULING-358 §8), so the
+			// first check quarantines the candidate and no later check runs.
+			var u *WorkspaceUnsettled
+			if !errors.As(err, &u) || !u.Recorded || len(u.Evidence) != 1 || len(b.Checks) != 0 {
+				t.Fatalf("%s: a status-less execution was not quarantined at its first check: err=%v bundle=%+v", name, err, b)
+			}
+			if _, statErr := os.Stat(filepath.Join(work, "build-ran")); statErr == nil {
+				t.Fatalf("%s: a check ran after the unresolved one", name)
+			}
+			continue
+		}
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -191,6 +240,7 @@ func confinedFormattingRig(t *testing.T, launcher string) (*Engine, gitx.Repo, s
 	e := formattingEngine(t, repo)
 	e.Config.Validation.Confined, e.Config.Validation.Confinement = true, pinnedWrapper(t, launcher)
 	e.beginReceipt("task-1")
+	recordCandidate(t, repo.Root, base, repo.Root)
 	return e, repo, base
 }
 
@@ -214,8 +264,11 @@ func confinedValidate(t *testing.T, e *Engine, repo gitx.Repo, base string) (val
 
 // n4RefusingLauncher refuses every execution whose argv or workspace mode
 // matches `when` (a shell pattern), and runs everything else as n4Launcher.
+// The refusal names a reason of the launcher's closed pre-start vocabulary
+// (bad-workspace): a refusal made before anything started, so it acquired no
+// workspace authority and its teardown is not applicable (RULING-358 §8).
 func n4RefusingLauncher(when string) string {
-	return "#!/bin/sh\nread nonce <&5\nexec 5<&-\ncase \"$SENSEI_CONFINE_WORKSPACE_MODE $*\" in " + when + ") echo \"" + validation.StatusProtocol + " $nonce refused no D2 executor for this check\" >&4; exit 0;; esac\n" +
+	return "#!/bin/sh\nread nonce <&5\nexec 5<&-\ncase \"$SENSEI_CONFINE_WORKSPACE_MODE $*\" in " + when + ") echo \"" + validation.StatusProtocol + " $nonce refused bad-workspace\" >&4; exit 0;; esac\n" +
 		"while [ \"$1\" != \"--\" ]; do shift; done\nshift\n\"$@\" 3<&- 4>&-\nrc=$?\necho \"" + validation.StatusProtocol + " $nonce ran $rc\" >&4\nexit $rc\n"
 }
 
@@ -754,24 +807,33 @@ func n4GarbageStatusLauncher(when string) string {
 		"echo \"" + validation.StatusProtocol + " $nonce ran $rc\" >&4\nexit $rc\n"
 }
 
-// W3, on the real path. The formatter runs and rewrites the candidate, but
-// its execution ends as an ordinary error (the broker could not read its
-// result and the context had expired): whatever ran is not evidence. The
-// recapture takes what the formatter left, the certifying checks run and
-// pass on it, and the bundle must not pass: the errored formatter blocks the
-// capture after it, named as errored and never as a sandbox refusal.
+// W3, on the real path, as RULING-358 (§8, §10-§11; P1 witnesses G and L)
+// requires it. The formatter runs and rewrites the candidate, but its
+// execution ends without a readable record under an expired context: no
+// completion fact survives, so its teardown is unresolved. Validation stops
+// at that execution: no recapture of what it may still be writing, no
+// certifying check, and the candidate is durably quarantined. (Before N5 P1
+// this case recaptured the formatter's output and ran the certifying checks
+// beside an errored blocker.)
 func TestAnErroredFormatterBlocksConfinedValidationOnTheRealPath(t *testing.T) {
 	e, repo, base := blockerRig(t, n4GarbageStatusLauncher("rw*"), true)
-	b, before, after := confinedValidateUnder(t, erringCtx{context.Background()}, e, repo, base)
-	if after == before || !strings.Contains(after, formattedMark) {
-		t.Fatalf("the recapture did not take what the formatter left: %q", after)
+	ctx := erringCtx{context.Background()}
+	before, err := repo.CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	r := derivedFormatRecord(t, b, before, after, validation.Errored)
-	if strings.HasPrefix(r.Detail, validation.SandboxUnavailable) || !strings.Contains(r.Detail, "did not finish") {
-		t.Fatalf("an ordinary error was relabelled, or lost its reason: %+v", r)
+	b, after, err := e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, before.Diff, nil)
+	var u *WorkspaceUnsettled
+	if !errors.As(err, &u) || !u.Recorded || u.Phase != "format" || len(u.Evidence) != 1 ||
+		u.Evidence[0].Teardown != validation.TeardownUnresolved || !strings.Contains(u.Evidence[0].Detail, "did not finish") {
+		t.Fatalf("an execution with no completion proof was not quarantined at the formatter: err=%v", err)
 	}
-	if len(b.Checks) != 4 || b.Checks[1].Outcome != validation.Passed || b.Checks[2].Outcome != validation.Passed || b.Checks[3].Outcome != validation.Passed {
-		t.Fatalf("the other checks did not run and pass beside the blocker: %+v", b)
+	if after != before.Diff || len(b.Checks) != 0 {
+		t.Fatalf("the workspace was recaptured or checked after an unresolved formatter: bundle=%+v", b)
+	}
+	id, ok, loadErr := candidate.Load(repo.Root, "task-1")
+	if loadErr != nil || !ok || id.Resolution == nil || id.Resolution.Disposition != candidate.Quarantined || id.InFlight == nil || id.InFlight.Invocation != u.Invocation {
+		t.Fatalf("the quarantine is not durable on the candidate record: %+v (%v)", id, loadErr)
 	}
 }
 
