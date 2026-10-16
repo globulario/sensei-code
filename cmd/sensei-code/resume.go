@@ -318,6 +318,12 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 		if *list {
 			if view := loadContainment(repo.Root, nil); view.owes() {
 				printWorkspaceOrphans(os.Stdout, view)
+				// An inventory nobody could list is UNKNOWN, not empty and not
+				// complete: what is known is shown, and the listing fails
+				// (RULING-375 §6-§9).
+				if view.listErr != nil {
+					return exitFailed
+				}
 				return exitCompleted
 			}
 		} else if refusal := contained.refusal(); refusal != nil {
@@ -359,6 +365,8 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 			printContainmentOnly(os.Stdout, active, view)
 			if scoped == "" {
 				printWorkspaceOrphans(os.Stdout, view)
+			} else {
+				reportUnlistedInventory(view)
 			}
 			return exitFailed
 		}
@@ -377,6 +385,16 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 			// The hint is drawn from the inventory the listing itself came
 			// from, so it speaks about the same world.
 			reportOtherSessionsWithQuestions(os.Stdout, inventory.Active, scoped)
+		}
+		// A COMPLETE LISTING ASSERTS THE INVENTORY WAS ENUMERATED (RULING-375
+		// §6-§9). Everything known has been rendered above; an inventory that
+		// could not be listed is unknown, so the listing fails. The discovery
+		// is repository-wide: `--session` narrows what is shown, not this.
+		if view.listErr != nil {
+			if scoped != "" {
+				reportUnlistedInventory(view)
+			}
+			return exitFailed
 		}
 		return exitCompleted
 	}
@@ -892,6 +910,17 @@ func printWorkspaceOrphans(out io.Writer, view containmentView) {
 		printWorkspaceObligation(out, c)
 		fmt.Fprintln(out)
 	}
+}
+
+// reportUnlistedInventory states, on stderr, that the candidate inventory could
+// not be listed. A scoped listing does not print the repository-wide orphan
+// section, and must not hide that discovery failed (RULING-375 §9).
+func reportUnlistedInventory(view containmentView) {
+	if view.listErr == nil {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "sensei-code resume: %v: the candidate records of this repository could not be listed: %v\n",
+		errContainmentUnknown, view.listErr)
 }
 
 // printStandingQuestion renders the question a task is asking, and the option
