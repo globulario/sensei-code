@@ -373,14 +373,87 @@ func TestP2BW26TheRecordIsConsultedBeforeAnythingIsStarted(t *testing.T) {
 		t.Fatal("resumeAuthorityAnswered was not found")
 	}
 	command := body[start:end]
-	check := strings.Index(command, "if refusal := contained.refusal(); refusal != nil {")
-	if check < 0 {
-		t.Fatal("the command does not refuse from the current candidate record")
+	// THE MAIN GATE, not the FindActive-error or no-history branches (both
+	// `} else if refusal := ...`): the one function-level refusal that every
+	// named-task continuation passes.
+	const gate = "\n\tif refusal := contained.refusal(); refusal != nil {\n"
+	if n := strings.Count(command, gate); n != 1 {
+		t.Fatalf("the command has %d function-level refusals from the current candidate record, want 1", n)
 	}
-	for _, later := range []string{"openResumeIdentity(", "selectResumeLane(", "selectAuthorityResume(",
+	check := strings.Index(command, gate)
+	for _, later := range []string{"activeTask(active, *taskID)", "errObjectiveUnusable",
+		"openResumeIdentity(", "selectResumeLane(", "selectAuthorityResume(",
 		"inspectQuick(", "workflow.New(", "owedReviewObligation("} {
 		if at := strings.Index(command, later); at < 0 || at < check {
 			t.Errorf("%s is reached before the candidate record is consulted", later)
+		}
+	}
+}
+
+// W21 W20 / M08a, on a task a session DOES hold. The workspace refusal is the
+// first thing decided about a named task: it precedes the task lookup, the
+// objective check and the resume identity. Minting that identity has no
+// observable side effect for a held task (session.New only re-creates the
+// holder's existing directory; FreshID writes nothing), so its order is
+// pinned textually by W26 and behaviourally HERE by the two refusals that sit
+// between the gate and openResumeIdentity: a held task with no usable
+// objective, and a held task named under another --session. Each must be
+// refused as owed settlement -- never as an unusable objective or a scoped
+// miss -- for --task and --answer alike, with nothing appended, minted or
+// rewritten.
+func TestP2BW21AHeldQuarantinedTaskIsRefusedBeforeLookupObjectiveOrIdentity(t *testing.T) {
+	for name, c := range map[string]struct {
+		objective string
+		scoped    bool
+		other     error
+	}{
+		"held with no usable objective": {"", false, errObjectiveUnusable},
+		"held in another named session": {"the objective", true, errTaskNotInSession},
+	} {
+		for _, answer := range []bool{false, true} {
+			t.Run(name+map[bool]string{false: " --task", true: " --answer"}[answer], func(t *testing.T) {
+				root := gitRepoRoot(t)
+				const holder, other = "session-20260117T000000.000000000Z", "session-20260118T000000.000000000Z"
+				wqCandidate(t, root, "t-q", true)
+				writeRawSession(t, root, holder,
+					event.New(holder, "t-q", event.SourceSystem, event.TaskCreated, c.objective, nil),
+					b2a2Deferred(holder, "t-q"))
+				writeSession(t, root, other, event.New(other, "t-ok", event.SourceSystem, event.TaskCreated, "good work", nil))
+				before, err := session.FindActive(root)
+				if err != nil {
+					t.Fatal(err)
+				}
+				held, ok := activeTask(before.Active, "t-q")
+				if !ok || held.SessionID != holder || held.Task.ObjectiveUsable() == (c.objective == "") {
+					t.Fatalf("premise: %s holds t-q with objective %q: %+v", holder, c.objective, before.Active)
+				}
+				ledger, record, sessions := wqRead(t, wqLedger(root, holder)), wqRead(t, wqRecordPath(root, "t-q")), wqSessions(t, root)
+
+				args := []string{"--task", "t-q", "--quiet"}
+				if answer {
+					args = append(args, "--answer", "1")
+				}
+				if c.scoped {
+					args = append(args, "--session", other)
+				}
+				code, _, stderr := runResume(t, root, args...)
+				if code != exitFailed || !strings.Contains(stderr, wqLaneText) || !strings.Contains(stderr, wqNoSettle) {
+					t.Fatalf("the held quarantined task was not refused as owed settlement first: exit %d\n%s", code, stderr)
+				}
+				if strings.Contains(stderr, c.other.Error()) {
+					t.Errorf("a check after the gate decided the refusal:\n%s", stderr)
+				}
+				after := wqRead(t, wqLedger(root, holder))
+				if string(after) != string(ledger) || strings.Contains(string(after), string(event.SessionLineageBound)) {
+					t.Error("the refusal appended to the task's history")
+				}
+				if got := wqSessions(t, root); strings.Join(got, ",") != strings.Join(sessions, ",") {
+					t.Errorf("a session was created for a refused resume: %v -> %v", sessions, got)
+				}
+				if string(wqRead(t, wqRecordPath(root, "t-q"))) != string(record) {
+					t.Error("W12: resume changed the candidate record")
+				}
+			})
 		}
 	}
 }

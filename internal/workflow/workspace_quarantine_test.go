@@ -216,6 +216,21 @@ func TestW1ALiveUnsettledValidationEndsWorkspaceQuarantined(t *testing.T) {
 	seen := drainEvents(h.events)
 	id := quarantinedRecord(t, h.engine.Repo.Root)
 	wqAssertQuarantined(t, seen, "task-1", u.Invocation, id.InFlight.Workspace)
+	// M12a. The quarantine terminal CLAIMS no candidate state beyond what was
+	// observed: a PRESENT claim at the emit site would disagree with the
+	// UNKNOWN projection and surface as candidate_state_disagreement.
+	for _, ev := range seen {
+		if ev.Kind != event.RunReceipt {
+			continue
+		}
+		var body map[string]any
+		if err := json.Unmarshal(ev.Payload, &body); err != nil {
+			t.Fatal(err)
+		}
+		if d, has := body["candidate_state_disagreement"]; has {
+			t.Fatalf("the quarantine terminal claimed a candidate state it never observed: %v", d)
+		}
+	}
 	history, lerr := h.engine.Store.Load()
 	if lerr != nil {
 		t.Fatal(lerr)
