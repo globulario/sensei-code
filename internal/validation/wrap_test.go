@@ -12,7 +12,15 @@ import (
 	"testing"
 )
 
-const passThrough = "#!/bin/sh\nwhile [ \"$1\" != \"--\" ]; do shift; done\nshift\nexec \"$@\"\n"
+// passThrough is a fixture launcher speaking the status protocol: it takes
+// the nonce, keeps fds 3-5 from the confined command, runs it, and records
+// how it exited. What makes it confinement here is only that the broker
+// refuses to run anything except through it, pinned by digest.
+const passThrough = "#!/bin/sh\nread nonce <&5\nexec 5<&-\nwhile [ \"$1\" != \"--\" ]; do shift; done\nshift\n\"$@\" 3<&- 4>&-\nrc=$?\necho \"" + StatusProtocol + " $nonce ran $rc\" >&4\nexit $rc\n"
+
+// silentPassThrough is today's pinned wrapper's shape: it runs the command
+// and reports nothing on the status descriptor.
+const silentPassThrough = "#!/bin/sh\nwhile [ \"$1\" != \"--\" ]; do shift; done\nshift\nexec \"$@\"\n"
 
 func wrapper(t *testing.T, body string) *Confinement {
 	t.Helper()
@@ -21,7 +29,7 @@ func wrapper(t *testing.T, body string) *Confinement {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256([]byte(body))
-	return &Confinement{Profile: "d2-test", Command: p, Args: []string{"--profile", "d2-test"}, SHA256: hex.EncodeToString(sum[:])}
+	return &Confinement{Profile: "d2-test", Command: p, Args: []string{"--profile", "d2-test"}, SHA256: hex.EncodeToString(sum[:]), RequireStatus: true}
 }
 
 // touch is a check that leaves a marker, so a test can tell whether it ran.
@@ -76,6 +84,8 @@ func TestNoConfinementMeansNoExecution(t *testing.T) {
 		"no profile":       {Command: good.Command, SHA256: good.SHA256},
 		"wrapper fails":    wrapper(t, "#!/bin/sh\nexit 125\n"),
 		"custom failure":   func() *Confinement { c := wrapper(t, "#!/bin/sh\nexit 3\n"); c.FailureExit = 3; return c }(),
+		// The launcher's own refusal, exiting zero: a refusal, not a pass.
+		"launcher refuses": wrapper(t, "#!/bin/sh\nread n <&5\necho \""+StatusProtocol+" $n refused no D2 executor\" >&4\nexit 0\n"),
 	}
 	for name, c := range cases {
 		dir := t.TempDir()
@@ -119,9 +129,8 @@ func TestASwappedWrapperPathDoesNotRun(t *testing.T) {
 	if err := os.Rename(evil, c.Command); err != nil {
 		t.Fatal(err)
 	}
-	cmd := c.commandFor(context.Background(), f, dir, touch(marker))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("the verified wrapper did not run: %v: %s", err, out)
+	if x := c.launch(context.Background(), f, dir, candidateRole, touch(marker)); x.refused != "" || x.err != nil || x.exit != 0 {
+		t.Fatalf("the verified wrapper did not run: %+v: %s", x, x.output)
 	}
 	if ran(swapped) || !ran(marker) {
 		t.Fatalf("the swapped wrapper ran (swapped=%v, verified=%v)", ran(swapped), ran(marker))

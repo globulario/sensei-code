@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -12943,26 +12944,23 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	// attribution costs a second checkout and a second execution, and is worth
 	// paying only for a result something is about to act on.
 	var baselinePath string
-	runner := validation.Runner{
-		Workspace: repo.Root,
-		Permits:   permits,
-		Baseline: func() (string, error) {
-			if baselinePath != "" {
-				return baselinePath, nil
-			}
-			if strings.TrimSpace(base) == "" {
-				return "", errors.New("no recorded base commit to compare against")
-			}
-			// Detached: a named branch would outlive this call's removal of the
-			// worktree and refuse the next cycle's checkout, leaving every
-			// later failure unattributed.
-			path, err := e.Repo.CreateObservationWorktree(ctx, taskID+"-baseline", base)
-			if err != nil {
-				return "", err
-			}
-			baselinePath = path
-			return path, nil
-		},
+	runner := e.validationRunner(repo.Root, permits)
+	runner.Baseline = func() (string, error) {
+		if baselinePath != "" {
+			return baselinePath, nil
+		}
+		if strings.TrimSpace(base) == "" {
+			return "", errors.New("no recorded base commit to compare against")
+		}
+		// Detached: a named branch would outlive this call's removal of the
+		// worktree and refuse the next cycle's checkout, leaving every
+		// later failure unattributed.
+		path, err := e.Repo.CreateObservationWorktree(ctx, taskID+"-baseline", base)
+		if err != nil {
+			return "", err
+		}
+		baselinePath = path
+		return path, nil
 	}
 	defer func() {
 		if baselinePath != "" {
@@ -12972,28 +12970,62 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 
 	// Formatting first, and its evidence is deliberately discarded from the
 	// certifying bundle: it describes the candidate before the rewrite.
-	if formats := checksOf(validation.Format, e.Config.Validation.Format); len(formats) != 0 {
+	// Under required confinement (N4) a formatter that did not pass -- not
+	// permitted, failed, refused, or not run -- is not discarded with the
+	// formatter's evidence: it is carried into the certifying bundle, as a
+	// record about the capture it blocks, so the candidate cannot certify
+	// without it (RULING-340). With neither flag set the legacy behaviour is
+	// kept exactly: the formatter's evidence is discarded whatever it says.
+	//
+	// Under required confinement the list also runs one formatter at a time,
+	// and the candidate is captured again between them: a formatter after a
+	// rewrite ran on the rewritten bytes, and its record is bound to those,
+	// never to the bytes before every formatter (RULING-345). Legacy keeps
+	// the base's one execution over the whole list, bound to the bytes before
+	// it. The capture after the last execution is the one that stands for the
+	// formatting phase; the ones between are measured for the binding of the
+	// execution after them and published as nothing else.
+	confined := validationRequiresConfinement(e.Config)
+	var unsatisfiedFormat []validation.Evidence
+	if formats := phaseChecks(validation.Format, e.Config.Validation.Format, true); len(formats) != 0 {
 		before := validation.Digest(diff)
-		runner.Run(ctx, taskID, before, formats)
-		recapture, err := repo.CandidateCapture(ctx, base, intended)
-		if err != nil {
-			// The formatter may have rewritten the candidate, and nobody could
-			// measure what it left: recorded before the return, as UNKNOWN
-			// rather than as the identity captured before the rewrite.
-			e.noteCandidateCaptureFailed(taskID, postFormatCapture, err)
-			return validation.Bundle{}, diff, err
+		var stages [][]validation.Check
+		if confined {
+			for _, f := range formats {
+				stages = append(stages, []validation.Check{f})
+			}
+		} else {
+			stages = [][]validation.Check{formats}
+		}
+		var recapture gitx.Capture
+		for _, stage := range stages {
+			for _, c := range runner.Run(ctx, taskID, validation.Digest(diff), stage).Checks {
+				if formatterBlocks(confined, c.Outcome) {
+					unsatisfiedFormat = append(unsatisfiedFormat, c)
+				}
+			}
+			var err error
+			recapture, err = repo.CandidateCapture(ctx, base, intended)
+			if err != nil {
+				// The formatter may have rewritten the candidate, and nobody could
+				// measure what it left: recorded before the return, as UNKNOWN
+				// rather than as the identity captured before the rewrite. No
+				// formatter after this one runs: it would be bound to a capture
+				// nobody took.
+				e.noteCandidateCaptureFailed(taskID, postFormatCapture, err)
+				return validation.Bundle{}, diff, err
+			}
+			diff = recapture.Diff
 		}
 		// Recorded at once, empty as no current candidate: the capture after
 		// this one can still fail, and its failure must be judged against what
 		// the formatter left, not against the candidate before it (DF-41A4).
 		e.noteCurrentCapture(taskID, postFormatCapture, base, recapture.Tree, recapture.Diff)
-		reread := recapture.Diff
 		// The formatter's own evidence is discarded above, but WHETHER IT
 		// REWROTE ANYTHING is not the formatter's evidence -- it is a fact
 		// about the candidate, and later identity reasoning depends on it.
 		// Measured here because this is the only point where both sides exist.
-		e.noteFormatterMutation(taskID, before != validation.Digest(reread))
-		diff = reread
+		e.noteFormatterMutation(taskID, before != validation.Digest(diff))
 	} else {
 		e.noteNoFormatterConfigured(taskID)
 	}
@@ -13001,11 +13033,134 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	var checks []validation.Check
 	// The formatter's own evidence was discarded above; this proves formatting
 	// holds for the bytes about to be reviewed, bound to the final digest.
-	checks = append(checks, checksOf(validation.Format, e.Config.Validation.FormatVerify)...)
-	checks = append(checks, checksOf(validation.Vet, e.Config.Validation.Vet)...)
-	checks = append(checks, checksOf(validation.Build, e.Config.Validation.Build)...)
-	checks = append(checks, checksOf(validation.Test, e.Config.Validation.Test)...)
-	return runner.Run(ctx, taskID, validation.Digest(diff), checks), diff, nil
+	checks = append(checks, phaseChecks(validation.Format, e.Config.Validation.FormatVerify, false)...)
+	checks = append(checks, phaseChecks(validation.Vet, e.Config.Validation.Vet, false)...)
+	checks = append(checks, phaseChecks(validation.Build, e.Config.Validation.Build, false)...)
+	checks = append(checks, phaseChecks(validation.Test, e.Config.Validation.Test, false)...)
+	bundle := runner.Run(ctx, taskID, validation.Digest(diff), checks)
+	if len(unsatisfiedFormat) != 0 {
+		// Each original keeps its own binding -- the bytes the formatter was
+		// asked to run against -- and what enters the certifying bundle is a
+		// fresh record about THIS capture: formatting is unsatisfied here
+		// because of what the formatter's execution came to before it, and
+		// it was never re-executed on these bytes. Errored, so the bundle
+		// names these bytes and still cannot pass; the original execution is
+		// preserved, with its binding, inside the record rather than rebound
+		// to bytes it never saw.
+		derived := make([]validation.Evidence, 0, len(unsatisfiedFormat))
+		for _, original := range unsatisfiedFormat {
+			derived = append(derived, formatterBlocker(original, bundle))
+		}
+		bundle.Checks = append(derived, bundle.Checks...)
+	}
+	return bundle, diff, nil
+}
+
+// phaseChecks builds the checks of one validation phase with the write
+// authority that phase has, which is the phase's and never the command's:
+// the formatter phase rewrites the candidate; the verifier, vet, build and
+// test phases do not. Under confinement that authority is the workspace mode
+// the launcher is asked for, so a verifier that reports by its exit status
+// must not be handed a writable candidate, and a formatter that reports by
+// its output must not be refused one. FailIfOutput says how a command's
+// output is read and nothing about what it may write (RULING-346).
+// checksOf's own inference is left to its one caller outside validation
+// (the N3 tool-time check), whose contract this does not decide.
+func phaseChecks(kind validation.CheckKind, commands []config.Command, mutates bool) []validation.Check {
+	checks := checksOf(kind, commands)
+	for i := range checks {
+		checks[i].Mutates = mutates
+	}
+	return checks
+}
+
+// validationRequiresConfinement reports whether validation runs in the
+// required-confinement mode (N4): either flag selects it, and in that mode
+// no required validation evidence may silently disappear.
+func validationRequiresConfinement(c config.Config) bool {
+	return c.Validation.Confined || c.ExecBinding.Enabled
+}
+
+// formatterBlocks decides whether a formatter outcome blocks the capture
+// after it: under required confinement, every outcome but a pass; otherwise
+// none, which is the legacy behaviour the base established.
+func formatterBlocks(confined bool, outcome validation.Outcome) bool {
+	return confined && outcome != validation.Passed
+}
+
+// formatterBlocker derives the record a non-passing formatter execution
+// leaves in the certifying bundle of the capture after it. The original
+// keeps its outcome and its binding, quoted inside; the derived record is
+// Errored (an unsatisfied obligation about these bytes, not an execution on
+// them), bound to the bundle's capture, and says the formatter was not
+// re-executed. A confinement refusal keeps its own classification; any other
+// outcome is named as what it was and never as a sandbox refusal.
+func formatterBlocker(original validation.Evidence, bundle validation.Bundle) validation.Evidence {
+	var detail string
+	// Only the formatter's OWN refusal (not a refusal of its baseline, which
+	// means the formatter itself did run) is described as refused before it.
+	if strings.HasPrefix(original.Detail, validation.SandboxUnavailable+": ") {
+		detail = validation.SandboxUnavailable + ": formatting is unsatisfied for this capture because the formatter was refused " +
+			"before it and not attempted on these bytes (not re-executed); the refused execution, bound to " + original.DiffDigest + ": " + original.Detail
+	} else {
+		what := "ended " + string(original.Outcome)
+		if original.ExitStatus >= 0 && (original.Outcome == validation.Failed || original.Outcome == validation.Infrastructure) {
+			what += " (exit " + strconv.Itoa(original.ExitStatus) + ")"
+		}
+		detail = "formatting is unsatisfied for this capture: the configured formatter's execution before it " + what +
+			" and it was not re-executed on these bytes; the original execution, bound to " + original.DiffDigest
+		if original.Detail != "" {
+			detail += ": " + original.Detail
+		}
+		if original.Attribution != "" {
+			detail += " (attribution " + original.Attribution + ")"
+		}
+	}
+	return validation.Evidence{
+		Kind: original.Kind, Command: original.Command, Args: original.Args,
+		RequestedBy: original.RequestedBy, ExecutedBy: original.ExecutedBy + " (not re-executed on this capture)",
+		CandidateID: bundle.CandidateID, DiffDigest: bundle.DiffDigest,
+		StartedAt: original.StartedAt, FinishedAt: original.FinishedAt,
+		ExitStatus: -1, Outcome: validation.Errored, Detail: detail,
+	}
+}
+
+// validationRunner is the one policy every validation Runner the engine
+// builds is constructed under (N4): validate, its formatter and baseline
+// attribution, and named required tests, on every first, retried or resumed
+// cycle, since each reaches them only through here.
+//
+// With neither confined validation nor N3 exec binding selected it is the
+// unconfined broker, exactly as before, and its evidence claims nothing
+// about confinement. With either, every check runs under the pinned profile
+// through the launcher status protocol, or -- with no profile to pin -- is
+// refused before anything runs. There is no mixed mode and no host fallback.
+func (e *Engine) validationRunner(workspace string, permits func(validation.CheckKind) (bool, string)) validation.Runner {
+	r := validation.Runner{Workspace: workspace, Permits: permits}
+	r.Confine, r.Refusal = validationConfinementOf(e.Config)
+	return r
+}
+
+// validationConfinementOf decides validation's confinement from
+// configuration alone: nil and no refusal is the unconfined broker; otherwise
+// exactly one of a status-protocol confinement or a refusal.
+func validationConfinementOf(c config.Config) (*validation.Confinement, string) {
+	if !c.Validation.Confined && !c.ExecBinding.Enabled {
+		return nil, ""
+	}
+	p := c.Validation.Confinement
+	if strings.TrimSpace(p.Profile) == "" && strings.TrimSpace(p.Command) == "" && strings.TrimSpace(p.SHA256) == "" && len(p.Args) == 0 {
+		p = c.ExecBinding.Confinement
+	}
+	if strings.TrimSpace(p.Command) == "" {
+		why := "validation.confined is set"
+		if c.ExecBinding.Enabled {
+			why = "exec_binding is enabled"
+		}
+		return nil, "confined validation is required (" + why + ") but no D2 confinement profile is configured"
+	}
+	return &validation.Confinement{Profile: p.Profile, Command: p.Command, Args: p.Args,
+		SHA256: p.SHA256, FailureExit: p.FailureExit, RequireStatus: true}, ""
 }
 
 // validationPermits maps a kind of check onto the capability the envelope must
@@ -13055,7 +13210,7 @@ func (e *Engine) requiredTestEvidence(ctx context.Context, taskID string, envelo
 	digest := validation.Digest(diff)
 	var runs []requiredTestRun
 	if len(ids) != 0 {
-		runner := validation.Runner{Workspace: repo.Root, Permits: validationPermits(envelope)}
+		runner := e.validationRunner(repo.Root, validationPermits(envelope))
 		runs = runner.RunRequiredTests(ctx, taskID, digest, ids)
 	}
 	return runs, correlateRequiredTests(findings, runs, taskID, digest)
