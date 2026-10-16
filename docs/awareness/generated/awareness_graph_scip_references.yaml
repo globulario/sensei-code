@@ -4950,11 +4950,11 @@ code_references:
     to_name: Join
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
@@ -6357,11 +6357,11 @@ code_references:
     to_name: Bus.Subscribe
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/ghwebhook/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/config.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6454,15 +6454,15 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
+    to_id: internal/control/server.go:New
+    to_name: New
+    file: cmd/sensei-code/control.go
+  - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/workflow/engine.go:New
-    to_name: New
-    file: cmd/sensei-code/control.go
-  - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6524,11 +6524,11 @@ code_references:
     to_name: SIGTERM
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Close
+    to_id: internal/control/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Close
+    to_id: internal/ghwebhook/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6536,11 +6536,11 @@ code_references:
     to_name: Server.CloseLocal
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6556,11 +6556,11 @@ code_references:
     to_name: Server.ListenRelay
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Serve
+    to_id: internal/ghwebhook/server.go:Server.Serve
     to_name: Server.Serve
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Serve
+    to_id: internal/control/server.go:Server.Serve
     to_name: Server.Serve
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -7312,11 +7312,11 @@ code_references:
     to_name: Reviewer
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/agent/agent.go:Runner~type
+    to_id: internal/ghbridge/runner.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/ghbridge/runner.go:Runner~type
+    to_id: internal/agent/agent.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
@@ -7847,7 +7847,7 @@ code_references:
     to_name: Mint
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -7855,7 +7855,7 @@ code_references:
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -8412,10 +8412,6 @@ code_references:
     to_name: Load
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/session/store.go:New
-    to_name: New
-    file: cmd/sensei-code/main.go
-  - from: cmd/sensei-code/main.go:main
     to_id: internal/tui/model.go:New
     to_name: New
     file: cmd/sensei-code/main.go
@@ -8424,8 +8420,15 @@ code_references:
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
+    to_id: internal/session/store.go:New
+    to_name: New
+    file: cmd/sensei-code/main.go
+  - from: cmd/sensei-code/main.go:main
     to_id: internal/event/bus.go:NewBus
     to_name: NewBus
+    file: cmd/sensei-code/main.go
+  - from: cmd/sensei-code/main.go:main
+    to_name: NewProgram
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
     to_name: Now
@@ -8435,6 +8438,9 @@ code_references:
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
     to_name: Println
+    file: cmd/sensei-code/main.go
+  - from: cmd/sensei-code/main.go:main
+    to_name: Program.Run
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
     to_id: internal/session/store.go:QuarantineCommand
@@ -14465,11 +14471,11 @@ code_references:
     to_name: Interrupted.TaskID
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1InteractiveStartupResumesUnderAFreshBoundSession
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1InteractiveStartupResumesUnderAFreshBoundSession
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1InteractiveStartupResumesUnderAFreshBoundSession
@@ -15013,11 +15019,11 @@ code_references:
     to_name: Index
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1RF1EveryResumeLaneIsHandedAFreshSession
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1RF1EveryResumeLaneIsHandedAFreshSession
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: cmd/sensei-code/resume_test.go
   - from: cmd/sensei-code/resume_test.go:TestB2a1RF1EveryResumeLaneIsHandedAFreshSession
@@ -19083,11 +19089,11 @@ code_references:
     to_name: ID
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
@@ -35520,11 +35526,11 @@ code_references:
     to_name: Agent.Name
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/behavioral/behavioral.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
@@ -39649,7 +39655,7 @@ code_references:
     to_name: Minute
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
@@ -39657,7 +39663,7 @@ code_references:
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
@@ -42077,7 +42083,28 @@ code_references:
     to_name: Getpid
     file: internal/control/peer_linux.go
   - from: internal/control/peer_linux.go:inspectPeer
+    to_name: GetsockoptUcred
+    file: internal/control/peer_linux.go
+  - from: internal/control/peer_linux.go:inspectPeer
     to_name: RawConn.Control
+    file: internal/control/peer_linux.go
+  - from: internal/control/peer_linux.go:inspectPeer
+    to_name: SOL_SOCKET
+    file: internal/control/peer_linux.go
+  - from: internal/control/peer_linux.go:inspectPeer
+    to_name: SO_PEERCRED
+    file: internal/control/peer_linux.go
+  - from: internal/control/peer_linux.go:inspectPeer
+    to_name: Ucred
+    file: internal/control/peer_linux.go
+  - from: internal/control/peer_linux.go:inspectPeer
+    to_name: Ucred.Gid
+    file: internal/control/peer_linux.go
+  - from: internal/control/peer_linux.go:inspectPeer
+    to_name: Ucred.Pid
+    file: internal/control/peer_linux.go
+  - from: internal/control/peer_linux.go:inspectPeer
+    to_name: Ucred.Uid
     file: internal/control/peer_linux.go
   - from: internal/control/peer_linux.go:inspectPeer
     to_name: UnixConn
@@ -42087,6 +42114,9 @@ code_references:
     file: internal/control/peer_linux.go
   - from: internal/control/peer_linux.go:inspectPeer
     to_name: fmt
+    file: internal/control/peer_linux.go
+  - from: internal/control/peer_linux.go:inspectPeer
+    to_name: golang.org/x/sys/unix
     file: internal/control/peer_linux.go
   - from: internal/control/peer_linux.go:inspectPeer
     to_name: net
@@ -45723,10 +45753,10 @@ code_references:
     to_name: Second
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
-    to_id: internal/control/server.go:Server~type
     to_name: Server
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
+    to_id: internal/control/server.go:Server~type
     to_name: Server
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
@@ -95754,10 +95784,10 @@ code_references:
     to_name: Issue.Number
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
@@ -101619,17 +101649,17 @@ code_references:
     to_name: Second
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
+    to_name: Server
+    file: internal/ghwebhook/server.go
+  - from: internal/ghwebhook/server.go:Server.Listen
     to_id: internal/ghwebhook/server.go:Server~type
     to_name: Server
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_name: Server
-    file: internal/ghwebhook/server.go
-  - from: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
@@ -154108,11 +154138,11 @@ code_references:
     to_name: CheckpointPrepared
     file: internal/session/interrupted_test.go
   - from: internal/session/interrupted_test.go:TestB1W15ACheckpointRecordIsAppendedDurably
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/session/interrupted_test.go
   - from: internal/session/interrupted_test.go:TestB1W15ACheckpointRecordIsAppendedDurably
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/session/interrupted_test.go
   - from: internal/session/interrupted_test.go:TestB1W15ACheckpointRecordIsAppendedDurably
@@ -160697,6 +160727,12 @@ code_references:
     to_name: testing
     file: internal/session/record_outlives_candidate_test.go
   - from: internal/session/recordlock_unix.go:tryLockRecordFile
+    to_name: EINTR
+    file: internal/session/recordlock_unix.go
+  - from: internal/session/recordlock_unix.go:tryLockRecordFile
+    to_name: EWOULDBLOCK
+    file: internal/session/recordlock_unix.go
+  - from: internal/session/recordlock_unix.go:tryLockRecordFile
     to_name: File.Close
     file: internal/session/recordlock_unix.go
   - from: internal/session/recordlock_unix.go:tryLockRecordFile
@@ -160704,6 +160740,18 @@ code_references:
     file: internal/session/recordlock_unix.go
   - from: internal/session/recordlock_unix.go:tryLockRecordFile
     to_name: File.Name
+    file: internal/session/recordlock_unix.go
+  - from: internal/session/recordlock_unix.go:tryLockRecordFile
+    to_name: Flock
+    file: internal/session/recordlock_unix.go
+  - from: internal/session/recordlock_unix.go:tryLockRecordFile
+    to_name: LOCK_EX
+    file: internal/session/recordlock_unix.go
+  - from: internal/session/recordlock_unix.go:tryLockRecordFile
+    to_name: LOCK_NB
+    file: internal/session/recordlock_unix.go
+  - from: internal/session/recordlock_unix.go:tryLockRecordFile
+    to_name: LOCK_UN
     file: internal/session/recordlock_unix.go
   - from: internal/session/recordlock_unix.go:tryLockRecordFile
     to_name: O_CREATE
@@ -160725,6 +160773,9 @@ code_references:
     file: internal/session/recordlock_unix.go
   - from: internal/session/recordlock_unix.go:tryLockRecordFile
     to_name: PathError.Path
+    file: internal/session/recordlock_unix.go
+  - from: internal/session/recordlock_unix.go:tryLockRecordFile
+    to_name: golang.org/x/sys/unix
     file: internal/session/recordlock_unix.go
   - from: internal/session/recordlock_unix.go:tryLockRecordFile
     to_name: os
@@ -162700,11 +162751,11 @@ code_references:
     to_name: Is
     file: internal/session/session_lineage_test.go
   - from: internal/session/session_lineage_test.go:TestB2a1RF1EveryTaskAppendRequiresTheWriteCapability
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/session/session_lineage_test.go
   - from: internal/session/session_lineage_test.go:TestB2a1RF1EveryTaskAppendRequiresTheWriteCapability
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/session/session_lineage_test.go
   - from: internal/session/session_lineage_test.go:TestB2a1RF1EveryTaskAppendRequiresTheWriteCapability
@@ -168851,11 +168902,11 @@ code_references:
     to_name: testing
     file: internal/session/session_lineage_test.go
   - from: internal/session/session_lineage_test.go:tornStore
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/session/session_lineage_test.go
   - from: internal/session/session_lineage_test.go:tornStore
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/session/session_lineage_test.go
   - from: internal/session/session_lineage_test.go:tornStore
@@ -181593,13 +181644,31 @@ code_references:
     to_name: testing
     file: internal/tui/astutil_test.go
   - from: internal/tui/clipboard.go:copyToClipboard
+    to_name: Cmd
+    file: internal/tui/clipboard.go
+  - from: internal/tui/clipboard.go:copyToClipboard
+    to_name: SetClipboard
+    file: internal/tui/clipboard.go
+  - from: internal/tui/clipboard.go:copyToClipboard
+    to_name: Strip
+    file: internal/tui/clipboard.go
+  - from: internal/tui/clipboard.go:copyToClipboard
     to_name: charm.land/bubbletea/v2
     file: internal/tui/clipboard.go
   - from: internal/tui/clipboard.go:copyToClipboard
     to_name: github.com/charmbracelet/x/ansi
     file: internal/tui/clipboard.go
   - from: internal/tui/clipboard.go:pasteHint
+    to_name: Cmd
+    file: internal/tui/clipboard.go
+  - from: internal/tui/clipboard.go:pasteHint
     to_name: Millisecond
+    file: internal/tui/clipboard.go
+  - from: internal/tui/clipboard.go:pasteHint
+    to_name: Msg
+    file: internal/tui/clipboard.go
+  - from: internal/tui/clipboard.go:pasteHint
+    to_name: Tick
     file: internal/tui/clipboard.go
   - from: internal/tui/clipboard.go:pasteHint
     to_name: Time
@@ -181618,6 +181687,9 @@ code_references:
     to_name: Join
     file: internal/tui/clipboard.go
   - from: internal/tui/clipboard.go:plainTranscript
+    to_name: Strip
+    file: internal/tui/clipboard.go
+  - from: internal/tui/clipboard.go:plainTranscript
     to_name: TrimSpace
     file: internal/tui/clipboard.go
   - from: internal/tui/clipboard.go:plainTranscript
@@ -181633,6 +181705,10 @@ code_references:
   - from: internal/tui/clipboard_test.go:TestAnAnsweredPasteIsNotWarnedAbout
     to_id: internal/tui/model.go:Model.Update
     to_name: Model.Update
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestAnAnsweredPasteIsNotWarnedAbout
+    to_id: internal/tui/model.go:Model.lines
+    to_name: Model.lines
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestAnAnsweredPasteIsNotWarnedAbout
     to_id: internal/tui/model.go:Model.pasteWaiting
@@ -181663,6 +181739,10 @@ code_references:
     to_name: Model.Update
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestAnUnansweredPasteExplainsItself
+    to_id: internal/tui/model.go:Model.lines
+    to_name: Model.lines
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestAnUnansweredPasteExplainsItself
     to_id: internal/tui/model.go:Model.pasteWaiting
     to_name: Model.pasteWaiting
     file: internal/tui/clipboard_test.go
@@ -181690,8 +181770,20 @@ code_references:
     to_name: testing
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestB2a1AStaleHaltDoesNotEndTheCurrentInvocation
+    to_id: internal/tui/model.go:Model~type
+    to_name: Model
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestB2a1AStaleHaltDoesNotEndTheCurrentInvocation
     to_id: internal/tui/model.go:Model.Update
     to_name: Model.Update
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestB2a1AStaleHaltDoesNotEndTheCurrentInvocation
+    to_id: internal/tui/model.go:Model.busy
+    to_name: Model.busy
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestB2a1AStaleHaltDoesNotEndTheCurrentInvocation
+    to_id: internal/tui/model.go:Model.currentTask
+    to_name: Model.currentTask
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestB2a1AStaleHaltDoesNotEndTheCurrentInvocation
     to_id: internal/workflow/engine.go:RecordAppendFailure.Detail
@@ -181812,12 +181904,24 @@ code_references:
     to_name: Interrupted.TaskID
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestB2a1ResumeAppendHaltEndsTheResumeInModelUpdate
+    to_id: internal/tui/model.go:Model~type
+    to_name: Model
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestB2a1ResumeAppendHaltEndsTheResumeInModelUpdate
     to_id: internal/tui/model.go:Model.Update
     to_name: Model.Update
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestB2a1ResumeAppendHaltEndsTheResumeInModelUpdate
+    to_id: internal/tui/model.go:Model.busy
+    to_name: Model.busy
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestB2a1ResumeAppendHaltEndsTheResumeInModelUpdate
     to_id: internal/tui/model.go:Model.ctx
     to_name: Model.ctx
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestB2a1ResumeAppendHaltEndsTheResumeInModelUpdate
+    to_id: internal/tui/model.go:Model.currentTask
+    to_name: Model.currentTask
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestB2a1ResumeAppendHaltEndsTheResumeInModelUpdate
     to_id: internal/tui/model.go:Model.resumable
@@ -181908,12 +182012,36 @@ code_references:
     to_name: Count
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestB2a1RunAppendHaltEndsTheRunInModelUpdate
+    to_id: internal/tui/model.go:Model~type
+    to_name: Model
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestB2a1RunAppendHaltEndsTheRunInModelUpdate
     to_id: internal/tui/model.go:Model.Update
     to_name: Model.Update
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestB2a1RunAppendHaltEndsTheRunInModelUpdate
+    to_id: internal/tui/model.go:Model.busy
+    to_name: Model.busy
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestB2a1RunAppendHaltEndsTheRunInModelUpdate
     to_id: internal/tui/model.go:Model.ctx
     to_name: Model.ctx
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestB2a1RunAppendHaltEndsTheRunInModelUpdate
+    to_id: internal/tui/model.go:Model.currentTask
+    to_name: Model.currentTask
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestB2a1RunAppendHaltEndsTheRunInModelUpdate
+    to_id: internal/tui/model.go:Model.pending
+    to_name: Model.pending
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestB2a1RunAppendHaltEndsTheRunInModelUpdate
+    to_id: internal/tui/model.go:Model.pendingTask
+    to_name: Model.pendingTask
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestB2a1RunAppendHaltEndsTheRunInModelUpdate
+    to_id: internal/tui/model.go:Model.resumable
+    to_name: Model.resumable
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestB2a1RunAppendHaltEndsTheRunInModelUpdate
     to_id: internal/workflow/engine.go:RecordAppendFailure.Detail
@@ -182270,8 +182398,22 @@ code_references:
     to_name: testing
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestCopyKeysProduceClipboardWrites
+    to_name: KeyPressMsg
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestCopyKeysProduceClipboardWrites
+    to_id: internal/tui/model.go:Model~type
+    to_name: Model
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestCopyKeysProduceClipboardWrites
     to_id: internal/tui/model.go:Model.Update
     to_name: Model.Update
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestCopyKeysProduceClipboardWrites
+    to_name: Model.Value
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestCopyKeysProduceClipboardWrites
+    to_id: internal/tui/model.go:Model.input
+    to_name: Model.input
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestCopyKeysProduceClipboardWrites
     to_name: T
@@ -182304,6 +182446,12 @@ code_references:
     to_name: testing
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestCopyingNothingWritesNothing
+    to_name: KeyPressMsg
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestCopyingNothingWritesNothing
+    to_name: KeyPressMsg.String
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestCopyingNothingWritesNothing
     to_id: internal/tui/model.go:Model.Update
     to_name: Model.Update
     file: internal/tui/clipboard_test.go
@@ -182332,10 +182480,28 @@ code_references:
     to_name: testing
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestCopyingStripsStyling
+    to_name: Color
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestCopyingStripsStyling
     to_name: Contains
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestCopyingStripsStyling
+    to_name: NewStyle
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestCopyingStripsStyling
+    to_name: Style.Bold
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestCopyingStripsStyling
+    to_name: Style.Foreground
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestCopyingStripsStyling
+    to_name: Style.Render
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestCopyingStripsStyling
     to_name: T
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestCopyingStripsStyling
+    to_name: charm.land/lipgloss/v2
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestCopyingStripsStyling
     to_name: common.Fatalf
@@ -182416,8 +182582,16 @@ code_references:
     to_name: GuidanceDelivered
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestTheHumansOwnWordsAreNotTheLastResponse
+    to_id: internal/tui/model.go:Model~type
+    to_name: Model
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestTheHumansOwnWordsAreNotTheLastResponse
     to_id: internal/tui/model.go:Model.Update
     to_name: Model.Update
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:TestTheHumansOwnWordsAreNotTheLastResponse
+    to_id: internal/tui/model.go:Model.lastResponse
+    to_name: Model.lastResponse
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:TestTheHumansOwnWordsAreNotTheLastResponse
     to_id: internal/event/event.go:SourceArchitect
@@ -182451,6 +182625,12 @@ code_references:
     to_name: testing
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:collectClipboardWrites
+    to_name: BatchMsg
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:collectClipboardWrites
+    to_name: Cmd
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:collectClipboardWrites
     to_name: String
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:collectClipboardWrites
@@ -182473,6 +182653,18 @@ code_references:
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:collectClipboardWrites
     to_name: reflect
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:ctrlKey
+    to_name: Key.Code
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:ctrlKey
+    to_name: Key.Mod
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:ctrlKey
+    to_name: KeyPressMsg
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:ctrlKey
+    to_name: ModCtrl
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:ctrlKey
     to_name: charm.land/bubbletea/v2
@@ -182538,12 +182730,18 @@ code_references:
     to_name: Model
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:newTestModel
+    to_name: Model.SetValue
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:newTestModel
     to_id: internal/tui/model.go:Model.input
     to_name: Model.input
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:newTestModel
     to_id: internal/tui/model.go:Model.lastResponse
     to_name: Model.lastResponse
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:newTestModel
+    to_name: New
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:newTestModel
     to_name: charm.land/bubbles/v2/textarea
@@ -182568,8 +182766,20 @@ code_references:
     to_name: github.com/globulario/sensei-code/internal/event
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:resumeTyped
+    to_name: Key.Code
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:resumeTyped
+    to_name: KeyEnter
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:resumeTyped
+    to_name: KeyPressMsg
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:resumeTyped
     to_id: internal/tui/model.go:Model~type
     to_name: Model
+    file: internal/tui/clipboard_test.go
+  - from: internal/tui/clipboard_test.go:resumeTyped
+    to_name: Model.SetValue
     file: internal/tui/clipboard_test.go
   - from: internal/tui/clipboard_test.go:resumeTyped
     to_id: internal/tui/model.go:Model.Update
@@ -182652,7 +182862,16 @@ code_references:
     to_name: Repeat
     file: internal/tui/layout_test.go
   - from: internal/tui/layout_test.go:TestWrapRowsPadsEveryRowToFullWidth
+    to_name: Style.Render
+    file: internal/tui/layout_test.go
+  - from: internal/tui/layout_test.go:TestWrapRowsPadsEveryRowToFullWidth
     to_name: T
+    file: internal/tui/layout_test.go
+  - from: internal/tui/layout_test.go:TestWrapRowsPadsEveryRowToFullWidth
+    to_name: Width
+    file: internal/tui/layout_test.go
+  - from: internal/tui/layout_test.go:TestWrapRowsPadsEveryRowToFullWidth
+    to_name: charm.land/lipgloss/v2
     file: internal/tui/layout_test.go
   - from: internal/tui/layout_test.go:TestWrapRowsPadsEveryRowToFullWidth
     to_name: common.Fatalf
@@ -182671,6 +182890,12 @@ code_references:
     to_id: internal/tui/model.go:wrapRows
     to_name: wrapRows
     file: internal/tui/layout_test.go
+  - from: internal/tui/model.go:Model.Init
+    to_name: Batch
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Init
+    to_name: Cmd
+    file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Init
     to_id: internal/tui/model.go:Model~type
     to_name: Model
@@ -182701,6 +182926,21 @@ code_references:
   - from: internal/tui/model.go:Model.Update
     to_id: internal/event/event.go:AuthorityResolved
     to_name: AuthorityResolved
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: Batch
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: ClearScreen
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: ClipboardMsg
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: ClipboardMsg.Content
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: Cmd
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
     to_name: Command
@@ -182786,6 +183026,9 @@ code_references:
     to_name: Event.TaskID
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
+    to_name: ExecProcess
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
     to_name: Executable
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -182794,6 +183037,12 @@ code_references:
   - from: internal/tui/model.go:Model.Update
     to_id: internal/command/command.go:IsUnknown
     to_name: IsUnknown
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: KeyPressMsg
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: KeyPressMsg.String
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
     to_id: internal/provider/provider.go:Label
@@ -182812,8 +183061,23 @@ code_references:
     to_name: ModeSelected
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
+    to_name: Model
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
     to_id: internal/tui/model.go:Model~type
     to_name: Model
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: Model.Reset
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: Model.SetWidth
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: Model.Update
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: Model.Value
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
     to_id: internal/tui/model.go:Model.activity
@@ -182928,6 +183192,21 @@ code_references:
     to_name: Model.wordIdx
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
+    to_name: Mouse.Button
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: MouseWheelDown
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: MouseWheelMsg
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: MouseWheelUp
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: Msg
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
     to_name: Now
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -182937,6 +183216,18 @@ code_references:
   - from: internal/tui/model.go:Model.Update
     to_id: internal/provider/provider.go:Parse
     to_name: Parse
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: PasteMsg
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: PasteMsg.Content
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: Quit
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: ReadClipboard
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
     to_id: internal/workflow/engine.go:RecordAppendFailure.Error
@@ -182966,6 +183257,9 @@ code_references:
     to_name: Status.State
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
+    to_name: Style.Render
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
     to_id: internal/command/command.go:Suggest
     to_name: Suggest
     file: internal/tui/model.go
@@ -182984,6 +183278,15 @@ code_references:
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
     to_name: Unmarshal
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: WindowSizeMsg
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: WindowSizeMsg.Height
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.Update
+    to_name: WindowSizeMsg.Width
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
     to_id: internal/event/event.go:WorkflowAwaitingAuthority
@@ -183227,11 +183530,17 @@ code_references:
     to_name: Engine.Repo
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.View
+    to_name: Height
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.View
     to_name: Join
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.View
     to_id: internal/tui/model.go:Model~type
     to_name: Model
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.View
+    to_name: Model.View
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.View
     to_id: internal/tui/model.go:Model.engine
@@ -183282,6 +183591,15 @@ code_references:
     to_name: Model.width
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.View
+    to_name: MouseModeCellMotion
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.View
+    to_name: MouseModeNone
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.View
+    to_name: NewView
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.View
     to_name: Repeat
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.View
@@ -183292,7 +183610,28 @@ code_references:
     to_name: Sprintf
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.View
+    to_name: Style.Render
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.View
+    to_name: Style.Width
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.View
+    to_name: View
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.View
+    to_name: View.AltScreen
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.View
+    to_name: View.MouseMode
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.View
+    to_name: View.WindowTitle
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.View
     to_name: charm.land/bubbletea/v2
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.View
+    to_name: charm.land/lipgloss/v2
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.View
     to_id: internal/tui/model.go:composerBorder
@@ -183357,6 +183696,9 @@ code_references:
     to_name: Model.taskModeWhy
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.modeLine
+    to_name: Style.Render
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.modeLine
     to_id: internal/tui/model.go:hintStyle
     to_name: hintStyle
     file: internal/tui/model.go
@@ -183367,6 +183709,15 @@ code_references:
   - from: internal/tui/model.go:Model.modeLine
     to_id: internal/tui/model.go:modeStyle
     to_name: modeStyle
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.runCommand
+    to_name: Batch
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.runCommand
+    to_name: ClearScreen
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.runCommand
+    to_name: Cmd
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.runCommand
     to_id: internal/command/command.go:Command~type
@@ -183476,6 +183827,9 @@ code_references:
     to_name: ResumeAttempt.TaskID
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.runCommand
+    to_name: Style.Render
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.runCommand
     to_id: internal/session/store.go:TaskHistoryRefusal.Error
     to_name: TaskHistoryRefusal.Error
     file: internal/tui/model.go
@@ -183562,6 +183916,9 @@ code_references:
     to_name: Client.Close
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.senseiCommand
+    to_name: Cmd
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.senseiCommand
     to_id: internal/command/command.go:Command~type
     to_name: Command
     file: internal/tui/model.go
@@ -183612,6 +183969,9 @@ code_references:
   - from: internal/tui/model.go:Model.senseiCommand
     to_id: internal/tui/model.go:Model.width
     to_name: Model.width
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.senseiCommand
+    to_name: Msg
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.senseiCommand
     to_name: New
@@ -183772,6 +184132,9 @@ code_references:
     to_name: Sprintf
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.statusLine
+    to_name: Style.Render
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:Model.statusLine
     to_id: internal/tui/model.go:authorityStyle
     to_name: authorityStyle
     file: internal/tui/model.go
@@ -183837,6 +184200,24 @@ code_references:
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:New
+    to_name: Model.Focus
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:New
+    to_name: Model.Placeholder
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:New
+    to_name: Model.Prompt
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:New
+    to_name: Model.SetHeight
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:New
+    to_name: Model.SetWidth
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:New
+    to_name: Model.ShowLineNumbers
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:New
     to_id: internal/tui/model.go:Model.ctx
     to_name: Model.ctx
     file: internal/tui/model.go
@@ -183867,6 +184248,12 @@ code_references:
   - from: internal/tui/model.go:New
     to_id: internal/tui/model.go:Model.resumable
     to_name: Model.resumable
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:New
+    to_name: New
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:New
+    to_name: Style.Render
     file: internal/tui/model.go
   - from: internal/tui/model.go:New
     to_id: internal/session/store.go:TaskHistoryRefusal.Error
@@ -183912,6 +184299,9 @@ code_references:
     file: internal/tui/model.go
   - from: internal/tui/model.go:argSuffix
     to_name: strings
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:banner
+    to_name: Style.Render
     file: internal/tui/model.go
   - from: internal/tui/model.go:banner
     to_id: internal/tui/model.go:dimStyle
@@ -184203,6 +184593,12 @@ code_references:
     to_name: Repeat
     file: internal/tui/model.go
   - from: internal/tui/model.go:padRow
+    to_name: Width
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:padRow
+    to_name: charm.land/lipgloss/v2
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:padRow
     to_name: strings
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderActivity
@@ -184232,6 +184628,9 @@ code_references:
   - from: internal/tui/model.go:renderActivity
     to_id: internal/event/event.go:SourceClaude
     to_name: SourceClaude
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderActivity
+    to_name: Style.Render
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderActivity
     to_name: TrimSpace
@@ -184283,6 +184682,9 @@ code_references:
     to_name: Decision.Subject
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderAuthority
+    to_name: NewStyle
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderAuthority
     to_id: internal/authority/authority.go:Option.Description
     to_name: Option.Description
     file: internal/tui/model.go
@@ -184295,8 +184697,26 @@ code_references:
     to_name: Option.Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderAuthority
+    to_name: RoundedBorder
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderAuthority
+    to_name: Style.Border
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderAuthority
+    to_name: Style.Padding
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderAuthority
+    to_name: Style.Render
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderAuthority
+    to_name: Style.Width
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderAuthority
     to_id: internal/tui/model.go:authorityStyle
     to_name: authorityStyle
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderAuthority
+    to_name: charm.land/lipgloss/v2
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderAuthority
     to_id: internal/tui/model.go:dimStyle
@@ -184386,6 +184806,9 @@ code_references:
   - from: internal/tui/model.go:renderEvent
     to_id: internal/event/event.go:SourceUser
     to_name: SourceUser
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderEvent
+    to_name: Style.Render
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderEvent
     to_name: TrimSpace
@@ -184481,6 +184904,9 @@ code_references:
     to_name: Sprintf
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderHelp
+    to_name: Style.Render
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderHelp
     to_id: internal/tui/model.go:architectStyle
     to_name: architectStyle
     file: internal/tui/model.go
@@ -184519,6 +184945,12 @@ code_references:
     to_name: Missing
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderMCP
+    to_name: NewStyle
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderMCP
+    to_name: RoundedBorder
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderMCP
     to_name: Sprintf
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderMCP
@@ -184534,12 +184966,27 @@ code_references:
     to_name: Status.State
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderMCP
+    to_name: Style.Border
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderMCP
+    to_name: Style.Padding
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderMCP
+    to_name: Style.Render
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderMCP
+    to_name: Style.Width
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderMCP
     to_id: internal/tui/model.go:architectStyle
     to_name: architectStyle
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderMCP
     to_id: internal/tui/model.go:authorityStyle
     to_name: authorityStyle
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderMCP
+    to_name: charm.land/lipgloss/v2
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderMCP
     to_id: internal/tui/model.go:dimStyle
@@ -184576,15 +185023,36 @@ code_references:
     to_name: Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderProviderLogin
+    to_name: NewStyle
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderProviderLogin
     to_id: internal/provider/provider.go:Ordered
     to_name: Ordered
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderProviderLogin
+    to_name: RoundedBorder
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderProviderLogin
     to_name: Sprintf
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderProviderLogin
+    to_name: Style.Border
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderProviderLogin
+    to_name: Style.Padding
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderProviderLogin
+    to_name: Style.Render
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderProviderLogin
+    to_name: Style.Width
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderProviderLogin
     to_id: internal/tui/model.go:architectStyle
     to_name: architectStyle
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:renderProviderLogin
+    to_name: charm.land/lipgloss/v2
     file: internal/tui/model.go
   - from: internal/tui/model.go:renderProviderLogin
     to_name: fmt
@@ -184618,6 +185086,9 @@ code_references:
   - from: internal/tui/model.go:replayConversation
     to_id: internal/event/event.go:SourceSystem
     to_name: SourceSystem
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:replayConversation
+    to_name: Style.Render
     file: internal/tui/model.go
   - from: internal/tui/model.go:replayConversation
     to_id: internal/event/event.go:TaskCreated
@@ -184673,6 +185144,9 @@ code_references:
     file: internal/tui/model.go
   - from: internal/tui/model.go:runHalted
     to_name: Context
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:runHalted
+    to_name: Msg
     file: internal/tui/model.go
   - from: internal/tui/model.go:runHalted
     to_id: internal/tui/model.go:appendHaltedMsg~type
@@ -184765,6 +185239,15 @@ code_references:
     to_name: github.com/globulario/sensei-code/internal/workflow
     file: internal/tui/model.go
   - from: internal/tui/model.go:tick
+    to_name: Cmd
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:tick
+    to_name: Msg
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:tick
+    to_name: Tick
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:tick
     to_name: Time
     file: internal/tui/model.go
   - from: internal/tui/model.go:tick
@@ -184782,8 +185265,14 @@ code_references:
     to_name: time
     file: internal/tui/model.go
   - from: internal/tui/model.go:waitEvent
+    to_name: Cmd
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:waitEvent
     to_id: internal/event/event.go:Event~type
     to_name: Event
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:waitEvent
+    to_name: Msg
     file: internal/tui/model.go
   - from: internal/tui/model.go:waitEvent
     to_name: charm.land/bubbletea/v2
@@ -184800,6 +185289,9 @@ code_references:
     to_name: github.com/globulario/sensei-code/internal/event
     file: internal/tui/model.go
   - from: internal/tui/model.go:waitResumeBinding
+    to_name: Cmd
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:waitResumeBinding
     to_name: Context
     file: internal/tui/model.go
   - from: internal/tui/model.go:waitResumeBinding
@@ -184812,6 +185304,9 @@ code_references:
   - from: internal/tui/model.go:waitResumeBinding
     to_id: internal/session/store.go:Interrupted.TaskID
     to_name: Interrupted.TaskID
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:waitResumeBinding
+    to_name: Msg
     file: internal/tui/model.go
   - from: internal/tui/model.go:waitResumeBinding
     to_id: internal/workflow/engine.go:ResumeAttempt~type
@@ -184874,6 +185369,9 @@ code_references:
     to_name: resumeBoundMsg.task
     file: internal/tui/model.go
   - from: internal/tui/model.go:waitResumeHalted
+    to_name: Cmd
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:waitResumeHalted
     to_name: Context
     file: internal/tui/model.go
   - from: internal/tui/model.go:waitResumeHalted
@@ -184883,6 +185381,9 @@ code_references:
   - from: internal/tui/model.go:waitResumeHalted
     to_id: internal/session/store.go:Interrupted.TaskID
     to_name: Interrupted.TaskID
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:waitResumeHalted
+    to_name: Msg
     file: internal/tui/model.go
   - from: internal/tui/model.go:waitResumeHalted
     to_id: internal/tui/model.go:appendHaltedMsg~type
@@ -184930,6 +185431,9 @@ code_references:
     to_name: haltOf
     file: internal/tui/model.go
   - from: internal/tui/model.go:waitRunHalted
+    to_name: Cmd
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:waitRunHalted
     to_name: Context
     file: internal/tui/model.go
   - from: internal/tui/model.go:waitRunHalted
@@ -184939,6 +185443,9 @@ code_references:
   - from: internal/tui/model.go:waitRunHalted
     to_id: internal/workflow/engine.go:Engine.RunAttempt
     to_name: Engine.RunAttempt
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:waitRunHalted
+    to_name: Msg
     file: internal/tui/model.go
   - from: internal/tui/model.go:waitRunHalted
     to_name: charm.land/bubbletea/v2
@@ -184965,16 +185472,28 @@ code_references:
     to_name: github.com/globulario/sensei-code/internal/event
     file: internal/tui/model.go
   - from: internal/tui/model.go:wrapRows
+    to_name: NewStyle
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:wrapRows
     to_name: Repeat
     file: internal/tui/model.go
   - from: internal/tui/model.go:wrapRows
     to_name: Split
     file: internal/tui/model.go
   - from: internal/tui/model.go:wrapRows
+    to_name: Style.Render
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:wrapRows
+    to_name: Style.Width
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:wrapRows
     to_name: TrimLeft
     file: internal/tui/model.go
   - from: internal/tui/model.go:wrapRows
     to_name: TrimSpace
+    file: internal/tui/model.go
+  - from: internal/tui/model.go:wrapRows
+    to_name: charm.land/lipgloss/v2
     file: internal/tui/model.go
   - from: internal/tui/model.go:wrapRows
     to_id: internal/tui/model.go:max
@@ -184999,6 +185518,9 @@ code_references:
     to_name: T
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestASingleLineScrollActuallyMoves
+    to_name: View.Content
+    file: internal/tui/scroll_test.go
+  - from: internal/tui/scroll_test.go:TestASingleLineScrollActuallyMoves
     to_name: common.Fatal
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestASingleLineScrollActuallyMoves
@@ -185025,6 +185547,9 @@ code_references:
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestPagingUpFromTheBottomContinuesFromTheScreen
     to_name: T
+    file: internal/tui/scroll_test.go
+  - from: internal/tui/scroll_test.go:TestPagingUpFromTheBottomContinuesFromTheScreen
+    to_name: View.Content
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestPagingUpFromTheBottomContinuesFromTheScreen
     to_name: common.Fatal
@@ -185050,6 +185575,9 @@ code_references:
     to_name: T
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestResizingChangesHowMuchIsVisible
+    to_name: View.Content
+    file: internal/tui/scroll_test.go
+  - from: internal/tui/scroll_test.go:TestResizingChangesHowMuchIsVisible
     to_name: common.Fatalf
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestResizingChangesHowMuchIsVisible
@@ -185081,6 +185609,9 @@ code_references:
     to_name: T
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestReturningToTheBottomFollowsNewOutputAgain
+    to_name: View.Content
+    file: internal/tui/scroll_test.go
+  - from: internal/tui/scroll_test.go:TestReturningToTheBottomFollowsNewOutputAgain
     to_name: common.Fatal
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestReturningToTheBottomFollowsNewOutputAgain
@@ -185102,6 +185633,9 @@ code_references:
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestScrollIndicatorDoesNotHideALine
     to_name: T
+    file: internal/tui/scroll_test.go
+  - from: internal/tui/scroll_test.go:TestScrollIndicatorDoesNotHideALine
+    to_name: View.Content
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestScrollIndicatorDoesNotHideALine
     to_name: common.Fatalf
@@ -185148,6 +185682,9 @@ code_references:
     to_name: T
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestScrollingPastTheStartRestsAtTheStart
+    to_name: View.Content
+    file: internal/tui/scroll_test.go
+  - from: internal/tui/scroll_test.go:TestScrollingPastTheStartRestsAtTheStart
     to_name: common.Fatal
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestScrollingPastTheStartRestsAtTheStart
@@ -185176,6 +185713,9 @@ code_references:
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestTheTopOfTheTranscriptIsReachable
     to_name: T
+    file: internal/tui/scroll_test.go
+  - from: internal/tui/scroll_test.go:TestTheTopOfTheTranscriptIsReachable
+    to_name: View.Content
     file: internal/tui/scroll_test.go
   - from: internal/tui/scroll_test.go:TestTheTopOfTheTranscriptIsReachable
     to_name: common.Fatal
@@ -185330,6 +185870,12 @@ code_references:
   - from: internal/tui/setup_command_test.go:TestSetupCommandReportsAndRepairsNothing
     to_id: internal/tui/setup_command_test.go:tree
     to_name: tree
+    file: internal/tui/setup_command_test.go
+  - from: internal/tui/setup_command_test.go:findCommandResult
+    to_name: BatchMsg
+    file: internal/tui/setup_command_test.go
+  - from: internal/tui/setup_command_test.go:findCommandResult
+    to_name: Cmd
     file: internal/tui/setup_command_test.go
   - from: internal/tui/setup_command_test.go:findCommandResult
     to_name: charm.land/bubbletea/v2
@@ -226431,11 +226977,11 @@ code_references:
     to_name: ErrTaskInvocationLive
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestB2a1R193W7InvocationsAreIsolatedAndOwnTheirFailure
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestB2a1R193W7InvocationsAreIsolatedAndOwnTheirFailure
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestB2a1R193W7InvocationsAreIsolatedAndOwnTheirFailure
@@ -227218,11 +227764,11 @@ code_references:
     to_name: Event.Kind
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestB2a1W10AppendError
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestB2a1W10AppendError
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestB2a1W10AppendError
@@ -227864,11 +228410,11 @@ code_references:
     to_name: Event
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:rootedTaskEngine
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:rootedTaskEngine
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:rootedTaskEngine
@@ -228508,10 +229054,10 @@ code_references:
     to_name: Load
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.ResumeTask
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.ResumeTask
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.ResumeTask
@@ -234353,10 +234899,10 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
@@ -238751,11 +239297,11 @@ code_references:
     to_name: Is
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/behavioral/behavioral.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/event/event.go:New
+    to_id: internal/behavioral/behavioral.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
@@ -248577,19 +249123,19 @@ code_references:
     to_name: ToolResult
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/sensei/mcp.go:ToolResult.IsError
-    to_name: ToolResult.IsError
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:senseiProposer.CallTool
     to_id: internal/authority/resolution.go:ToolResult.IsError
     to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/sensei/mcp.go:ToolResult.Structured
-    to_name: ToolResult.Structured
+    to_id: internal/sensei/mcp.go:ToolResult.IsError
+    to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
     to_id: internal/authority/resolution.go:ToolResult.Structured
+    to_name: ToolResult.Structured
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:senseiProposer.CallTool
+    to_id: internal/sensei/mcp.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
@@ -249853,19 +250399,19 @@ code_references:
     to_name: Confinement.Args
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:validationConfinementOf
-    to_id: internal/validation/evidence.go:Confinement.Command
-    to_name: Confinement.Command
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:validationConfinementOf
     to_id: internal/config/config.go:Confinement.Command
     to_name: Confinement.Command
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:validationConfinementOf
-    to_id: internal/config/config.go:Confinement.FailureExit
-    to_name: Confinement.FailureExit
+    to_id: internal/validation/evidence.go:Confinement.Command
+    to_name: Confinement.Command
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:validationConfinementOf
     to_id: internal/validation/evidence.go:Confinement.FailureExit
+    to_name: Confinement.FailureExit
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:validationConfinementOf
+    to_id: internal/config/config.go:Confinement.FailureExit
     to_name: Confinement.FailureExit
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:validationConfinementOf
@@ -258957,11 +259503,11 @@ code_references:
     to_name: Confinement
     file: internal/workflow/execservice.go
   - from: internal/workflow/execservice.go:execService.runCheck
-    to_id: internal/config/config.go:Confinement.Args
+    to_id: internal/validation/evidence.go:Confinement.Args
     to_name: Confinement.Args
     file: internal/workflow/execservice.go
   - from: internal/workflow/execservice.go:execService.runCheck
-    to_id: internal/validation/evidence.go:Confinement.Args
+    to_id: internal/config/config.go:Confinement.Args
     to_name: Confinement.Args
     file: internal/workflow/execservice.go
   - from: internal/workflow/execservice.go:execService.runCheck
@@ -258973,11 +259519,11 @@ code_references:
     to_name: Confinement.Command
     file: internal/workflow/execservice.go
   - from: internal/workflow/execservice.go:execService.runCheck
-    to_id: internal/validation/evidence.go:Confinement.FailureExit
+    to_id: internal/config/config.go:Confinement.FailureExit
     to_name: Confinement.FailureExit
     file: internal/workflow/execservice.go
   - from: internal/workflow/execservice.go:execService.runCheck
-    to_id: internal/config/config.go:Confinement.FailureExit
+    to_id: internal/validation/evidence.go:Confinement.FailureExit
     to_name: Confinement.FailureExit
     file: internal/workflow/execservice.go
   - from: internal/workflow/execservice.go:execService.runCheck
@@ -259054,11 +259600,11 @@ code_references:
     to_name: Mutex.Unlock
     file: internal/workflow/execservice.go
   - from: internal/workflow/execservice.go:execService.runCheck
-    to_id: internal/broker/broker.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/execservice.go
   - from: internal/workflow/execservice.go:execService.runCheck
-    to_id: internal/event/event.go:New
+    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/execservice.go
   - from: internal/workflow/execservice.go:execService.runCheck
@@ -259678,11 +260224,17 @@ code_references:
     to_name: syscall
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: Close
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
     to_id: internal/workflow/execservice.go:Engine.authorityGate
     to_name: Engine.authorityGate
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.applyPatch
     to_name: Equal
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: Fchmod
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.applyPatch
     to_name: File.Close
@@ -259694,6 +260246,9 @@ code_references:
     to_name: File.Write
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: Fsync
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
     to_name: Mutex.Lock
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.applyPatch
@@ -259703,13 +260258,43 @@ code_references:
     to_name: NewFile
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: O_CLOEXEC
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: O_CREAT
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: O_EXCL
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: O_NOFOLLOW
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: O_WRONLY
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: Openat
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
     to_name: RWMutex.RLock
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.applyPatch
     to_name: RWMutex.RUnlock
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: Renameat
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
     to_name: Replace
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: Stat_t.Dev
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: Stat_t.Ino
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: Stat_t.Mode
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.applyPatch
     to_name: ToLower
@@ -259719,6 +260304,9 @@ code_references:
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.applyPatch
     to_name: TrimSpace
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: Unlinkat
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.applyPatch
     to_name: bytes
@@ -259754,6 +260342,9 @@ code_references:
   - from: internal/workflow/execservice_linux.go:execService.applyPatch
     to_id: internal/workflow/execservice.go:execService.revalidate
     to_name: execService.revalidate
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.applyPatch
+    to_name: golang.org/x/sys/unix
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.applyPatch
     to_id: internal/workflow/execservice.go:occurrences
@@ -259822,6 +260413,9 @@ code_references:
     to_name: toolRefusal
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.readFile
+    to_name: Close
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.readFile
     to_id: internal/workflow/execservice.go:Engine.authorityGate
     to_name: Engine.authorityGate
     file: internal/workflow/execservice_linux.go
@@ -259860,6 +260454,9 @@ code_references:
   - from: internal/workflow/execservice_linux.go:execService.readFile
     to_id: internal/workflow/execservice.go:execService.revalidate
     to_name: execService.revalidate
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:execService.readFile
+    to_name: golang.org/x/sys/unix
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:execService.readFile
     to_id: internal/workflow/execservice_linux.go:openDirBeneath
@@ -259904,11 +260501,47 @@ code_references:
     to_id: internal/workflow/execservice.go:toolRefusal~type
     to_name: toolRefusal
     file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:openDirBeneath
+    to_name: Close
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:openDirBeneath
+    to_name: O_CLOEXEC
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:openDirBeneath
+    to_name: O_DIRECTORY
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:openDirBeneath
+    to_name: O_NOFOLLOW
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:openDirBeneath
+    to_name: O_RDONLY
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:openDirBeneath
+    to_name: Open
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:openDirBeneath
+    to_name: Openat
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:openDirBeneath
+    to_name: golang.org/x/sys/unix
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:pathRefusal
+    to_name: ELOOP
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:pathRefusal
+    to_name: ENOENT
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:pathRefusal
+    to_name: ENOTDIR
+    file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:pathRefusal
     to_name: Is
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:pathRefusal
     to_name: errors
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:pathRefusal
+    to_name: golang.org/x/sys/unix
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:pathRefusal
     to_id: internal/workflow/execservice.go:refusePath
@@ -259923,13 +260556,31 @@ code_references:
     to_name: toolRefusal
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:peerUID
+    to_name: GetsockoptUcred
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:peerUID
     to_name: RawConn.Control
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:peerUID
+    to_name: SOL_SOCKET
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:peerUID
+    to_name: SO_PEERCRED
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:peerUID
+    to_name: Ucred
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:peerUID
+    to_name: Ucred.Uid
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:peerUID
     to_name: UnixConn
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:peerUID
     to_name: UnixConn.SyscallConn
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:peerUID
+    to_name: golang.org/x/sys/unix
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:peerUID
     to_name: net
@@ -259941,6 +260592,9 @@ code_references:
     to_name: File.Close
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:readAt
+    to_name: Fstat
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:readAt
     to_name: LimitReader
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:readAt
@@ -259950,13 +260604,46 @@ code_references:
     to_name: NewFile
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:readAt
+    to_name: O_CLOEXEC
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:readAt
+    to_name: O_NOFOLLOW
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:readAt
+    to_name: O_NONBLOCK
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:readAt
+    to_name: O_RDONLY
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:readAt
+    to_name: Openat
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:readAt
     to_name: ReadAll
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:readAt
+    to_name: S_IFMT
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:readAt
+    to_name: S_IFREG
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:readAt
+    to_name: Stat_t
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:readAt
+    to_name: Stat_t.Mode
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:readAt
+    to_name: Stat_t.Size
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:readAt
     to_name: errors
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:readAt
     to_name: fmt
+    file: internal/workflow/execservice_linux.go
+  - from: internal/workflow/execservice_linux.go:readAt
+    to_name: golang.org/x/sys/unix
     file: internal/workflow/execservice_linux.go
   - from: internal/workflow/execservice_linux.go:readAt
     to_name: io
@@ -262494,11 +263181,11 @@ code_references:
     to_name: Identity.Worktree
     file: internal/workflow/execservice_test.go
   - from: internal/workflow/execservice_test.go:newExecRig
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/execservice_test.go
   - from: internal/workflow/execservice_test.go:newExecRig
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/execservice_test.go
   - from: internal/workflow/execservice_test.go:newExecRig
@@ -266320,11 +267007,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/event/event.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
@@ -266470,11 +267157,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
@@ -286404,11 +287091,11 @@ code_references:
     to_name: Join
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestB2a2R238X8aANonMemberTaskCreatedCannotEstablishTheObjective
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestB2a2R238X8aANonMemberTaskCreatedCannotEstablishTheObjective
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestB2a2R238X8aANonMemberTaskCreatedCannotEstablishTheObjective
@@ -287058,10 +287745,10 @@ code_references:
     to_name: Interrupted.PlanAttemptRefusals
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61OnlyARecordedReturnToTheArchitectIsOwed
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61OnlyARecordedReturnToTheArchitectIsOwed
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61OnlyARecordedReturnToTheArchitectIsOwed
@@ -288441,10 +289128,10 @@ code_references:
     to_name: Interrupted.PlanAttemptRefusals
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
@@ -290393,11 +291080,11 @@ code_references:
     to_name: Join
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:b2a2Holder
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:b2a2Holder
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:b2a2Holder
@@ -311351,11 +312038,11 @@ code_references:
     to_name: Join
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
@@ -340037,10 +340724,10 @@ code_references:
     to_name: Cmd.CombinedOutput
     file: internal/workflow/validation_confine_test.go
   - from: internal/workflow/validation_confine_test.go:TestEveryFormatterStageKeepsItsOwnBinding
-    to_id: internal/config/config.go:Command~type
     to_name: Command
     file: internal/workflow/validation_confine_test.go
   - from: internal/workflow/validation_confine_test.go:TestEveryFormatterStageKeepsItsOwnBinding
+    to_id: internal/config/config.go:Command~type
     to_name: Command
     file: internal/workflow/validation_confine_test.go
   - from: internal/workflow/validation_confine_test.go:TestEveryFormatterStageKeepsItsOwnBinding
