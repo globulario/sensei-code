@@ -265,7 +265,7 @@ func TestStandingQuestionsAreListedWithTheirOptions(t *testing.T) {
 	printActiveTasks(&out, "s-1", []session.Active{
 		{SessionID: "s-1", Task: standing(t, "t-asking", "may this change land?", "1", "2")},
 		{SessionID: "s-1", Task: session.Interrupted{TaskID: "t-plain", Task: "no question here", Planned: true}},
-	}, nil)
+	}, nil, nil)
 	got := out.String()
 	for _, want := range []string{"t-asking", "may this change land?", "--answer 1", "--answer 2", "1 standing"} {
 		if !strings.Contains(got, want) {
@@ -282,12 +282,12 @@ func TestStandingQuestionsAreListedWithTheirOptions(t *testing.T) {
 
 	out.Reset()
 	printActiveTasks(&out, "s-1", []session.Active{
-		{SessionID: "s-1", Task: session.Interrupted{TaskID: "t-plain", Task: "x", Planned: true}}}, nil)
+		{SessionID: "s-1", Task: session.Interrupted{TaskID: "t-plain", Task: "x", Planned: true}}}, nil, nil)
 	if !strings.Contains(out.String(), "no human-owned question is standing") {
 		t.Fatalf("a listing with nothing standing did not say so: %q", out.String())
 	}
 	out.Reset()
-	printActiveTasks(&out, "s-1", nil, nil)
+	printActiveTasks(&out, "s-1", nil, nil, nil)
 	if !strings.Contains(out.String(), "no task is active") {
 		t.Fatalf("an empty listing did not say so: %q", out.String())
 	}
@@ -313,7 +313,7 @@ func TestEveryActiveTaskIsListedWithWhatItOwes(t *testing.T) {
 		{SessionID: "session-b", Task: session.Interrupted{TaskID: "t-unplanned", Task: "owes its architect turn"}},
 		{SessionID: "session-b", Task: session.Interrupted{TaskID: "t-implementing", Task: "owes the work",
 			Planned: true, Review: "REVISE: the guard is unreachable"}},
-	}, nil)
+	}, nil, nil)
 	got := out.String()
 	for _, want := range []string{
 		"t-asking", "--answer 1",
@@ -868,7 +868,7 @@ func TestATaskThatRecordedNoObjectiveIsShownAndRefused(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	printActiveTasks(&out, "", []session.Active{{SessionID: "session-a", Task: blank}}, nil)
+	printActiveTasks(&out, "", []session.Active{{SessionID: "session-a", Task: blank}}, nil, nil)
 	got := out.String()
 	if !strings.Contains(got, "t-blank") {
 		t.Fatalf("the task vanished from the listing:\n%s", got)
@@ -926,7 +926,7 @@ func TestTheListingReadsTheDurableReviewObligationAndNotOnlyTheTranscript(t *tes
 			return "", err
 		}
 		var out bytes.Buffer
-		printActiveTasks(&out, "", active, states)
+		printActiveTasks(&out, "", active, states, nil)
 		return out.String(), nil
 	}
 

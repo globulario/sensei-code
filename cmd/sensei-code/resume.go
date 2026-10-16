@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/authority"
+	"github.com/globulario/sensei-code/internal/candidate"
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/ghbridge"
@@ -290,12 +291,39 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 	// had managed to open, about storage that might hold the very task being
 	// looked for.
 	scoped := strings.TrimSpace(*sessionName)
+	// THE CURRENT CANDIDATE RECORD OF A NAMED TASK, read once, before anything
+	// about the task is decided (RULING-366 §19-§20). It does not depend on the
+	// session history: a task whose history ended it FAILED, or whose history
+	// is gone or unreadable, may still own a workspace that is being written.
+	// Read-only; nothing here writes the record or touches a workspace.
+	var contained containment
+	if !*list && strings.TrimSpace(*taskID) != "" {
+		contained = containmentOf(repo.Root, *taskID)
+	}
 	inventory, err := session.FindActive(repo.Root)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
+		// The history refusal stands, and the unsafe-workspace fact is not
+		// erased by it.
+		if *list {
+			printWorkspaceOrphans(os.Stdout, loadContainment(repo.Root, nil))
+		} else if refusal := contained.refusal(); refusal != nil {
+			fmt.Fprintln(os.Stderr, "sensei-code resume:", refusal)
+		}
 		return exitFailed
 	}
 	if len(inventory.Records) == 0 {
+		// No session history, and still possibly a workspace owed a
+		// settlement: that is reported, never "no session" alone.
+		if *list {
+			if view := loadContainment(repo.Root, nil); view.owes() {
+				printWorkspaceOrphans(os.Stdout, view)
+				return exitCompleted
+			}
+		} else if refusal := contained.refusal(); refusal != nil {
+			fmt.Fprintln(os.Stderr, "sensei-code resume:", refusal)
+			return exitFailed
+		}
 		fmt.Fprintln(os.Stderr, "sensei-code resume:", errNoSession)
 		return exitUsage
 	}
@@ -321,11 +349,19 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 			fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
 			return exitFailed
 		}
-		printActiveTasks(os.Stdout, scoped, active, owed)
+		// The current candidate record of every discovered task, and every
+		// unsettled or unreadable record no discovered task holds. Read across
+		// the whole inventory, so a task held by any session is never also
+		// listed as an orphan.
+		view := loadContainment(repo.Root, inventory.Active)
+		printActiveTasks(os.Stdout, scoped, active, owed, view.tasks)
 		if scoped == "" {
 			// A quarantined record's tasks are reserved, visible and never
 			// resumable: listed as such, never as absent.
 			printQuarantinedTasks(os.Stdout, inventory.Quarantined)
+			// P1-era tasks whose history already ended them, and tasks whose
+			// session is gone, still owe their workspace a settlement.
+			printWorkspaceOrphans(os.Stdout, view)
 		}
 		if scoped != "" && countStanding(tasksOf(active)) == 0 {
 			// A named session is a window onto one account. Say where else to
@@ -354,6 +390,20 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 	// TUI's /resume reads the same refusal (Discovery.ResumableIn).
 	if refusing, refusal := inventory.TaskRefusal(*taskID); refusal != nil {
 		fmt.Fprintln(os.Stderr, "sensei-code resume:", taskRefusalError(refusing, refusal))
+		if workspace := contained.refusal(); workspace != nil {
+			fmt.Fprintln(os.Stderr, "sensei-code resume:", workspace)
+		}
+		return exitFailed
+	}
+	// THE WORKSPACE QUARANTINE IS THE FIRST LANE, and a refusal (RULING-366
+	// §19-§20). Decided from the current candidate record read above, never
+	// from a session payload, and BEFORE the task is looked up, a resume
+	// identity is opened, a session lineage is bound, a lane is chosen, an
+	// answer is considered, readiness is checked or an engine exists -- so a
+	// standing question is neither answered nor consumed, and a P1-era task
+	// its history already ended is refused as owed settlement, not as absent.
+	if refusal := contained.refusal(); refusal != nil {
+		fmt.Fprintln(os.Stderr, "sensei-code resume:", refusal)
 		return exitFailed
 	}
 	holder, held := activeTask(active, *taskID)
@@ -578,13 +628,30 @@ func loadReviewStates(repoRoot string, active []session.Active) (map[string]revi
 // admitting the listing could not see an obligation recorded outside the session
 // record -- meant a task could be advertised at a lane resuming would not take.
 // What is printed is now what resuming would do.
-func printActiveTasks(out io.Writer, scope string, active []session.Active, review map[string]reviewState) {
+//
+// The current candidate record comes first (contain): a task whose record names
+// an unsettled workspace, or cannot be read, is shown at that obligation and
+// at no other lane, whatever its session history says it owes.
+func printActiveTasks(out io.Writer, scope string, active []session.Active, review map[string]reviewState,
+	contain map[string]containment) {
 	standing := 0
 	for _, entry := range active {
 		task := entry.Task
 		fmt.Fprintf(out, "task %s  session %s\n", task.TaskID, entry.SessionID)
 		if s := strings.TrimSpace(task.Task); s != "" {
 			fmt.Fprintf(out, "  objective  %s\n", s)
+		}
+		if c := contain[task.TaskID]; c.refusal() != nil {
+			printWorkspaceObligation(out, c)
+			if task.Unavailable != nil {
+				// The history refusal is preserved beside it.
+				_, laneErr := selectResumeLane(task, false)
+				fmt.Fprintf(out, "  history    %v\n", laneErr)
+			} else if len(task.AwaitingAuthority) != 0 {
+				printQuestionBehindObligation(out, task)
+			}
+			fmt.Fprintln(out)
+			continue
 		}
 		if task.Unavailable != nil {
 			// Shown, typed, and routed nowhere: the refusal precedes every
@@ -637,6 +704,141 @@ func printActiveTasks(out io.Writer, scope string, active []session.Active, revi
 		return
 	}
 	fmt.Fprintf(out, "%s: %d active, %d standing\n", where, len(active), standing)
+}
+
+// containmentView is the CURRENT candidate record of every task resume
+// discovered (tasks), and every record no discovered task holds that names an
+// unsettled workspace or cannot be read (orphans): a P1-era task its history
+// already ended, or one whose session is gone. listErr is set when the
+// records could not be listed at all; nothing is then read as settled.
+type containmentView struct {
+	tasks   map[string]containment
+	orphans []containment
+	listErr error
+}
+
+// owes reports whether the view has anything a listing must show beyond the
+// session history.
+func (v containmentView) owes() bool { return len(v.orphans) != 0 || v.listErr != nil }
+
+// loadContainment reads the current candidate record of each discovered task
+// and of every other recorded candidate, once, read-only. One unreadable
+// record makes that task's containment unknown and hides no other task.
+func loadContainment(repoRoot string, discovered []session.Active) containmentView {
+	view := containmentView{tasks: map[string]containment{}}
+	recorded, listErr := candidate.List(repoRoot)
+	ids := map[string]bool{}
+	for _, id := range recorded {
+		ids[id.TaskID] = true
+	}
+	for _, entry := range discovered {
+		if _, seen := view.tasks[entry.Task.TaskID]; !seen {
+			view.tasks[entry.Task.TaskID] = readContainment(repoRoot, entry.Task.TaskID, ids, listErr)
+		}
+	}
+	if listErr != nil {
+		view.listErr = listErr
+		return view
+	}
+	sort.Slice(recorded, func(a, b int) bool { return recorded[a].TaskID < recorded[b].TaskID })
+	for _, id := range recorded {
+		if _, held := view.tasks[id.TaskID]; held {
+			continue
+		}
+		if c := readContainment(repoRoot, id.TaskID, ids, nil); c.refusal() != nil {
+			view.orphans = append(view.orphans, c)
+		}
+	}
+	return view
+}
+
+// containmentOf is the current candidate record of one named task.
+func containmentOf(repoRoot, taskID string) containment {
+	recorded, listErr := candidate.List(repoRoot)
+	ids := map[string]bool{}
+	for _, id := range recorded {
+		ids[id.TaskID] = true
+	}
+	return readContainment(repoRoot, strings.TrimSpace(taskID), ids, listErr)
+}
+
+// readContainment reads one task's record under its lock (candidate.LoadLocked)
+// when the repository records one for it; a task with no record owns no
+// confined execution. A read that fails is UNKNOWN, never settled. On a
+// platform with no cross-process lock the record is read as P1's own gates
+// read it (candidate.Load), so a quarantine stays visible there too.
+func readContainment(repoRoot, taskID string, recorded map[string]bool, listErr error) containment {
+	c := containment{TaskID: taskID}
+	if listErr != nil {
+		c.Err = fmt.Errorf("the candidate records of this repository could not be listed: %w", listErr)
+		return c
+	}
+	if !recorded[taskID] {
+		return c
+	}
+	id, ok, err := candidate.LoadLocked(repoRoot, taskID)
+	if errors.Is(err, candidate.ErrNoCrossProcessLock) {
+		id, ok, err = candidate.Load(repoRoot, taskID)
+	}
+	if err != nil {
+		c.Err = err
+		return c
+	}
+	if ok {
+		c.Record, c.Unsettled = id, id.Unsettled()
+	}
+	return c
+}
+
+// printWorkspaceObligation renders one task's containment obligation: the
+// invocation, workspace and baseline its record names, and that no settlement
+// capability exists -- or that its containment state cannot be established.
+func printWorkspaceObligation(out io.Writer, c containment) {
+	if c.Err != nil {
+		fmt.Fprintf(out, "  owed       %v\n", c.refusal())
+		return
+	}
+	invocation, workspace, baseline, reason := c.facts()
+	fmt.Fprintf(out, "  owed       %s\n", laneWorkspaceQuarantined)
+	fmt.Fprintf(out, "  candidate  %s\n", oneLine(reason))
+	fmt.Fprintf(out, "  execution  %s\n", invocation)
+	fmt.Fprintf(out, "  workspace  %s\n", workspace)
+	fmt.Fprintf(out, "  baseline   %s\n", baseline)
+	fmt.Fprintln(out, "  settlement no settlement capability exists; the task is not continued, no answer is taken for it "+
+		"and its workspace is not touched")
+}
+
+// printQuestionBehindObligation names a question that stands behind a
+// workspace quarantine. It is preserved and NOT offered for an answer: no
+// human answer releases containment.
+func printQuestionBehindObligation(out io.Writer, task session.Interrupted) {
+	var q workflow.DeferredAuthority
+	if err := json.Unmarshal(task.AwaitingAuthority, &q); err != nil {
+		fmt.Fprintf(out, "  question   preserved behind this obligation, but it could not be read back: %v\n", err)
+		return
+	}
+	fmt.Fprintf(out, "  question   %s (preserved behind this obligation; it cannot be answered while the workspace "+
+		"is quarantined)\n", strings.TrimSpace(q.Decision.Subject))
+}
+
+// printWorkspaceOrphans lists the candidate records no discovered task holds
+// that still owe a settlement, or whose state cannot be established. Their
+// session history, if any, is not rewritten.
+func printWorkspaceOrphans(out io.Writer, view containmentView) {
+	if !view.owes() {
+		return
+	}
+	fmt.Fprintf(out, "%s, from the candidate records:\n\n", laneWorkspaceQuarantined)
+	if view.listErr != nil {
+		fmt.Fprintf(out, "candidate records\n  owed       %v: the candidate records of this repository could not be "+
+			"listed: %v\n\n", errContainmentUnknown, view.listErr)
+	}
+	for _, c := range view.orphans {
+		fmt.Fprintf(out, "task %s  candidate record\n", c.TaskID)
+		fmt.Fprintln(out, "  history    no active session task holds it; its history, if any, is not rewritten")
+		printWorkspaceObligation(out, c)
+		fmt.Fprintln(out)
+	}
 }
 
 // printStandingQuestion renders the question a task is asking, and the option
