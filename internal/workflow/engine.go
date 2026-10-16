@@ -13046,10 +13046,14 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 		}, func() string { return baselinePath })
 		currentInvocation = ""
 		if err != nil {
-			// The batch did not settle -- an unresolved teardown, a boundary
-			// that could not be recorded or settled: nothing proves the
-			// baseline free, so it is kept (RULING-361 §4).
-			keepBaseline = true
+			// The batch did not settle -- an unresolved teardown, a settlement
+			// that failed, an existing quarantine: nothing proves the baseline
+			// free, so it is kept (RULING-361 §4). The one exception is a
+			// batch that never started over a record that protects nothing
+			// (RULING-362 §6): no execution acquired the baseline.
+			if !e.baselineFreeAfterPreStart(taskID, err) {
+				keepBaseline = true
+			}
 		} else if bindFailure != nil {
 			// No baseline ran unbound and the batch settled through its
 			// trusted settlement: the batch still ends on the typed safety
@@ -13296,6 +13300,12 @@ type ExecutionBoundaryFailure struct {
 	TaskID string
 	Phase  string
 	Err    error
+	// notStarted is execution-phase evidence, set only on the pre-execution
+	// boundary path of boundedRun: no execution of this batch started
+	// (RULING-362 §7). It is not teardown authority. invocation is the
+	// boundary that batch attempted, "" when none was drawn.
+	notStarted bool
+	invocation string
 }
 
 func (f *ExecutionBoundaryFailure) Error() string {
@@ -13368,7 +13378,7 @@ func (e *Engine) boundedRun(ctx context.Context, taskID, phase, workspace string
 	}
 	invocation, err := newExecutionInvocation()
 	if err == nil {
-		_, err = candidate.BeginExecution(e.Repo.Root, taskID, candidate.InFlight{
+		_, err = beginExecution(e.Repo.Root, taskID, candidate.InFlight{
 			Invocation: invocation, Phase: phase, Workspace: workspace, Profile: r.Confine.Describe(),
 		})
 	}
@@ -13377,7 +13387,7 @@ func (e *Engine) boundedRun(ctx context.Context, taskID, phase, workspace string
 		if errors.As(err, &q) {
 			return q
 		}
-		return &ExecutionBoundaryFailure{TaskID: taskID, Phase: phase,
+		return &ExecutionBoundaryFailure{TaskID: taskID, Phase: phase, notStarted: true, invocation: invocation,
 			Err: fmt.Errorf("the execution did not start: %w", err)}
 	}
 	// run learns the invocation now in flight, so every baseline execution it
@@ -13426,6 +13436,39 @@ func (e *Engine) boundedRun(ctx context.Context, taskID, phase, workspace string
 	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status, u.Error(),
 		map[string]any{"error": u.Error()}))
 	return u
+}
+
+// beginExecution records a bounded execution's durable boundary
+// (candidate.BeginExecution). It is a variable only so a test can inject a
+// trusted pre-start boundary failure (RULING-362 §13); nothing else assigns it.
+var beginExecution = candidate.BeginExecution
+
+// baselineFreeAfterPreStart reports whether a batch that failed with err
+// leaves the baseline free for its ordinary removal (RULING-362 §6-§9): only
+// when no execution of that batch started, and the durable record -- read
+// now, not recalled -- shows nothing protecting it: no quarantine, and no
+// execution in flight other than the boundary this very batch attempted,
+// naming no baseline (a boundary written before its own durability step
+// failed stays on the record and keeps the candidate unsettled; only the
+// baseline decision is made here). Every earlier batch of the validation
+// settled proven, or the validation would have stopped there. An unreadable,
+// missing or contradictory record keeps the baseline.
+func (e *Engine) baselineFreeAfterPreStart(taskID string, err error) bool {
+	f, ok := err.(*ExecutionBoundaryFailure)
+	if !ok || !f.notStarted {
+		return false
+	}
+	id, found, loadErr := candidate.Load(e.Repo.Root, taskID)
+	if loadErr != nil || !found {
+		return false
+	}
+	if id.Resolution != nil && id.Resolution.Disposition == candidate.Quarantined {
+		return false
+	}
+	if id.InFlight != nil && (f.invocation == "" || id.InFlight.Invocation != f.invocation || id.InFlight.Baseline != "") {
+		return false
+	}
+	return true
 }
 
 // newExecutionInvocation draws the nonsecret identifier of one bounded

@@ -595,3 +595,170 @@ func TestAnotherProcessCannotOperateATaskWhoseInvocationIsLive(t *testing.T) {
 		t.Fatalf("Resume reaches implement before it takes the task's lease (%d, %d)", lease2, impl2)
 	}
 }
+
+// injectPreStart substitutes the boundary recorder for one test (RULING-362
+// §13: trusted test-side fault injection, no candidate code). fail decides,
+// for the n-th boundary (from 1), whether that boundary fails before its
+// execution starts and how; nil keeps the real recorder.
+func injectPreStart(t *testing.T, fail func(n int, root, taskID string, f candidate.InFlight) (candidate.Identity, error, bool)) {
+	t.Helper()
+	saved := beginExecution
+	t.Cleanup(func() { beginExecution = saved })
+	n := 0
+	beginExecution = func(root, taskID string, f candidate.InFlight) (candidate.Identity, error) {
+		n++
+		if id, err, inject := fail(n, root, taskID, f); inject {
+			return id, err
+		}
+		return saved(root, taskID, f)
+	}
+}
+
+// countingBaselineLauncher is n4Launcher that appends one line to marker
+// for every baseline execution it runs.
+func countingBaselineLauncher(marker string) string {
+	return "#!/bin/sh\nread nonce <&5\nexec 5<&-\nif [ \"$SENSEI_CONFINE_ROLE\" = baseline ]; then echo run >> '" + marker + "'; fi\n" +
+		"while [ \"$1\" != \"--\" ]; do shift; done\nshift\n\"$@\" 3<&- 4>&-\nrc=$?\necho \"" + validation.StatusProtocol + " $nonce ran $rc\" >&4\nexit $rc\n"
+}
+
+// preStartRig is a formatter that fails, so its batch creates and runs the
+// baseline (proven, settled), and a certification that fails too, so it
+// would reuse that baseline -- if its own boundary ever started.
+func preStartRig(t *testing.T) (*Engine, gitx.Repo, string, string, string) {
+	t.Helper()
+	marker := t.TempDir() + "/baseline-runs"
+	e, repo, base := confinedFormattingRig(t, countingBaselineLauncher(marker))
+	e.Config.Validation.Format = []config.Command{{Command: "sh", Args: []string{"-c", "exit 1"}}}
+	e.Config.Validation.FormatVerify = nil
+	e.Config.Validation.Test = []config.Command{{Command: "sh", Args: []string{"-c", "exit 1"}}}
+	e.Config.Permissions.RunTests = true
+	before, err := repo.CandidateCapture(context.Background(), base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return e, repo, base, before.Diff, marker
+}
+
+func baselineRuns(marker string) int {
+	b, _ := os.ReadFile(marker)
+	return strings.Count(string(b), "run")
+}
+
+var errInjectedPreStart = errors.New("injected: the boundary could not be recorded")
+
+// W1 and W2 (RULING-362 §12). The formatter's baseline execution is proven
+// and settled; certification's boundary fails before its execution starts.
+// The typed stop stands, no further baseline runs, nothing protects the
+// baseline -- so it is removed, and the next validation recreates the same
+// deterministic observation worktree.
+func TestAPreStartFailureLeavesNoOrphanBaseline(t *testing.T) {
+	e, repo, base, diff, marker := preStartRig(t)
+	injectPreStart(t, func(n int, _, _ string, _ candidate.InFlight) (candidate.Identity, error, bool) {
+		return candidate.Identity{}, errInjectedPreStart, n == 2
+	})
+	ctx := context.Background()
+	_, _, err := e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, diff, nil)
+	var stop *ExecutionBoundaryFailure
+	if !errors.As(err, &stop) || stop.Phase != "certify" || !errors.Is(err, errInjectedPreStart) {
+		t.Fatalf("premise: certification did not stop on its pre-start boundary failure: %v", err)
+	}
+	if runs := baselineRuns(marker); runs != 1 {
+		t.Fatalf("premise: exactly the formatter's baseline should have run, ran %d", runs)
+	}
+	if id, _, _ := candidate.Load(repo.Root, "task-1"); id.Unsettled() {
+		t.Fatalf("premise: the formatter's batch did not settle: %+v", id)
+	}
+	if _, statErr := os.Stat(observationPath(repo)); !os.IsNotExist(statErr) {
+		t.Fatalf("a baseline no execution holds was retained after a pre-start failure: %v", statErr)
+	}
+	beginExecution = candidate.BeginExecution
+	if _, _, err := e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, diff, nil); err != nil {
+		t.Fatalf("the next validation could not recreate the observation worktree: %v", err)
+	}
+	if runs := baselineRuns(marker); runs < 2 {
+		t.Fatalf("the next validation did not run its baseline: %d", runs)
+	}
+}
+
+// W3. The boundary is written and its durability step then fails: no
+// execution started, and the record keeps the in-flight boundary -- it is
+// not cleared to tidy up. Every later operation on the candidate refuses.
+func TestABoundaryThatFailedAfterItsWriteKeepsTheCandidateUnsettled(t *testing.T) {
+	e, repo, base, diff, marker := preStartRig(t)
+	var attempted string
+	injectPreStart(t, func(n int, root, taskID string, f candidate.InFlight) (candidate.Identity, error, bool) {
+		if n != 2 {
+			return candidate.Identity{}, nil, false
+		}
+		attempted = f.Invocation
+		id, err := candidate.BeginExecution(root, taskID, f)
+		if err != nil {
+			t.Fatalf("premise: the boundary was not written: %v", err)
+		}
+		return id, errInjectedPreStart, true
+	})
+	_, _, err := e.validate(context.Background(), "task-1", base, broker.New(e.Config.Permissions), repo, diff, nil)
+	var stop *ExecutionBoundaryFailure
+	if !errors.As(err, &stop) || stop.Phase != "certify" {
+		t.Fatalf("premise: certification did not stop on its boundary failure: %v", err)
+	}
+	if runs := baselineRuns(marker); runs != 1 {
+		t.Fatalf("an execution started after its boundary failed: %d baseline runs", runs)
+	}
+	id, _, _ := candidate.Load(repo.Root, "task-1")
+	if id.InFlight == nil || id.InFlight.Invocation != attempted {
+		t.Fatalf("the written boundary was cleared instead of protecting the candidate: %+v", id.InFlight)
+	}
+	refusesEverything(t, repo.Root, repo.Root)
+}
+
+// W6. A boundary refused because the task is already quarantined is not a
+// pre-start failure to tidy after: the quarantine protects the baseline.
+func TestAnExistingQuarantineIsNotBypassedByThePreStartClassification(t *testing.T) {
+	e, repo, base, diff, _ := preStartRig(t)
+	injectPreStart(t, func(n int, root, taskID string, _ candidate.InFlight) (candidate.Identity, error, bool) {
+		if n != 2 {
+			return candidate.Identity{}, nil, false
+		}
+		if _, err := candidate.BeginExecution(root, taskID, candidate.InFlight{Invocation: "exec-earlier", Phase: "certify", Workspace: root, Profile: "d2-v3"}); err != nil {
+			t.Fatal(err)
+		}
+		q, err := candidate.QuarantineExecution(root, taskID, candidate.Resolution{Reason: "an earlier unresolved execution"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return candidate.Identity{}, q.Quarantine(), true
+	})
+	_, _, err := e.validate(context.Background(), "task-1", base, broker.New(e.Config.Permissions), repo, diff, nil)
+	var q *candidate.ErrQuarantined
+	if !errors.As(err, &q) {
+		t.Fatalf("premise: certification was not refused by the quarantine: %v", err)
+	}
+	if st, statErr := os.Stat(observationPath(repo)); statErr != nil || !st.IsDir() {
+		t.Fatalf("a baseline under a quarantine was removed: %v", statErr)
+	}
+}
+
+// W7. The boundary failed before start, but the durable record can no
+// longer be read: its safety state is not established, so the baseline is
+// kept.
+func TestAnUnreadableRecordKeepsTheBaselineAfterAPreStartFailure(t *testing.T) {
+	e, repo, base, diff, _ := preStartRig(t)
+	injectPreStart(t, func(n int, root, taskID string, _ candidate.InFlight) (candidate.Identity, error, bool) {
+		if n != 2 {
+			return candidate.Identity{}, nil, false
+		}
+		if err := os.WriteFile(filepath.Join(root, ".sensei-code", "candidates", taskID+".json"), []byte("{torn"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return candidate.Identity{}, errInjectedPreStart, true
+	})
+	_, _, err := e.validate(context.Background(), "task-1", base, broker.New(e.Config.Permissions), repo, diff, nil)
+	var stop *ExecutionBoundaryFailure
+	if !errors.As(err, &stop) {
+		t.Fatalf("premise: certification did not stop on its boundary failure: %v", err)
+	}
+	if st, statErr := os.Stat(observationPath(repo)); statErr != nil || !st.IsDir() {
+		t.Fatalf("a baseline was removed although the record's safety state was not established: %v", statErr)
+	}
+}
