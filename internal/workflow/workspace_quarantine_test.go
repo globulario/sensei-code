@@ -180,24 +180,6 @@ func wqAssertQuarantined(t *testing.T, seen []event.Event, taskID, invocation, w
 	return p
 }
 
-// wqSettle reads a resumed invocation's events until its run ending.
-func wqSettle(t *testing.T, events <-chan event.Event) []event.Event {
-	t.Helper()
-	var seen []event.Event
-	deadline := time.After(20 * time.Second)
-	for {
-		select {
-		case ev := <-events:
-			seen = append(seen, ev)
-			if _, terminal := event.RunTerminality(ev.Kind); terminal || ev.Kind == wqKind {
-				return seen
-			}
-		case <-deadline:
-			t.Fatalf("the resumed invocation did not end: %v", kinds(seen))
-		}
-	}
-}
-
 // W1. A LIVE unsettled certification on the real candidate loop ends the
 // invocation WORKSPACE_QUARANTINED through the production classifier, not
 // FAILED, and the task stays discoverable.

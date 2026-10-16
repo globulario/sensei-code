@@ -1470,6 +1470,14 @@ func newRecordAppendFailure(ev event.Event, err error) *RecordAppendFailure {
 }
 
 func (f *RecordAppendFailure) Error() string {
+	// The containment gate's pre-binding refusal rides this transport
+	// (RULING-373 §7), but no session append was attempted, so it does not
+	// read as one (RULING-374 §18).
+	if errors.Is(f.cause, ErrResumeContainmentRefused) {
+		return "Resume refused before session lineage binding because workspace containment could not be established. " +
+			"Task " + f.TaskID + ": " + containmentRefusalCause(f.cause) +
+			"; no session lineage was bound, and nothing of the task was recorded or published"
+	}
 	outcome := "; it was neither recorded nor published"
 	if f.Indeterminate {
 		outcome = "; it was not published, and whether the session record holds it is unknown"
@@ -1479,6 +1487,23 @@ func (f *RecordAppendFailure) Error() string {
 }
 
 func (f *RecordAppendFailure) Unwrap() error { return f.cause }
+
+// containmentRefusalCause is the containment error a pre-binding refusal
+// carries beside ErrResumeContainmentRefused, read by typed structure.
+func containmentRefusalCause(err error) string {
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		var causes []string
+		for _, c := range joined.Unwrap() {
+			if c != nil && c != ErrResumeContainmentRefused {
+				causes = append(causes, c.Error())
+			}
+		}
+		if len(causes) > 0 {
+			return strings.Join(causes, "; ")
+		}
+	}
+	return err.Error()
+}
 
 // appendToStore is the one call through which the engine appends one event of
 // a task to a session store -- its root through the Store's dedicated root
@@ -1984,8 +2009,11 @@ func (a *ResumeAttempt) settle(b ResumeBinding) {
 func (a *ResumeAttempt) ID() string { return a.inv.id }
 
 // Bound is closed once the invocation's pre-binding outcome is settled. It
-// always is: the binding's wait for the record lock is bounded and ends with
-// the caller's context.
+// always is: every wait before it is bounded. The session record's lock wait
+// ends with the caller's context; the containment gate's wait for the
+// candidate record lock (candidate.LoadLocked) is bounded by that lock's own
+// timeout, not by the caller's context, so cancelling the caller does not
+// shorten it (RULING-374 §16-§17).
 func (a *ResumeAttempt) Bound() <-chan struct{} { return a.bound }
 
 // Binding is the invocation's pre-binding outcome, waiting for it if needed.
@@ -2796,11 +2824,15 @@ func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err erro
 		return
 	}
 	// An invocation can end while its task continues to owe containment
-	// settlement (RULING-366 §3-§4, §13-§14). The durable candidate record --
-	// the one quarantine authority -- is read here, before cancellation and
-	// before every ordinary ending: a workspace that may still be written is
-	// the truth about how this invocation ended, whoever stopped it and
-	// whatever error reached here, and the task is not over.
+	// settlement (RULING-366 §3-§4, §13-§14). It is decided here, before
+	// cancellation and before every ordinary ending: an in-run containment
+	// admission that refused the invocation ends it on that refusal, which no
+	// later read can undo (RULING-374); otherwise the durable candidate record
+	// -- the one quarantine authority -- is read under its lock, and a
+	// workspace that may still be written, or containment that cannot be
+	// established, is the truth about how this invocation ended, whoever
+	// stopped it and whatever error reached here (RULING-371), and the task
+	// is not over.
 	if e.terminateQuarantined(ctx, taskID, err) {
 		return
 	}
@@ -2873,9 +2905,12 @@ func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err erro
 // It has two shapes, told apart by Recorded. VERIFIED (Recorded true): the
 // record was read and names the containment state unsettled, and the
 // invocation, phase, workspace and baseline are the ones it names -- empty
-// only when the record names none. UNVERIFIED (Recorded false): the record
-// could not be read while a workspace safety stop ended the run, so it
-// carries the task and the actual read failure and nothing else.
+// only when the record names none. UNVERIFIED (Recorded false): containment
+// was not established -- the record could not be read under its lock when the
+// invocation ended, whatever error, cancellation or timeout ended it
+// (RULING-371), or an in-run containment admission refused the invocation and
+// no current locked read verifies an unsettled record (RULING-374) -- so it
+// carries the task and the actual failure and nothing else.
 //
 // It is a projection: it never mints, clears or settles a quarantine, and the
 // candidate record stays the authority whatever happens to this record.
@@ -2952,8 +2987,12 @@ func confinementUnsupportedBeforeStart(err error) bool {
 // terminateQuarantined is terminateRun's workspace-quarantine classifier, and
 // reports whether it ended the invocation.
 //
-// It decides from the durable candidate record, read once under its lock
-// (candidate.LoadLocked), never from the error alone (terminateOnLockedRead):
+// A refusal of the one containment check at an in-run gate
+// (containmentAdmissionRefusal) is decided first, from that refusal, by
+// terminateRefusedAdmission: a later read of the record never turns it into an
+// ordinary ending (RULING-374). Every other ending is decided from the durable
+// candidate record, read once under its lock (candidate.LoadLocked), never from
+// the error alone (terminateOnLockedRead):
 //
 //	record unsettled          -> VERIFIED quarantine terminal
 //	record absent or settled  -> not decided here (the ordinary outcome)
@@ -2995,8 +3034,80 @@ func confinementUnsupportedBeforeStart(err error) bool {
 // no behavioural outcome is reported, because nothing about the work failed.
 // A cancellation or an expired budget is kept in the account, not lost.
 func (e *Engine) terminateQuarantined(ctx context.Context, taskID string, err error) bool {
+	// A refusal of the one containment check at an in-run gate is decided
+	// from that refusal, before any later read of the record: a later
+	// successful observation does not retroactively authorize the operation
+	// the gate refused (RULING-374 §3-§11). Typed identity only.
+	var refused *containmentAdmissionRefusal
+	if errors.As(err, &refused) {
+		e.terminateRefusedAdmission(ctx, taskID, refused)
+		return true
+	}
 	id, ok, readErr := candidate.LoadLocked(e.Repo.Root, taskID)
 	return e.terminateOnLockedRead(ctx, taskID, err, id, ok, readErr)
+}
+
+// terminateRefusedAdmission ends an invocation whose in-run containment
+// admission -- the planned lane's identity load, implement's entry, or the
+// question lane's resumePrecondition, each deciding through containmentCheck
+// -- refused it (RULING-374 §5-§11). Nothing past the gate ran. The ending is
+// the existing WorkflowWorkspaceQuarantined InvocationTerminal, through the
+// one emission owner: never WorkflowFailed, no behavioural outcome, no
+// candidate transition, and the task stays discoverable.
+//
+//	the check's locked read failed (ErrContainmentUnestablished)
+//	    -> UNVERIFIED, reason the failed admission read; no later read is
+//	       consulted, because none can authorize what the gate refused
+//	the record was unsettled (*candidate.ErrQuarantined)
+//	    -> the record is read once more under its lock: still unsettled ->
+//	       VERIFIED, projected from that current record; anything else (a
+//	       settled or absent record, a failed read) -> UNVERIFIED, keeping
+//	       the original refusal as the reason; settlement is never inferred
+//	       from the refusal or from an earlier in-memory identity
+//
+// The UNVERIFIED account is a history of the refused admission, not a
+// candidate disposition: a later resume re-reads the record through the
+// locked gate (RULING-374 §7).
+func (e *Engine) terminateRefusedAdmission(ctx context.Context, taskID string, refused *containmentAdmissionRefusal) {
+	const owed = "; no further workspace execution was authorized, and a later read of the record cannot authorize " +
+		"the refused operation: the task's containment must be established by a locked read of its candidate record " +
+		"before the task continues"
+	var unestablished *containmentUnestablished
+	var quarantined *candidate.ErrQuarantined
+	var q WorkspaceQuarantine
+	var summary string
+	switch {
+	case errors.As(refused, &unestablished):
+		q = WorkspaceQuarantine{TaskID: taskID, Reason: "the containment admission of task " + taskID +
+			" failed: its candidate record could not be read under its lock, so its containment state was not " +
+			"established: " + unestablished.err.Error()}
+		summary = "the invocation of task " + taskID + " ended at an in-run containment admission that refused it: " +
+			q.Reason + owed
+	case errors.As(refused, &quarantined):
+		id, ok, readErr := candidate.LoadLocked(e.Repo.Root, taskID)
+		if readErr == nil && ok && id.Unsettled() {
+			q, summary = verifiedQuarantine(taskID, id)
+			summary += "; the in-run containment admission refused continuation on it, and nothing past it ran"
+			break
+		}
+		now := "no longer reads unsettled under its lock"
+		if readErr != nil {
+			now = "could not be read under its lock again: " + readErr.Error()
+		}
+		q = WorkspaceQuarantine{TaskID: taskID, Reason: "the containment admission of task " + taskID +
+			" was refused on its candidate record's quarantine (" + quarantined.Error() + "), and the record now " +
+			now + "; that later observation does not establish the containment the refused admission could not"}
+		summary = "the invocation of task " + taskID + " ended at an in-run containment admission that refused it: " +
+			q.Reason + owed
+	default:
+		// containmentCheck refuses with nothing else; an unknown shape fails
+		// closed as an unestablished admission.
+		q = WorkspaceQuarantine{TaskID: taskID, Reason: "the containment admission of task " + taskID +
+			" refused it: " + refused.Error()}
+		summary = "the invocation of task " + taskID + " ended at an in-run containment admission that refused it: " +
+			q.Reason + owed
+	}
+	e.endQuarantined(ctx, taskID, q, summary)
 }
 
 // terminateOnLockedRead is terminateQuarantined's decision over the result of
@@ -3035,23 +3146,41 @@ func (e *Engine) terminateOnLockedRead(ctx context.Context, taskID string, err e
 	case !ok || !id.Unsettled():
 		return false
 	default:
-		q = WorkspaceQuarantine{TaskID: taskID, Recorded: true, Workspace: id.Worktree}
-		if f := id.InFlight; f != nil {
-			q.Invocation, q.Phase, q.Workspace, q.Baseline = f.Invocation, f.Phase, f.Workspace, f.Baseline
-		}
-		if unsettled := id.Quarantine(); unsettled != nil {
-			q.Reason = strings.TrimSpace(unsettled.Reason)
-		}
-		if q.Reason == "" {
-			q.Reason = "the candidate record names an execution whose teardown was never established"
-		}
-		summary = "the invocation ended while the workspace containment of task " + taskID +
-			" is not established (its candidate record: " + q.Reason + "); workspace " + q.Workspace
-		if q.Baseline != "" {
-			summary += " and baseline workspace " + q.Baseline
-		}
-		summary += " may still be written, so the task is owed a trusted settlement and nothing ordinary continues it"
+		q, summary = verifiedQuarantine(taskID, id)
 	}
+	e.endQuarantined(ctx, taskID, q, summary)
+	return true
+}
+
+// verifiedQuarantine is the VERIFIED projection of a candidate record read
+// under its lock and found unsettled: the invocation, phase, workspace and
+// baseline it names, and its own reason.
+func verifiedQuarantine(taskID string, id candidate.Identity) (WorkspaceQuarantine, string) {
+	q := WorkspaceQuarantine{TaskID: taskID, Recorded: true, Workspace: id.Worktree}
+	if f := id.InFlight; f != nil {
+		q.Invocation, q.Phase, q.Workspace, q.Baseline = f.Invocation, f.Phase, f.Workspace, f.Baseline
+	}
+	if unsettled := id.Quarantine(); unsettled != nil {
+		q.Reason = strings.TrimSpace(unsettled.Reason)
+	}
+	if q.Reason == "" {
+		q.Reason = "the candidate record names an execution whose teardown was never established"
+	}
+	summary := "the invocation ended while the workspace containment of task " + taskID +
+		" is not established (its candidate record: " + q.Reason + "); workspace " + q.Workspace
+	if q.Baseline != "" {
+		summary += " and baseline workspace " + q.Baseline
+	}
+	summary += " may still be written, so the task is owed a trusted settlement and nothing ordinary continues it"
+	return q, summary
+}
+
+// endQuarantined emits the one WorkflowWorkspaceQuarantined terminal of an
+// invocation, through emitRunTerminal (its receipt and its event one record
+// unit), over an UNKNOWN candidate state. Pending refused material is
+// disclosed and left pending; a cancellation or an expired budget is kept in
+// the account and does not decide it.
+func (e *Engine) endQuarantined(ctx context.Context, taskID string, q WorkspaceQuarantine, summary string) {
 	if p := e.pendingRefusedMaterial(taskID); p != nil {
 		q.PendingRefusedMaterial = p
 		refusal := p.RefusalID
@@ -3071,7 +3200,6 @@ func (e *Engine) terminateOnLockedRead(ctx context.Context, taskID string, err e
 	e.noteWorkspaceQuarantine(taskID, q)
 	e.emitRunTerminal(ctx, taskID, event.WorkflowWorkspaceQuarantined, event.SourceSystem,
 		runreceipt.OutcomeWorkspaceQuarantined, runreceipt.CandidateUnknown, summary, q)
-	return true
 }
 
 // refuseCandidatePrecondition ends the invocation with the typed refusal a
@@ -11222,8 +11350,10 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	}
 	// The durable record, not the in-memory copy, decides whether the
 	// candidate may be touched: an unsettled one (quarantined, or an
-	// execution recorded in flight and never settled -- after a crash too)
-	// is refused before its worktree is created or reused (RULING-358 §14).
+	// execution recorded in flight and never settled -- after a crash too),
+	// or one whose containment cannot be established under its lock, is
+	// refused before its worktree is created or reused (RULING-358 §14,
+	// RULING-373 §10).
 	if q := unsettledCandidate(e.Repo.Root, taskID); q != nil {
 		fail(q)
 		return
@@ -12750,8 +12880,12 @@ func (e *Engine) ResumeTask(ctx context.Context, task session.Interrupted) *Resu
 			fail(fmt.Errorf("cannot resume %s: no candidate identity was recorded for it", task.TaskID))
 			return
 		}
+		// Defence in depth (RULING-374 §19): containmentCheck already refused
+		// an unsettled record above. Should this ever be reached, it is the
+		// same gate's decision over the same locked read, and is carried as
+		// that gate's refusal.
 		if q := identity.Quarantine(); q != nil {
-			fail(q)
+			fail(&containmentAdmissionRefusal{err: q})
 			return
 		}
 
@@ -13639,8 +13773,26 @@ func (e *containmentUnestablished) Unwrap() []error {
 // falls back to an unlocked read.
 func containmentCheck(repoRoot, taskID string) (candidate.Identity, bool, error) {
 	id, ok, err := candidate.LoadLocked(repoRoot, taskID)
-	return containmentFromRead(repoRoot, taskID, id, ok, err)
+	id, ok, err = containmentFromRead(repoRoot, taskID, id, ok, err)
+	if err != nil {
+		return id, ok, &containmentAdmissionRefusal{err: err}
+	}
+	return id, ok, nil
 }
+
+// containmentAdmissionRefusal marks a refusal as produced by the one
+// containment check (containmentCheck), so terminateRun recognises an in-run
+// gate's refusal by typed identity (RULING-374 §9) and never by its message.
+// It changes neither the message nor the identity of what it carries
+// (errors.Is ErrContainmentUnestablished and the read failure, or errors.As
+// *candidate.ErrQuarantined), and it is private: a *candidate.ErrQuarantined
+// from any other source -- a candidate operation refusing over a quarantined
+// record -- is not one, and keeps terminateQuarantined's ordinary locked read.
+type containmentAdmissionRefusal struct{ err error }
+
+func (r *containmentAdmissionRefusal) Error() string { return r.err.Error() }
+
+func (r *containmentAdmissionRefusal) Unwrap() error { return r.err }
 
 // containmentFromRead is containmentCheck's decision over the result of its
 // one locked read. It is separate only so the typed lockless read result,
