@@ -35,7 +35,9 @@ type Outcome struct {
 	TaskID string
 	Task   string
 	// Result is the terminal transition the record shows, not an interpretation
-	// of it: completed, failed, stopped or awaiting-authority.
+	// of it: completed, failed, stopped or awaiting-authority, or
+	// workspace_quarantined -- the invocation ended with workspace containment
+	// unresolved and the task owed a settlement, which is none of the others.
 	Result string
 	At     time.Time
 }
@@ -99,7 +101,8 @@ func Summarize(events []event.Event, candidates []candidate.Identity, b Bounds) 
 		case event.DecisionRecorded:
 			s.Decisions = append(s.Decisions, e.Summary)
 		case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority,
-			event.WorkflowBlockedExternal, event.WorkflowNotConverged, event.WorkflowRestorationRefused:
+			event.WorkflowBlockedExternal, event.WorkflowNotConverged, event.WorkflowRestorationRefused,
+			event.WorkflowWorkspaceQuarantined:
 			s.Recent = append(s.Recent, Outcome{
 				TaskID: e.TaskID, Task: tasks[e.TaskID],
 				Result: strings.TrimPrefix(string(e.Kind), "workflow."), At: e.Time,

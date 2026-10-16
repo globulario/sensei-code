@@ -79,6 +79,14 @@ const (
 	// exitFailed it would say the objective broke, which is the classification
 	// that destroyed the task this terminal exists to keep.
 	exitRestorationRefused = 10
+	// exitWorkspaceQuarantined means the invocation ended, but workspace
+	// containment remains unresolved and ordinary continuation is forbidden
+	// (WorkflowWorkspaceQuarantined, RULING-368 §5). The candidate record says
+	// a confined execution's workspace may still be written; the task is owed
+	// a trusted settlement. It is not completed, failed, stopped, timed out,
+	// awaiting authority or restoration refused, and a caller that read it as
+	// any of those would retry, resume or abandon work it must not touch.
+	exitWorkspaceQuarantined = 11
 )
 
 func runGoverned(ctx context.Context, repo gitx.Repo, cfg config.Config, args []string) int {
@@ -478,6 +486,10 @@ func exitFor(k event.Kind, deferred bool) (int, bool) {
 		return exitNotConverged, true
 	case event.WorkflowRestorationRefused:
 		return exitRestorationRefused, true
+	case event.WorkflowWorkspaceQuarantined:
+		// The engine's own ending: no deferral, deadline or later event
+		// rewrites it, and no other ending is waited for.
+		return exitWorkspaceQuarantined, true
 	}
 	return 0, false
 }
@@ -489,7 +501,8 @@ func terminal(k event.Kind) bool {
 	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped,
 		event.WorkflowTimedOut, event.WorkflowObserved,
 		event.WorkflowAwaitingAuthority, event.WorkflowAwaitingReview, event.WorkflowBlockedExternal,
-		event.WorkflowNotConverged, event.WorkflowRestorationRefused, event.AuthorityRequired:
+		event.WorkflowNotConverged, event.WorkflowRestorationRefused, event.WorkflowWorkspaceQuarantined,
+		event.AuthorityRequired:
 		return true
 	}
 	return false
