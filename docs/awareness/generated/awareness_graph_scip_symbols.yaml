@@ -7877,6 +7877,78 @@ code_symbols:
     file: internal/campaign/campaign_test.go
     symbol: TestTheReportShowsUnmeasuredAsUnmeasured
     kind: function
+  - id: internal/candidate/crossprocess_test.go:TestAStaleProcessCannotDropTheBaselineBinding
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/crossprocess_test.go
+    symbol: TestAStaleProcessCannotDropTheBaselineBinding
+    kind: function
+  - id: internal/candidate/crossprocess_test.go:TestAStaleProcessCannotDropTheInFlightRecord
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/crossprocess_test.go
+    symbol: TestAStaleProcessCannotDropTheInFlightRecord
+    kind: function
+  - id: internal/candidate/crossprocess_test.go:TestAnInvalidLockObjectRefusesWithoutWriting
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/crossprocess_test.go
+    symbol: TestAnInvalidLockObjectRefusesWithoutWriting
+    kind: function
+  - id: internal/candidate/crossprocess_test.go:TestAnotherProcessCannotResolveOverAQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/crossprocess_test.go
+    symbol: TestAnotherProcessCannotResolveOverAQuarantine
+    kind: function
+  - id: internal/candidate/crossprocess_test.go:TestAnotherProcessCannotResurrectASettledExecution
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/crossprocess_test.go
+    symbol: TestAnotherProcessCannotResurrectASettledExecution
+    kind: function
+  - id: internal/candidate/crossprocess_test.go:TestConcurrentProcessesCannotBothBeginAnExecution
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/crossprocess_test.go
+    symbol: TestConcurrentProcessesCannotBothBeginAnExecution
+    kind: function
+  - id: internal/candidate/crossprocess_test.go:TestHelperCandidateProcess
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/crossprocess_test.go
+    symbol: TestHelperCandidateProcess
+    kind: function
+  - id: internal/candidate/crossprocess_test.go:TestTheRecordLockSerializesAcrossProcessesAndSurvivesADeadHolder
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/crossprocess_test.go
+    symbol: TestTheRecordLockSerializesAcrossProcessesAndSurvivesADeadHolder
+    kind: function
+  - id: internal/candidate/crossprocess_test.go:helperEnv
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/crossprocess_test.go
+    symbol: helperEnv
+    kind: const
+  - id: internal/candidate/crossprocess_test.go:resultOf
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/crossprocess_test.go
+    symbol: resultOf
+    kind: function
+  - id: internal/candidate/crossprocess_test.go:startHelper
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/crossprocess_test.go
+    symbol: startHelper
+    kind: function
+  - id: internal/candidate/crossprocess_test.go:waitFor
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/crossprocess_test.go
+    symbol: waitFor
+    kind: function
   - id: internal/candidate/disposition.go:Adopted
     namespace: structural.scip
     language: go
@@ -7985,6 +8057,18 @@ code_symbols:
     file: internal/candidate/disposition.go
     symbol: List
     kind: function
+  - id: internal/candidate/disposition.go:QuarantineExecution
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/disposition.go
+    symbol: QuarantineExecution
+    kind: function
+  - id: internal/candidate/disposition.go:Quarantined
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/disposition.go
+    symbol: Quarantined
+    kind: const
   - id: internal/candidate/disposition.go:Rejected
     namespace: structural.scip
     language: go
@@ -8099,6 +8183,12 @@ code_symbols:
     file: internal/candidate/disposition_test.go
     symbol: TestRetentionStatesItsReason
     kind: function
+  - id: internal/candidate/identity.go:BeginExecution
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: BeginExecution
+    kind: function
   - id: internal/candidate/identity.go:ErrBaseMoved.Current
     namespace: structural.scip
     language: go
@@ -8147,6 +8237,48 @@ code_symbols:
     file: internal/candidate/identity.go
     symbol: ErrDirtyCanonical
     kind: type
+  - id: internal/candidate/identity.go:ErrNoCrossProcessLock
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: ErrNoCrossProcessLock
+    kind: var
+  - id: internal/candidate/identity.go:ErrNoIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: ErrNoIdentity
+    kind: var
+  - id: internal/candidate/identity.go:ErrQuarantined.Error
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: ErrQuarantined.Error
+    kind: method
+  - id: internal/candidate/identity.go:ErrQuarantined.Reason
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: ErrQuarantined.Reason
+    kind: var
+  - id: internal/candidate/identity.go:ErrQuarantined.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: ErrQuarantined.TaskID
+    kind: var
+  - id: internal/candidate/identity.go:ErrQuarantined.Workspace
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: ErrQuarantined.Workspace
+    kind: var
+  - id: internal/candidate/identity.go:ErrQuarantined~type
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: ErrQuarantined
+    kind: type
   - id: internal/candidate/identity.go:Establish
     namespace: structural.scip
     language: go
@@ -8189,6 +8321,18 @@ code_symbols:
     file: internal/candidate/identity.go
     symbol: Identity.GraphBuildCommit
     kind: var
+  - id: internal/candidate/identity.go:Identity.InFlight
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: Identity.InFlight
+    kind: var
+  - id: internal/candidate/identity.go:Identity.Quarantine
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: Identity.Quarantine
+    kind: method
   - id: internal/candidate/identity.go:Identity.Repository
     namespace: structural.scip
     language: go
@@ -8225,6 +8369,12 @@ code_symbols:
     file: internal/candidate/identity.go
     symbol: Identity.TaskID
     kind: var
+  - id: internal/candidate/identity.go:Identity.Unsettled
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: Identity.Unsettled
+    kind: method
   - id: internal/candidate/identity.go:Identity.Worktree
     namespace: structural.scip
     language: go
@@ -8243,11 +8393,65 @@ code_symbols:
     file: internal/candidate/identity.go
     symbol: Identity
     kind: type
+  - id: internal/candidate/identity.go:InFlight.Baseline
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: InFlight.Baseline
+    kind: var
+  - id: internal/candidate/identity.go:InFlight.Invocation
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: InFlight.Invocation
+    kind: var
+  - id: internal/candidate/identity.go:InFlight.Phase
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: InFlight.Phase
+    kind: var
+  - id: internal/candidate/identity.go:InFlight.Profile
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: InFlight.Profile
+    kind: var
+  - id: internal/candidate/identity.go:InFlight.StartedAt
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: InFlight.StartedAt
+    kind: var
+  - id: internal/candidate/identity.go:InFlight.Workspace
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: InFlight.Workspace
+    kind: var
+  - id: internal/candidate/identity.go:InFlight~type
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: InFlight
+    kind: type
   - id: internal/candidate/identity.go:Load
     namespace: structural.scip
     language: go
     file: internal/candidate/identity.go
     symbol: Load
+    kind: function
+  - id: internal/candidate/identity.go:LoadLocked
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: LoadLocked
+    kind: function
+  - id: internal/candidate/identity.go:NoteBaseline
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: NoteBaseline
     kind: function
   - id: internal/candidate/identity.go:Repo.Head
     namespace: structural.scip
@@ -8267,17 +8471,95 @@ code_symbols:
     file: internal/candidate/identity.go
     symbol: Repo
     kind: type
+  - id: internal/candidate/identity.go:SettleExecution
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: SettleExecution
+    kind: function
+  - id: internal/candidate/identity.go:dropsUnsettled
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: dropsUnsettled
+    kind: function
+  - id: internal/candidate/identity.go:errLockTimeout
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: errLockTimeout
+    kind: var
+  - id: internal/candidate/identity.go:errProtectedState
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: errProtectedState
+    kind: var
+  - id: internal/candidate/identity.go:load
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: load
+    kind: function
+  - id: internal/candidate/identity.go:lockWait
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: lockWait
+    kind: var
+  - id: internal/candidate/identity.go:mintsProtected
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: mintsProtected
+    kind: function
   - id: internal/candidate/identity.go:path
     namespace: structural.scip
     language: go
     file: internal/candidate/identity.go
     symbol: path
     kind: function
+  - id: internal/candidate/identity.go:quarantined
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: quarantined
+    kind: function
+  - id: internal/candidate/identity.go:recordMu
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: recordMu
+    kind: var
+  - id: internal/candidate/identity.go:sameJSON
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: sameJSON
+    kind: function
   - id: internal/candidate/identity.go:short
     namespace: structural.scip
     language: go
     file: internal/candidate/identity.go
     symbol: short
+    kind: function
+  - id: internal/candidate/identity.go:syncDir
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: syncDir
+    kind: function
+  - id: internal/candidate/identity.go:withRecord
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: withRecord
+    kind: function
+  - id: internal/candidate/identity.go:writeRecord
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: writeRecord
     kind: function
   - id: internal/candidate/identity_test.go:TestBaseSHAIsImmutableForACandidateLifecycle
     namespace: structural.scip
@@ -8362,6 +8644,120 @@ code_symbols:
     language: go
     file: internal/candidate/identity_test.go
     symbol: writeCorrupt
+    kind: function
+  - id: internal/candidate/lock_unix.go:crossProcessLock
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/lock_unix.go
+    symbol: crossProcessLock
+    kind: const
+  - id: internal/candidate/lock_unix.go:lockRecord
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/lock_unix.go
+    symbol: lockRecord
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestAQuarantineCannotBeOverwritten
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestAQuarantineCannotBeOverwritten
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestAStaleResolveCannotResurrectASettledExecution
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestAStaleResolveCannotResurrectASettledExecution
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestAStaleSaveCannotClearAnInFlightRecord
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestAStaleSaveCannotClearAnInFlightRecord
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestAStaleSaveCannotResurrectASettledExecution
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestAStaleSaveCannotResurrectASettledExecution
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestAnInFlightExecutionIsUnsettledOnAFreshRead
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestAnInFlightExecutionIsUnsettledOnAFreshRead
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestAnOrdinarySaveCannotIntroduceAQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestAnOrdinarySaveCannotIntroduceAQuarantine
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestAnOrdinarySaveCannotIntroduceAnExecution
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestAnOrdinarySaveCannotIntroduceAnExecution
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestAnUnreadableRecordIsNotOverwritten
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestAnUnreadableRecordIsNotOverwritten
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestLoadLockedIsASerializedReadOnlyObservation
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestLoadLockedIsASerializedReadOnlyObservation
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestNoExecutionIsBoundWithoutAnIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestNoExecutionIsBoundWithoutAnIdentity
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestNoOrdinaryResolutionWhileAnExecutionIsInFlight
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestNoOrdinaryResolutionWhileAnExecutionIsInFlight
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestOrdinaryUpdatesStillWorkAroundASettledExecution
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestOrdinaryUpdatesStillWorkAroundASettledExecution
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestTheBaselineIsBoundToTheInFlightRecord
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestTheBaselineIsBoundToTheInFlightRecord
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestTheRecordIsReplacedAtomically
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestTheRecordIsReplacedAtomically
+    kind: function
+  - id: internal/candidate/quarantine_test.go:TestTheWholeSafetyStateIsMonotonic
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: TestTheWholeSafetyStateIsMonotonic
+    kind: function
+  - id: internal/candidate/quarantine_test.go:inflight
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: inflight
+    kind: function
+  - id: internal/candidate/quarantine_test.go:recorded
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/quarantine_test.go
+    symbol: recorded
     kind: function
   - id: internal/command/command.go:Command.Arg
     namespace: structural.scip
@@ -44801,6 +45197,12 @@ code_symbols:
     file: internal/validation/evidence.go
     symbol: Bundle.Unactionable
     kind: method
+  - id: internal/validation/evidence.go:Bundle.Unsettled
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: Bundle.Unsettled
+    kind: method
   - id: internal/validation/evidence.go:Bundle~type
     namespace: structural.scip
     language: go
@@ -44957,6 +45359,12 @@ code_symbols:
     file: internal/validation/evidence.go
     symbol: Evidence.Attribution
     kind: var
+  - id: internal/validation/evidence.go:Evidence.BaselineTeardown
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: Evidence.BaselineTeardown
+    kind: var
   - id: internal/validation/evidence.go:Evidence.CandidateID
     namespace: structural.scip
     language: go
@@ -45041,6 +45449,18 @@ code_symbols:
     file: internal/validation/evidence.go
     symbol: Evidence.StartedAt
     kind: var
+  - id: internal/validation/evidence.go:Evidence.Teardown
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: Evidence.Teardown
+    kind: var
+  - id: internal/validation/evidence.go:Evidence.Unsettled
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: Evidence.Unsettled
+    kind: method
   - id: internal/validation/evidence.go:Evidence~type
     namespace: structural.scip
     language: go
@@ -45227,6 +45647,30 @@ code_symbols:
     file: internal/validation/evidence.go
     symbol: StatusProtocol
     kind: const
+  - id: internal/validation/evidence.go:TeardownNotApplicable
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: TeardownNotApplicable
+    kind: const
+  - id: internal/validation/evidence.go:TeardownProven
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: TeardownProven
+    kind: const
+  - id: internal/validation/evidence.go:TeardownUnresolved
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: TeardownUnresolved
+    kind: const
+  - id: internal/validation/evidence.go:Teardown~type
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: Teardown
+    kind: type
   - id: internal/validation/evidence.go:Test
     namespace: structural.scip
     language: go
@@ -45287,6 +45731,12 @@ code_symbols:
     file: internal/validation/evidence.go
     symbol: execution.refused
     kind: var
+  - id: internal/validation/evidence.go:execution.teardown
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: execution.teardown
+    kind: var
   - id: internal/validation/evidence.go:execution~type
     namespace: structural.scip
     language: go
@@ -45317,12 +45767,24 @@ code_symbols:
     file: internal/validation/evidence.go
     symbol: namedVerdict
     kind: function
+  - id: internal/validation/evidence.go:notStarted
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: notStarted
+    kind: function
   - id: internal/validation/evidence.go:parseStatus
     namespace: structural.scip
     language: go
     file: internal/validation/evidence.go
     symbol: parseStatus
     kind: function
+  - id: internal/validation/evidence.go:preStartRefusals
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: preStartRefusals
+    kind: var
   - id: internal/validation/evidence.go:release
     namespace: structural.scip
     language: go
@@ -45353,6 +45815,12 @@ code_symbols:
     file: internal/validation/evidence.go
     symbol: statusGrace
     kind: const
+  - id: internal/validation/evidence.go:teardownOfRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: teardownOfRefusal
+    kind: function
   - id: internal/validation/evidence.go:terminallyInvalid
     namespace: structural.scip
     language: go
@@ -45731,6 +46199,108 @@ code_symbols:
     file: internal/validation/runner_confine_test.go
     symbol: unboundedStatus
     kind: const
+  - id: internal/validation/teardown_test.go:TestACompletionProofSurvivesALaterCancellation
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: TestACompletionProofSurvivesALaterCancellation
+    kind: function
+  - id: internal/validation/teardown_test.go:TestAMissingStatementFromARequiredStatusExecutorIsUnsettled
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: TestAMissingStatementFromARequiredStatusExecutorIsUnsettled
+    kind: function
+  - id: internal/validation/teardown_test.go:TestAPreStartRefusalIsNotApplicable
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: TestAPreStartRefusalIsNotApplicable
+    kind: function
+  - id: internal/validation/teardown_test.go:TestAValidRanRecordProvesTeardown
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: TestAValidRanRecordProvesTeardown
+    kind: function
+  - id: internal/validation/teardown_test.go:TestAnUnresolvedBaselineMarksTheRecordUnsettled
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: TestAnUnresolvedBaselineMarksTheRecordUnsettled
+    kind: function
+  - id: internal/validation/teardown_test.go:TestCancellationWithoutACompletionProofIsUnresolved
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: TestCancellationWithoutACompletionProofIsUnresolved
+    kind: function
+  - id: internal/validation/teardown_test.go:TestNoCheckRunsAfterAnUnresolvedOne
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: TestNoCheckRunsAfterAnUnresolvedOne
+    kind: function
+  - id: internal/validation/teardown_test.go:TestNoRefusalReasonIsProvenWithoutItsProof
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: TestNoRefusalReasonIsProvenWithoutItsProof
+    kind: function
+  - id: internal/validation/teardown_test.go:TestNoRequiredTestRunsAfterAnUnresolvedOne
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: TestNoRequiredTestRunsAfterAnUnresolvedOne
+    kind: function
+  - id: internal/validation/teardown_test.go:TestNoStatusAfterAPossibleStartIsUnresolved
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: TestNoStatusAfterAPossibleStartIsUnresolved
+    kind: function
+  - id: internal/validation/teardown_test.go:TestTeardownUnresolvedAndUnknownReasonsAreUnresolved
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: TestTeardownUnresolvedAndUnknownReasonsAreUnresolved
+    kind: function
+  - id: internal/validation/teardown_test.go:TestUnconfinedAndLegacyExecutionsAreNotApplicable
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: TestUnconfinedAndLegacyExecutionsAreNotApplicable
+    kind: function
+  - id: internal/validation/teardown_test.go:alwaysErring.Context
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: alwaysErring.Context
+    kind: var
+  - id: internal/validation/teardown_test.go:alwaysErring.Err
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: alwaysErring.Err
+    kind: method
+  - id: internal/validation/teardown_test.go:alwaysErring~type
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: alwaysErring
+    kind: type
+  - id: internal/validation/teardown_test.go:exitCheck
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: exitCheck
+    kind: function
+  - id: internal/validation/teardown_test.go:refusingLauncherWith
+    namespace: structural.scip
+    language: go
+    file: internal/validation/teardown_test.go
+    symbol: refusingLauncherWith
+    kind: function
   - id: internal/validation/wrap_test.go:TestAConfinedCheckRunsThroughItsPinnedWrapper
     namespace: structural.scip
     language: go
@@ -51527,6 +52097,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.awaitHuman
     kind: method
+  - id: internal/workflow/engine.go:Engine.baselineFreeAfterPreStart
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.baselineFreeAfterPreStart
+    kind: method
   - id: internal/workflow/engine.go:Engine.beginPlanAttempt
     namespace: structural.scip
     language: go
@@ -51562,6 +52138,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.bindLineage
+    kind: method
+  - id: internal/workflow/engine.go:Engine.boundedRun
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.boundedRun
     kind: method
   - id: internal/workflow/engine.go:Engine.canonicalTask
     namespace: structural.scip
@@ -52619,6 +53201,54 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: ErrTaskInvocationLive
     kind: var
+  - id: internal/workflow/engine.go:ExecutionBoundaryFailure.Err
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: ExecutionBoundaryFailure.Err
+    kind: var
+  - id: internal/workflow/engine.go:ExecutionBoundaryFailure.Error
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: ExecutionBoundaryFailure.Error
+    kind: method
+  - id: internal/workflow/engine.go:ExecutionBoundaryFailure.Phase
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: ExecutionBoundaryFailure.Phase
+    kind: var
+  - id: internal/workflow/engine.go:ExecutionBoundaryFailure.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: ExecutionBoundaryFailure.TaskID
+    kind: var
+  - id: internal/workflow/engine.go:ExecutionBoundaryFailure.Unwrap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: ExecutionBoundaryFailure.Unwrap
+    kind: method
+  - id: internal/workflow/engine.go:ExecutionBoundaryFailure.invocation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: ExecutionBoundaryFailure.invocation
+    kind: var
+  - id: internal/workflow/engine.go:ExecutionBoundaryFailure.notStarted
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: ExecutionBoundaryFailure.notStarted
+    kind: var
+  - id: internal/workflow/engine.go:ExecutionBoundaryFailure~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: ExecutionBoundaryFailure
+    kind: type
   - id: internal/workflow/engine.go:ModeInspect
     namespace: structural.scip
     language: go
@@ -52955,6 +53585,66 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: UnprovenAuthorityScopeError
     kind: type
+  - id: internal/workflow/engine.go:WorkspaceUnsettled.Baseline
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceUnsettled.Baseline
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceUnsettled.Error
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceUnsettled.Error
+    kind: method
+  - id: internal/workflow/engine.go:WorkspaceUnsettled.Evidence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceUnsettled.Evidence
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceUnsettled.Invocation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceUnsettled.Invocation
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceUnsettled.Phase
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceUnsettled.Phase
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceUnsettled.RecordErr
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceUnsettled.RecordErr
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceUnsettled.Recorded
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceUnsettled.Recorded
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceUnsettled.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceUnsettled.TaskID
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceUnsettled.Workspace
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceUnsettled.Workspace
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceUnsettled~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceUnsettled
+    kind: type
   - id: internal/workflow/engine.go:accountForFindings
     namespace: structural.scip
     language: go
@@ -53195,6 +53885,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: architecturePrompt
     kind: function
+  - id: internal/workflow/engine.go:beginExecution
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: beginExecution
+    kind: var
   - id: internal/workflow/engine.go:behaviourFailure
     namespace: structural.scip
     language: go
@@ -53927,6 +54623,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: isReviewLifecycleFault
     kind: function
+  - id: internal/workflow/engine.go:isWorkspaceSafetyStop
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: isWorkspaceSafetyStop
+    kind: function
   - id: internal/workflow/engine.go:lease
     namespace: structural.scip
     language: go
@@ -53950,6 +54652,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: movedPathsSince
+    kind: function
+  - id: internal/workflow/engine.go:newExecutionInvocation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: newExecutionInvocation
     kind: function
   - id: internal/workflow/engine.go:newInvocation
     namespace: structural.scip
@@ -54094,6 +54802,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: observeCandidate
+    kind: function
+  - id: internal/workflow/engine.go:observeInherited
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: observeInherited
     kind: function
   - id: internal/workflow/engine.go:oneLine
     namespace: structural.scip
@@ -54887,6 +55601,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: repositoryHead
     kind: function
+  - id: internal/workflow/engine.go:requiresExecutionBoundary
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: requiresExecutionBoundary
+    kind: function
   - id: internal/workflow/engine.go:resolutionRounds.begin
     namespace: structural.scip
     language: go
@@ -55607,6 +56327,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: taskPlanAttempts
     kind: type
+  - id: internal/workflow/engine.go:teardownName
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: teardownName
+    kind: function
   - id: internal/workflow/engine.go:terminalAppendWait
     namespace: structural.scip
     language: go
@@ -55630,6 +56356,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: unmetProof
+    kind: function
+  - id: internal/workflow/engine.go:unsettledCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: unsettledCandidate
     kind: function
   - id: internal/workflow/engine.go:validationConfinementOf
     namespace: structural.scip
@@ -63707,6 +64439,240 @@ code_symbols:
     file: internal/workflow/publication_test.go
     symbol: TestEveryPublicationOutcomeIsDistinguished
     kind: function
+  - id: internal/workflow/quarantine_test.go:TestABaselineThatCannotBeBoundNeverRuns
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestABaselineThatCannotBeBoundNeverRuns
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestABoundaryThatFailedAfterItsWriteKeepsTheCandidateUnsettled
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestABoundaryThatFailedAfterItsWriteKeepsTheCandidateUnsettled
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestACachedBaselineIsBoundToTheCurrentInvocation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestACachedBaselineIsBoundToTheCurrentInvocation
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestADurableQuarantineKeepsTheBaselineAfterAPreStartFailure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestADurableQuarantineKeepsTheBaselineAfterAPreStartFailure
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestAFailedBaselineBindingAloneEndsOnTheBoundaryStop
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestAFailedBaselineBindingAloneEndsOnTheBoundaryStop
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestAFreshEngineRefusesAQuarantinedCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestAFreshEngineRefusesAQuarantinedCandidate
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestALockHeldElsewhereKeepsTheBaseline
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestALockHeldElsewhereKeepsTheBaseline
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestAPreStartFailureLeavesNoOrphanBaseline
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestAPreStartFailureLeavesNoOrphanBaseline
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestARebindedCachedBaselineKeepsOrdinaryAttribution
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestARebindedCachedBaselineKeepsOrdinaryAttribution
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestASettledEarlierBaselineDoesNotKeepAnUnboundOne
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestASettledEarlierBaselineDoesNotKeepAnUnboundOne
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestAnExistingQuarantineIsNotBypassedByThePreStartClassification
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestAnExistingQuarantineIsNotBypassedByThePreStartClassification
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestAnInterruptedExecutionIsUnsettledAfterRestart
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestAnInterruptedExecutionIsUnsettledAfterRestart
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestAnInvalidLockObjectKeepsTheBaseline
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestAnInvalidLockObjectKeepsTheBaseline
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestAnUnreadableRecordKeepsTheBaselineAfterAPreStartFailure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestAnUnreadableRecordKeepsTheBaselineAfterAPreStartFailure
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestAnUnresolvedBaselineQuarantinesTheTaskAndKeepsItsWorktree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestAnUnresolvedBaselineQuarantinesTheTaskAndKeepsItsWorktree
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestAnUnresolvedFinalValidationNeverReachesTheReviewer
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestAnUnresolvedFinalValidationNeverReachesTheReviewer
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestAnotherInvocationInFlightKeepsTheBaseline
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestAnotherInvocationInFlightKeepsTheBaseline
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestAnotherProcessCannotOperateATaskWhoseInvocationIsLive
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestAnotherProcessCannotOperateATaskWhoseInvocationIsLive
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestHelperLeaseHolder
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestHelperLeaseHolder
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestTheEntryGatesPrecedeWorktreeUse
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestTheEntryGatesPrecedeWorktreeUse
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestTheExecutionServiceRefusesAQuarantinedTask
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestTheExecutionServiceRefusesAQuarantinedTask
+    kind: function
+  - id: internal/workflow/quarantine_test.go:TestTheInFlightBoundaryIsDurableBeforeTheExecutionStarts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: TestTheInFlightBoundaryIsDurableBeforeTheExecutionStarts
+    kind: function
+  - id: internal/workflow/quarantine_test.go:assertBaselineKept
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: assertBaselineKept
+    kind: function
+  - id: internal/workflow/quarantine_test.go:baselineRuns
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: baselineRuns
+    kind: function
+  - id: internal/workflow/quarantine_test.go:countingBaselineLauncher
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: countingBaselineLauncher
+    kind: function
+  - id: internal/workflow/quarantine_test.go:countingRunner.Run
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: countingRunner.Run
+    kind: method
+  - id: internal/workflow/quarantine_test.go:countingRunner.answeringRunner
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: countingRunner.answeringRunner
+    kind: var
+  - id: internal/workflow/quarantine_test.go:countingRunner.turns
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: countingRunner.turns
+    kind: var
+  - id: internal/workflow/quarantine_test.go:countingRunner~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: countingRunner
+    kind: type
+  - id: internal/workflow/quarantine_test.go:drainChan
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: drainChan
+    kind: function
+  - id: internal/workflow/quarantine_test.go:errInjectedPreStart
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: errInjectedPreStart
+    kind: var
+  - id: internal/workflow/quarantine_test.go:injectPreStart
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: injectPreStart
+    kind: function
+  - id: internal/workflow/quarantine_test.go:n4MarkingLauncher
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: n4MarkingLauncher
+    kind: function
+  - id: internal/workflow/quarantine_test.go:n4SilentLauncher
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: n4SilentLauncher
+    kind: function
+  - id: internal/workflow/quarantine_test.go:observationPath
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: observationPath
+    kind: function
+  - id: internal/workflow/quarantine_test.go:preStartRig
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: preStartRig
+    kind: function
+  - id: internal/workflow/quarantine_test.go:quarantinedRecord
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: quarantinedRecord
+    kind: function
+  - id: internal/workflow/quarantine_test.go:recordFile
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: recordFile
+    kind: function
+  - id: internal/workflow/quarantine_test.go:refusesEverything
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/quarantine_test.go
+    symbol: refusesEverything
+    kind: function
   - id: internal/workflow/receipt.go:Engine.beginReceipt
     namespace: structural.scip
     language: go
@@ -69881,6 +70847,12 @@ code_symbols:
     file: internal/workflow/validation_confine_test.go
     symbol: derivedFormatRecord
     kind: function
+  - id: internal/workflow/validation_confine_test.go:dirExists
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: dirExists
+    kind: function
   - id: internal/workflow/validation_confine_test.go:erringCtx.Context
     namespace: structural.scip
     language: go
@@ -69928,6 +70900,12 @@ code_symbols:
     language: go
     file: internal/workflow/validation_confine_test.go
     symbol: n4RefusingLauncher
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:recordCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: recordCandidate
     kind: function
   - id: internal/workflow/validation_confine_test.go:stageBinding
     namespace: structural.scip
