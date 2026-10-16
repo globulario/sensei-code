@@ -340,6 +340,7 @@ var governedKinds = map[event.Kind]kindRule{
 	event.WorkflowBaseMovedRefused:      closedKind(systemOnly, false, []shape{baseMovedShape}, semanticsOf(baseMovedRefusedPayload)),
 	event.WorkflowDirtyCanonicalRefused: closedKind(systemOnly, false, []shape{dirtyCanonicalShape}, semanticsOf(dirtyCanonicalRefusedPayload)),
 	event.WorkflowPlanAdmissionRefused:  closedKind(systemOnly, false, []shape{planAdmissionRefusalShape}, semanticsOf(planAdmissionRefusalPayload)),
+	event.WorkflowWorkspaceQuarantined:  closedKind(systemOnly, false, []shape{workspaceQuarantinedShape, workspaceUnverifiedShape}, semanticsOf(workspaceQuarantinedPayload)),
 	event.ModeSelected:                  closedKind(systemOnly, false, []shape{modeSelectedShape}),
 	event.ArchitectSpoke:                closedKind(sources(event.SourceArchitect), true, []shape{architectSpokeShape}),
 	event.PullRequestOpened:             closedKind(sources(event.SourceGit), false, []shape{pullRequestShape}),
@@ -786,6 +787,16 @@ var (
 		"TaskID": req(tText), "Recorded": req(tText), "Current": req(tText)}}
 	dirtyCanonicalShape = shape{name: "a dirty-canonical refusal", members: map[string]member{
 		"Repository": req(tText)}}
+	// workspaceQuarantinedShape is the VERIFIED quarantine terminal: a locked
+	// read of the candidate record named the task's containment state as
+	// unsettled, and these are the facts it named. workspaceUnverifiedShape
+	// is the UNVERIFIED one: the record could not be read, so the task, the
+	// unverified state and the actual read failure are all it may carry.
+	workspaceQuarantinedShape = shape{name: "a verified workspace quarantine", members: map[string]member{
+		"task_id": req(tText), "recorded": req(tBool), "invocation": opt(tText), "phase": opt(tText),
+		"workspace": req(tText), "baseline": opt(tText), "reason": req(tText)}}
+	workspaceUnverifiedShape = shape{name: "an unverified workspace quarantine", members: map[string]member{
+		"task_id": req(tText), "recorded": req(tBool), "reason": req(tText)}}
 )
 
 // THE CLOSED PAYLOAD SHAPES (RULING-200 A). No governed kind accepts an
@@ -1307,6 +1318,26 @@ func baseMovedRefusedPayload(e event.Event, m payloadMembers, present bool) erro
 	recorded, _ := m.str("Recorded")
 	if current, _ := m.str("Current"); recorded == current {
 		return fmt.Errorf("%w: a base-moved refusal of task %s names one base as both recorded and current", ErrMalformedEvent, e.TaskID)
+	}
+	return summarized(e)
+}
+
+// workspaceQuarantinedPayload is the discriminated quarantine terminal: its
+// own task, and either a verified observation (recorded true) naming the
+// workspace the record names, or an unverified one (recorded false) carrying
+// nothing but the task, the state and the read failure. The summary states
+// why the invocation ended.
+func workspaceQuarantinedPayload(e event.Event, m payloadMembers, present bool) error {
+	if err := ownTask(e, m, "task_id"); err != nil {
+		return err
+	}
+	recorded, _ := m.boolean("recorded")
+	if recorded {
+		if err := requireMembers(e, m, present, "workspace", "reason"); err != nil {
+			return err
+		}
+	} else if err := exactMembers(e, m, present, "task_id", "recorded", "reason"); err != nil {
+		return fmt.Errorf("%w (an unverified quarantine states nothing the failed read did not establish)", err)
 	}
 	return summarized(e)
 }

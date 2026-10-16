@@ -148,8 +148,9 @@ func TestRunTerminalityIsAClosedVocabulary(t *testing.T) {
 		WorkflowBaseMovedRefused:      InvocationTerminal,
 		WorkflowDirtyCanonicalRefused: InvocationTerminal,
 		WorkflowPlanAdmissionRefused:  InvocationTerminal,
+		WorkflowWorkspaceQuarantined:  InvocationTerminal,
 	}
-	if len(want) != 13 {
+	if len(want) != 14 {
 		t.Fatalf("%d run endings pinned; if the set changed, pin it here", len(want))
 	}
 	tasks := 0

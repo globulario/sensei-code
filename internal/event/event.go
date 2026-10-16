@@ -217,6 +217,18 @@ const (
 	// establishes that the plan cannot proceed, not that the objective is
 	// impossible (objective 61). The payload is workflow.PlanAdmissionRefused.
 	WorkflowPlanAdmissionRefused Kind = "workflow.plan_admission_refused"
+	// WorkflowWorkspaceQuarantined is an invocation that ended while the
+	// durable candidate record says the task's workspace containment is not
+	// established: a confined execution is in flight or quarantined, and its
+	// workspace may still be written (RULING-366 §5). It is system-owned and a
+	// projection only: the candidate record is the one quarantine authority,
+	// and this record never mints, clears or settles it, and never authorizes
+	// a mint, a review, an execution or any reuse of the workspace.
+	//
+	// Terminal for the INVOCATION and not for the TASK: the task stays
+	// discoverable, owing a trusted containment settlement, and is not
+	// executable while it owes one. The payload is workflow.WorkspaceQuarantine.
+	WorkflowWorkspaceQuarantined Kind = "workflow.workspace_quarantined"
 	// ProspectiveGranted records the prospective authorization the router read
 	// for a task's declared new surfaces (sensei#312): the covering surface,
 	// the pinned world and the facts read from it. The payload is the record
@@ -263,7 +275,10 @@ type Terminality string
 
 const (
 	// InvocationTerminal ends one process's attempt and leaves the task owing
-	// something: it stays resumable.
+	// something: the task remains DISCOVERABLE with an outstanding obligation.
+	// Discoverable is not executable: a task whose workspace is quarantined
+	// (WorkflowWorkspaceQuarantined) is listed and owed a settlement, and
+	// nothing ordinary may continue it (RULING-366 Q2).
 	InvocationTerminal Terminality = "invocation"
 	// TaskTerminal ends the task. Nothing is left to resume.
 	TaskTerminal Terminality = "task"
@@ -276,14 +291,16 @@ const (
 // a default, so a new ending cannot quietly become either kind of terminal.
 // The task-terminal set is exactly WorkflowCompleted, WorkflowFailed and
 // WorkflowObserved: a change was admitted, the work failed, or a read-only run
-// reported what it found. Every other ending leaves the task resumable.
+// reported what it found. Every other ending leaves the task discoverable
+// with an outstanding obligation.
 func RunTerminality(k Kind) (Terminality, bool) {
 	switch k {
 	case WorkflowCompleted, WorkflowFailed, WorkflowObserved:
 		return TaskTerminal, true
 	case WorkflowStopped, WorkflowTimedOut, WorkflowAwaitingAuthority, WorkflowAwaitingReview,
 		WorkflowBlockedExternal, WorkflowNotConverged, WorkflowRestorationRefused,
-		WorkflowBaseMovedRefused, WorkflowDirtyCanonicalRefused, WorkflowPlanAdmissionRefused:
+		WorkflowBaseMovedRefused, WorkflowDirtyCanonicalRefused, WorkflowPlanAdmissionRefused,
+		WorkflowWorkspaceQuarantined:
 		return InvocationTerminal, true
 	}
 	return "", false

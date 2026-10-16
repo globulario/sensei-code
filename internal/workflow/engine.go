@@ -2795,6 +2795,15 @@ func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err erro
 	if errors.Is(err, errAuthorityDeferred) {
 		return
 	}
+	// An invocation can end while its task continues to owe containment
+	// settlement (RULING-366 §3-§4, §13-§14). The durable candidate record --
+	// the one quarantine authority -- is read here, before cancellation and
+	// before every ordinary ending: a workspace that may still be written is
+	// the truth about how this invocation ended, whoever stopped it and
+	// whatever error reached here, and the task is not over.
+	if e.terminateQuarantined(ctx, taskID, err) {
+		return
+	}
 	// A stopped run is not a failed one, and recording it as failure would
 	// teach the behavioural record that this task shape breaks. The human
 	// withdrew; nothing was proved about the work. The outcome is still
@@ -2855,6 +2864,92 @@ func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err erro
 	// shape breaks, when what happened is that the human answered and said
 	// no.
 	e.terminateAuthorityOutcome(ctx, taskID, task, err)
+}
+
+// WorkspaceQuarantine is the payload of WorkflowWorkspaceQuarantined: what one
+// locked read of the durable candidate record established about the task's
+// workspace containment when the invocation ended (RULING-366 §10-§12).
+//
+// It has two shapes, told apart by Recorded. VERIFIED (Recorded true): the
+// record was read and names the containment state unsettled, and the
+// invocation, phase, workspace and baseline are the ones it names -- empty
+// only when the record names none. UNVERIFIED (Recorded false): the record
+// could not be read while a workspace safety stop ended the run, so it
+// carries the task and the actual read failure and nothing else.
+//
+// It is a projection: it never mints, clears or settles a quarantine, and the
+// candidate record stays the authority whatever happens to this record.
+type WorkspaceQuarantine struct {
+	TaskID     string `json:"task_id"`
+	Recorded   bool   `json:"recorded"`
+	Invocation string `json:"invocation,omitempty"`
+	Phase      string `json:"phase,omitempty"`
+	Workspace  string `json:"workspace,omitempty"`
+	Baseline   string `json:"baseline,omitempty"`
+	Reason     string `json:"reason"`
+}
+
+// terminateQuarantined is terminateRun's workspace-quarantine classifier, and
+// reports whether it ended the invocation.
+//
+// It decides from the durable candidate record, read once under its lock
+// (candidate.LoadLocked), never from the error alone:
+//
+//	record unsettled                     -> VERIFIED quarantine terminal
+//	record unreadable + safety-stop err  -> UNVERIFIED quarantine terminal
+//	record unreadable + ordinary err     -> not decided here
+//	record absent or settled             -> not decided here (a clean
+//	                                        pre-start boundary failure keeps
+//	                                        its ordinary outcome)
+//
+// It writes nothing to the record and inspects no worktree. The terminal goes
+// through emitRunTerminal, so its receipt and its event are one record unit;
+// no behavioural outcome is reported, because nothing about the work failed.
+// A cancellation or an expired budget is kept in the account, not lost.
+func (e *Engine) terminateQuarantined(ctx context.Context, taskID string, err error) bool {
+	id, ok, readErr := candidate.LoadLocked(e.Repo.Root, taskID)
+	var q WorkspaceQuarantine
+	var summary string
+	switch {
+	case readErr != nil:
+		if !isWorkspaceSafetyStop(err) {
+			return false
+		}
+		q = WorkspaceQuarantine{TaskID: taskID, Reason: "the candidate record of " + taskID +
+			" could not be read under its lock, so its containment state is not established: " + readErr.Error()}
+		summary = "the invocation ended on a workspace safety stop (" + err.Error() + ") and " + q.Reason +
+			"; the task stays blocked and is owed a trusted settlement"
+	case !ok || !id.Unsettled():
+		return false
+	default:
+		q = WorkspaceQuarantine{TaskID: taskID, Recorded: true, Workspace: id.Worktree}
+		if f := id.InFlight; f != nil {
+			q.Invocation, q.Phase, q.Workspace, q.Baseline = f.Invocation, f.Phase, f.Workspace, f.Baseline
+		}
+		if unsettled := id.Quarantine(); unsettled != nil {
+			q.Reason = strings.TrimSpace(unsettled.Reason)
+		}
+		if q.Reason == "" {
+			q.Reason = "the candidate record names an execution whose teardown was never established"
+		}
+		summary = "the invocation ended while the workspace containment of task " + taskID +
+			" is not established (its candidate record: " + q.Reason + "); workspace " + q.Workspace
+		if q.Baseline != "" {
+			summary += " and baseline workspace " + q.Baseline
+		}
+		summary += " may still be written, so the task is owed a trusted settlement and nothing ordinary continues it"
+	}
+	if ctx.Err() != nil {
+		if e.timedOutBy(taskID) {
+			summary += "; the execution budget also expired, and the invocation ends on the quarantine"
+		} else {
+			summary += "; the invocation was also stopped by the human, and it ends on the quarantine"
+		}
+	}
+	e.noteWorkspaceQuarantine(taskID, q)
+	e.emitRunTerminal(ctx, taskID, event.WorkflowWorkspaceQuarantined, event.SourceSystem,
+		runreceipt.OutcomeWorkspaceQuarantined, runreceipt.CandidateUnknown, summary, q)
+	return true
 }
 
 // refuseCandidatePrecondition ends the invocation with the typed refusal a
