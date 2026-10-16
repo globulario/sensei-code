@@ -921,7 +921,10 @@ func (e *Engine) emitRunTerminal(ctx context.Context, taskID string, kind event.
 	// over an unsettled record), so settling pending material there could only
 	// fail and suppress the one truthful ending into FAILED (RULING-366 §15,
 	// F8). The material stays bound to the quarantined record, which outlives
-	// this invocation as the authority over it.
+	// this invocation as the authority over it. Skipping the disposition does
+	// not discharge it: the classifier discloses the pending material, its
+	// governing refusal and that its disposition remains owed, in this same
+	// terminal and its receipt (RULING-367 §11-§13).
 	if outcome == runreceipt.OutcomeWorkspaceQuarantined {
 		e.emitTerminalIn(ctx, taskID, kind, source, outcome, cand, summary, payload)
 		return
@@ -1058,6 +1061,20 @@ func (e *Engine) noteWorkspaceQuarantine(taskID string, q WorkspaceQuarantine) {
 		unread := runreceipt.UnknownValue("not measured: the candidate record could not be read")
 		observed.State, observed.Detail = runreceipt.Unknown, q.Reason
 		observed.Invocation, observed.Phase, observed.Workspace, observed.Baseline = unread, unread, unread, unread
+	}
+	if p := q.PendingRefusedMaterial; p != nil {
+		// The pending refused material, as the invocation's own pending record
+		// names it; a member it cannot establish is UNKNOWN, never guessed.
+		const pendingSource = "the invocation's pending refused-material record (DF-48 production_scope refusal)"
+		known := func(v, what string) runreceipt.Value {
+			if strings.TrimSpace(v) == "" {
+				return runreceipt.UnknownValue("not established: the pending record names no " + what)
+			}
+			return runreceipt.MeasuredValue(v, "the "+what+" "+pendingSource+" names")
+		}
+		observed.PendingRefusedMaterial = &runreceipt.PendingRefusedMaterial{TaskID: p.TaskID,
+			RefusalID: known(p.RefusalID, "governing refusal"), Workspace: known(p.Workspace, "workspace"),
+			Disposition: p.Disposition, Reason: p.Reason}
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()

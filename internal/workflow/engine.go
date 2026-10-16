@@ -2887,6 +2887,66 @@ type WorkspaceQuarantine struct {
 	Workspace  string `json:"workspace,omitempty"`
 	Baseline   string `json:"baseline,omitempty"`
 	Reason     string `json:"reason"`
+	// PendingRefusedMaterial discloses refused production-scope material that
+	// was pending when the quarantine ended the invocation; nil, and absent
+	// from the record, when none was (RULING-367 §11-§13).
+	PendingRefusedMaterial *PendingRefusedMaterial `json:"pending_refused_material,omitempty"`
+}
+
+// PendingRefusedMaterial is the one definition of the pending refused-material
+// disclosure a WORKSPACE_QUARANTINED terminal carries (RULING-367 §11-§13).
+//
+// DF-48 disposes of refused material at every terminal; at this one it cannot
+// (candidate.Resolve refuses over an unsettled record), so its ordinary
+// disposition is suspended by the containment boundary and stays owed. This
+// states that, system-produced and nonsecret: the task, the governing refusal
+// (absent when it cannot be established), the workspace its candidate
+// identity names (absent when none), and Disposition, which is always
+// runreceipt.PendingDisposition. It is a projection: it resolves, disposes and
+// observes nothing, and grants no release.
+type PendingRefusedMaterial struct {
+	TaskID      string `json:"task_id"`
+	RefusalID   string `json:"refusal_id,omitempty"`
+	Workspace   string `json:"workspace,omitempty"`
+	Disposition string `json:"disposition"`
+	Reason      string `json:"reason"`
+}
+
+// pendingRefusedMaterial is the disclosure of the task's refused material
+// still pending at a quarantine terminal, or nil when none is. It reads the
+// pending record and changes nothing: the material stays armed.
+func (e *Engine) pendingRefusedMaterial(taskID string) *PendingRefusedMaterial {
+	e.mu.Lock()
+	var m *refusedScopeMaterial
+	if t := e.attempts[taskID]; t != nil {
+		m = t.refusedMaterial
+	}
+	e.mu.Unlock()
+	if m == nil {
+		return nil
+	}
+	p := &PendingRefusedMaterial{TaskID: taskID, RefusalID: strings.TrimSpace(m.refusalID),
+		Disposition: runreceipt.PendingDisposition,
+		Reason: "refused for production scope; its ordinary disposition was suspended by the workspace containment " +
+			"boundary (a quarantined candidate refuses every disposition), so it is neither resolved nor disposed and remains owed"}
+	if strings.TrimSpace(m.identity.TaskID) == taskID {
+		p.Workspace = strings.TrimSpace(m.identity.Worktree)
+	}
+	if p.RefusalID == "" {
+		p.Reason += "; its governing refusal identity is not established"
+	}
+	return p
+}
+
+// confinementUnsupportedBeforeStart reports the typed refusal of required
+// confinement on a platform with no cross-process lock: BeginExecution
+// refused with candidate.ErrNoCrossProcessLock, and the boundary failure is
+// typed definitely not-started (RULING-367 §5-§6). On such a platform no
+// confined execution can have started, because none starts without
+// BeginExecution. Typed identity only; no message is read.
+func confinementUnsupportedBeforeStart(err error) bool {
+	var f *ExecutionBoundaryFailure
+	return errors.As(err, &f) && f.notStarted && errors.Is(f.Err, candidate.ErrNoCrossProcessLock)
 }
 
 // terminateQuarantined is terminateRun's workspace-quarantine classifier, and
@@ -2902,6 +2962,17 @@ type WorkspaceQuarantine struct {
 //	                                        pre-start boundary failure keeps
 //	                                        its ordinary outcome)
 //
+// One exception, and only for a record that cannot be read under its lock:
+// required confinement refused before start because the platform has no
+// cross-process lock (confinementUnsupportedBeforeStart) is the ordinary
+// unsupported-confinement failure when an ordinary read of the record shows
+// nothing unresolved -- absent, or neither in flight nor quarantined. A
+// record that read cannot read, or one naming unresolved state, keeps the
+// quarantine path: the exception never releases anything (RULING-367 §5-§8).
+//
+// Refused material pending at the quarantine is disclosed in the terminal and
+// its receipt, and left pending (RULING-367 §11-§13).
+//
 // It writes nothing to the record and inspects no worktree. The terminal goes
 // through emitRunTerminal, so its receipt and its event are one record unit;
 // no behavioural outcome is reported, because nothing about the work failed.
@@ -2912,6 +2983,11 @@ func (e *Engine) terminateQuarantined(ctx context.Context, taskID string, err er
 	var summary string
 	switch {
 	case readErr != nil:
+		if confinementUnsupportedBeforeStart(err) {
+			if id, ok, loadErr := candidate.Load(e.Repo.Root, taskID); loadErr == nil && (!ok || !id.Unsettled()) {
+				return false
+			}
+		}
 		if !isWorkspaceSafetyStop(err) {
 			return false
 		}
@@ -2938,6 +3014,15 @@ func (e *Engine) terminateQuarantined(ctx context.Context, taskID string, err er
 			summary += " and baseline workspace " + q.Baseline
 		}
 		summary += " may still be written, so the task is owed a trusted settlement and nothing ordinary continues it"
+	}
+	if p := e.pendingRefusedMaterial(taskID); p != nil {
+		q.PendingRefusedMaterial = p
+		refusal := p.RefusalID
+		if refusal == "" {
+			refusal = "not established"
+		}
+		summary += "; refused material (refusal " + refusal + ") is pending: its ordinary disposition was suspended by " +
+			"the containment boundary and remains owed"
 	}
 	if ctx.Err() != nil {
 		if e.timedOutBy(taskID) {

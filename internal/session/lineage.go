@@ -792,12 +792,25 @@ var (
 	// unsettled, and these are the facts it named. workspaceUnverifiedShape
 	// is the UNVERIFIED one: the record could not be read, so the task, the
 	// unverified state and the actual read failure are all it may carry.
+	// Either may disclose refused material left pending at the quarantine
+	// (pendingRefusedMaterialShape, RULING-367 §13): absent when none is.
 	workspaceQuarantinedShape = shape{name: "a verified workspace quarantine", members: map[string]member{
 		"task_id": req(tText), "recorded": req(tBool), "invocation": opt(tText), "phase": opt(tText),
-		"workspace": req(tText), "baseline": opt(tText), "reason": req(tText)}}
+		"workspace": req(tText), "baseline": opt(tText), "reason": req(tText),
+		"pending_refused_material": opt(tObject)}}
 	workspaceUnverifiedShape = shape{name: "an unverified workspace quarantine", members: map[string]member{
-		"task_id": req(tText), "recorded": req(tBool), "reason": req(tText)}}
+		"task_id": req(tText), "recorded": req(tBool), "reason": req(tText),
+		"pending_refused_material": opt(tObject)}}
+	// pendingRefusedMaterialShape is the closed disclosure itself: its task,
+	// the governing refusal and workspace when established, PENDING, and why.
+	pendingRefusedMaterialShape = shape{name: "a pending refused-material disclosure", members: map[string]member{
+		"task_id": req(tText), "refusal_id": opt(tText), "workspace": opt(tText), "disposition": req(tText),
+		"reason": req(tText)}}
 )
+
+// pendingDisposition is the only disposition a pending refused-material
+// disclosure states (runreceipt.PendingDisposition, spelled as recorded).
+const pendingDisposition = "PENDING"
 
 // THE CLOSED PAYLOAD SHAPES (RULING-200 A). No governed kind accepts an
 // arbitrary payload: each names, in governedKinds, either noPayload -- the
@@ -1325,8 +1338,9 @@ func baseMovedRefusedPayload(e event.Event, m payloadMembers, present bool) erro
 // workspaceQuarantinedPayload is the discriminated quarantine terminal: its
 // own task, and either a verified observation (recorded true) naming the
 // workspace the record names, or an unverified one (recorded false) carrying
-// nothing but the task, the state and the read failure. The summary states
-// why the invocation ended.
+// nothing but the task, the state and the read failure. Either may disclose
+// pending refused material, bound to its own task and PENDING. The summary
+// states why the invocation ended.
 func workspaceQuarantinedPayload(e event.Event, m payloadMembers, present bool) error {
 	if err := ownTask(e, m, "task_id"); err != nil {
 		return err
@@ -1336,8 +1350,24 @@ func workspaceQuarantinedPayload(e event.Event, m payloadMembers, present bool) 
 		if err := requireMembers(e, m, present, "workspace", "reason"); err != nil {
 			return err
 		}
-	} else if err := exactMembers(e, m, present, "task_id", "recorded", "reason"); err != nil {
+	} else if err := exactMembers(e, m, present, "task_id", "recorded", "reason", "pending_refused_material"); err != nil {
 		return fmt.Errorf("%w (an unverified quarantine states nothing the failed read did not establish)", err)
+	}
+	if m.has("pending_refused_material") {
+		pending, _, err := decodePayload(m["pending_refused_material"])
+		if err == nil {
+			err = pendingRefusedMaterialShape.matches(pending)
+		}
+		if err != nil {
+			return fmt.Errorf("%w: a %s record of task %s discloses pending refused material that is no closed disclosure: %v",
+				ErrMalformedEvent, e.Kind, e.TaskID, err)
+		}
+		if err := ownTask(e, pending, "task_id"); err != nil {
+			return err
+		}
+		if d, _ := pending.str("disposition"); d != pendingDisposition {
+			return fmt.Errorf("%w: a %s record of task %s states refused material %q, not pending", ErrMalformedEvent, e.Kind, e.TaskID, d)
+		}
 	}
 	return summarized(e)
 }

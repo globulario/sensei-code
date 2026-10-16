@@ -341,19 +341,27 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 	}
 
 	if *list {
-		// The durable review obligations are established BEFORE anything is
-		// printed, and a store failure ends the command. A listing that could
-		// not read what a task owes must not render a guess about it.
-		owed, err := loadReviewStates(repo.Root, active)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
-			return exitFailed
-		}
 		// The current candidate record of every discovered task, and every
 		// unsettled or unreadable record no discovered task holds. Read across
 		// the whole inventory, so a task held by any session is never also
 		// listed as an orphan.
 		view := loadContainment(repo.Root, inventory.Active)
+		// The durable review obligations are established BEFORE any lane is
+		// printed, and a store failure ends the command. A listing that could
+		// not read what a task owes must not render a guess about it -- and
+		// must not hide the containment obligations the candidate records
+		// establish independently of it (RULING-367 §16-§17): those, and only
+		// those, are shown, the review error is kept, and nothing is offered
+		// for continuation.
+		owed, err := loadReviewStates(repo.Root, active)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
+			printContainmentOnly(os.Stdout, active, view)
+			if scoped == "" {
+				printWorkspaceOrphans(os.Stdout, view)
+			}
+			return exitFailed
+		}
 		printActiveTasks(os.Stdout, scoped, active, owed, view.tasks)
 		if scoped == "" {
 			// A quarantined record's tasks are reserved, visible and never
@@ -764,9 +772,15 @@ func containmentOf(repoRoot, taskID string) containment {
 
 // readContainment reads one task's record under its lock (candidate.LoadLocked)
 // when the repository records one for it; a task with no record owns no
-// confined execution. A read that fails is UNKNOWN, never settled. On a
-// platform with no cross-process lock the record is read as P1's own gates
-// read it (candidate.Load), so a quarantine stays visible there too.
+// confined execution. A read that fails is UNKNOWN, never settled.
+//
+// On a platform with no cross-process lock (candidate.ErrNoCrossProcessLock,
+// typed) the record is read as P1's own gates read it (candidate.Load), for
+// legacy visibility ONLY (RULING-367 §7-§8): that unlocked read is never
+// evidence that a protected invocation completed. An unsettled record it
+// shows is refused as owed settlement; a record it cannot read is refused as
+// CANNOT ESTABLISH, naming both failures; only a readable settled (or absent)
+// record keeps the ordinary legacy behaviour, and nothing here releases one.
 func readContainment(repoRoot, taskID string, recorded map[string]bool, listErr error) containment {
 	c := containment{TaskID: taskID}
 	if listErr != nil {
@@ -776,9 +790,14 @@ func readContainment(repoRoot, taskID string, recorded map[string]bool, listErr 
 	if !recorded[taskID] {
 		return c
 	}
-	id, ok, err := candidate.LoadLocked(repoRoot, taskID)
+	id, ok, err := loadLockedRecord(repoRoot, taskID)
 	if errors.Is(err, candidate.ErrNoCrossProcessLock) {
-		id, ok, err = candidate.Load(repoRoot, taskID)
+		var loadErr error
+		if id, ok, loadErr = candidate.Load(repoRoot, taskID); loadErr != nil {
+			err = fmt.Errorf("%v, and its unlocked read failed: %w", err, loadErr)
+		} else {
+			err = nil
+		}
 	}
 	if err != nil {
 		c.Err = err
@@ -788,6 +807,33 @@ func readContainment(repoRoot, taskID string, recorded map[string]bool, listErr 
 		c.Record, c.Unsettled = id, id.Unsettled()
 	}
 	return c
+}
+
+// loadLockedRecord is the locked read of a task's candidate record
+// (candidate.LoadLocked). It is a variable only so a test can stand in for a
+// platform with no cross-process lock; nothing else assigns it.
+var loadLockedRecord = candidate.LoadLocked
+
+// printContainmentOnly is the listing when the review obligations could not be
+// established (RULING-367 §16-§17): each discovered task whose current
+// candidate record names an unsettled workspace, or cannot be read, with its
+// task id and obligation -- and no other lane, no question offered for an
+// answer and no continuation, because what the rest owe is unknown.
+func printContainmentOnly(out io.Writer, active []session.Active, view containmentView) {
+	shown := 0
+	for _, entry := range active {
+		c := view.tasks[entry.Task.TaskID]
+		if c.refusal() == nil {
+			continue
+		}
+		shown++
+		fmt.Fprintf(out, "task %s  session %s\n", entry.Task.TaskID, entry.SessionID)
+		printWorkspaceObligation(out, c)
+		fmt.Fprintln(out, "  review     not established: the review obligations could not be read")
+		fmt.Fprintln(out)
+	}
+	fmt.Fprintf(out, "review obligations could not be established: %d of %d active tasks shown at a containment "+
+		"obligation; no task is offered for continuation\n", shown, len(active))
 }
 
 // printWorkspaceObligation renders one task's containment obligation: the

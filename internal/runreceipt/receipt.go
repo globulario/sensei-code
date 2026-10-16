@@ -63,7 +63,9 @@ import (
 //
 // v14 adds WORKSPACE_QUARANTINED and the workspace_quarantine observation it
 // requires, and under exactly that outcome an UNKNOWN candidate explained by a
-// verified observation is a complete statement (RULING-366 §7-§10).
+// verified observation is a complete statement (RULING-366 §7-§10). The
+// observation may disclose refused material left pending there
+// (pending_refused_material, RULING-367 §13).
 const SchemaVersion = "sensei-code.governed-run-receipt/v14"
 
 // Completeness is the instrument axis: does this record contain what a record
@@ -1187,6 +1189,28 @@ type WorkspaceQuarantine struct {
 	Workspace  Value  `json:"workspace"`
 	Baseline   Value  `json:"baseline"`
 	Reason     string `json:"reason,omitempty"`
+	// PendingRefusedMaterial discloses refused production-scope material whose
+	// ordinary disposition the containment boundary suspended at this terminal;
+	// nil when none was pending (RULING-367 §11-§13).
+	PendingRefusedMaterial *PendingRefusedMaterial `json:"pending_refused_material,omitempty"`
+}
+
+// PendingDisposition is the one disposition a pending refused-material
+// disclosure states: owed, not resolved.
+const PendingDisposition = "PENDING"
+
+// PendingRefusedMaterial is the receipt form of the disclosure of refused
+// material pending at a WORKSPACE_QUARANTINED terminal: the task it is bound
+// to (the observation's own), its governing refusal and the workspace its
+// candidate identity names, each with its source or UNKNOWN, Disposition
+// PendingDisposition, and why it is owed. A projection only: it states an
+// obligation and grants no release.
+type PendingRefusedMaterial struct {
+	TaskID      string `json:"task_id"`
+	RefusalID   Value  `json:"refusal_id"`
+	Workspace   Value  `json:"workspace"`
+	Disposition string `json:"disposition"`
+	Reason      string `json:"reason"`
 }
 
 // value projects the observation onto the axis every field shares. A record
@@ -1199,8 +1223,38 @@ func (q *WorkspaceQuarantine) value() Value {
 	if q.State == Known {
 		v.Text = fmt.Sprintf("task %s's workspace %s is quarantined (invocation %s): %s",
 			q.TaskID, q.Workspace.Text, q.Invocation.Text, q.Reason)
+		if p := q.PendingRefusedMaterial; p != nil {
+			v.Text += fmt.Sprintf("; refused material (refusal %s) is %s its disposition", p.RefusalID.Text, p.Disposition)
+		}
 	}
 	return v
+}
+
+// checkPendingRefusedMaterial holds a pending disclosure to its closed shape:
+// bound to the observation's task, PENDING and nothing else, a stated reason,
+// valid members, and a governing refusal that is established. An unknown
+// refusal is disclosed honestly and is not a complete statement.
+func (q *WorkspaceQuarantine) checkPendingRefusedMaterial() []string {
+	p := q.PendingRefusedMaterial
+	if p == nil {
+		return nil
+	}
+	const at = "workspace_quarantine.pending_refused_material"
+	bad := validateValue(at+".refusal_id", p.RefusalID)
+	bad = append(bad, validateValue(at+".workspace", p.Workspace)...)
+	if strings.TrimSpace(p.TaskID) == "" || p.TaskID != q.TaskID {
+		bad = append(bad, fmt.Sprintf("%s.task_id %q is not the quarantined task %q", at, p.TaskID, q.TaskID))
+	}
+	if p.Disposition != PendingDisposition {
+		bad = append(bad, fmt.Sprintf("%s.disposition %q: the disclosure states pending material, never a disposition", at, p.Disposition))
+	}
+	if strings.TrimSpace(p.Reason) == "" {
+		bad = append(bad, at+".reason: absent")
+	}
+	if p.RefusalID.State != Known {
+		bad = append(bad, at+".refusal_id: the governing refusal of the pending material is not established")
+	}
+	return bad
 }
 
 // checkWorkspaceQuarantine holds the quarantine outcome and its observation
@@ -1250,6 +1304,7 @@ func (r Receipt) checkWorkspaceQuarantine() []string {
 	for _, m := range members {
 		bad = append(bad, validateValue("workspace_quarantine."+m.name, m.v)...)
 	}
+	bad = append(bad, q.checkPendingRefusedMaterial()...)
 	if q.State != Known {
 		if q.Recorded {
 			bad = append(bad, fmt.Sprintf(
