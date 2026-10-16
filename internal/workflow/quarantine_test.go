@@ -207,6 +207,38 @@ func TestABaselineThatCannotBeBoundNeverRuns(t *testing.T) {
 	}
 }
 
+// C1-F2, the conversion (RULING-360 §5; independent review finding 1). The
+// binding fails while the batch's own boundary does not: a later check of the
+// same batch restores the record directory, so the in-flight record settles.
+// The batch must still end on the typed boundary stop naming the failed
+// binding, not as ordinary validation evidence, and no baseline runs.
+func TestAFailedBaselineBindingAloneEndsOnTheBoundaryStop(t *testing.T) {
+	marker := t.TempDir() + "/baseline-ran"
+	e, repo, base := confinedFormattingRig(t, n4MarkingLauncher(marker))
+	candidates := repo.Root + "/.sensei-code/candidates"
+	t.Cleanup(func() { _ = os.Chmod(candidates, 0o755) })
+	e.Config.Validation.FormatVerify = nil
+	e.Config.Validation.Vet = []config.Command{{Command: "sh", Args: []string{"-c", "chmod 555 .sensei-code/candidates; exit 1"}}}
+	e.Config.Validation.Test = []config.Command{{Command: "sh", Args: []string{"-c", "chmod 755 .sensei-code/candidates; exit 0"}}}
+	e.Config.Permissions.RunBuilds, e.Config.Permissions.RunTests = true, true
+	ctx := context.Background()
+	before, err := repo.CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, before.Diff, nil)
+	var stop *ExecutionBoundaryFailure
+	if !errors.As(err, &stop) || !strings.Contains(err.Error(), "could not be bound to the in-flight invocation, so it did not run") {
+		t.Fatalf("a failed baseline binding did not end on its own typed boundary stop: %v", err)
+	}
+	if _, statErr := os.Stat(marker); statErr == nil {
+		t.Fatal("a baseline execution ran without a durable binding to the in-flight invocation")
+	}
+	if fresh, _, _ := candidate.Load(repo.Root, "task-1"); fresh.InFlight != nil {
+		t.Fatalf("the batch's own boundary did not settle, so the stop is not the binding's: %+v", fresh.InFlight)
+	}
+}
+
 // C1-F3. A baseline created in one bounded invocation and correctly rebound
 // in the next keeps ordinary attribution: the certify failure that the base
 // reproduces is pre-existing, both executions are proven, and the record is
