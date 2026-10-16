@@ -231,6 +231,13 @@ func (e *Engine) startExecService(ctx context.Context, taskID, workspace string)
 	if !ok {
 		return nil, errors.New("no candidate identity is recorded for this task, so the execution service has no candidate to bind")
 	}
+	// A quarantined candidate, or one whose confined execution is recorded in
+	// flight and never settled, is not bound: no tool read, check or mutation
+	// may reach a workspace that execution may still be writing (RULING-358
+	// §15).
+	if q := id.Quarantine(); q != nil {
+		return nil, q
+	}
 	worktree, err := filepath.Abs(workspace)
 	if err != nil {
 		return nil, err
@@ -631,6 +638,11 @@ func (s *execService) revalidate() (planAttempt, *toolRefusal) {
 	id, ok, err := candidate.Load(s.e.Repo.Root, s.b.TaskID)
 	if err != nil || !ok || id.BaseSHA != s.b.BaseSHA || filepath.Clean(id.Worktree) != s.b.Worktree {
 		return planAttempt{}, refuseTool(refuseTaskBinding, "the recorded candidate of task %s is no longer the one this invocation was bound to", s.b.TaskID)
+	}
+	if q := id.Quarantine(); q != nil {
+		// Every authority revalidation re-reads the durable record: a
+		// quarantine recorded after the service was bound ends its use here.
+		return planAttempt{}, refuseTool(refuseTaskBinding, "%s", q.Error())
 	}
 	return op, nil
 }

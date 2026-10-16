@@ -2889,6 +2889,9 @@ func (e *Engine) resumePrecondition(ctx context.Context, taskID string) error {
 	if err != nil || !ok {
 		return err
 	}
+	if q := existing.Quarantine(); q != nil {
+		return q
+	}
 	head, err := e.Repo.Head(ctx)
 	if err != nil {
 		return err
@@ -2923,7 +2926,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// must not record "no candidate" beside work sitting on disk. A fresh run
 	// has no candidate recorded and is untouched.
 	if inherited, ok, err := candidate.Load(e.Repo.Root, taskID); err == nil && ok {
-		e.noteInheritedCandidate(taskID, observeCandidate(ctx, inherited.Worktree, inherited.BaseSHA))
+		e.noteInheritedCandidate(taskID, observeInherited(ctx, inherited))
 	}
 	// A supplied plan governs the run from its first instruction, so its
 	// identity is recorded before anything can fail. Waiting until the plan is
@@ -6253,7 +6256,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// satisfied only by the broker executing that same test, by id, and it
 		// passing against this exact candidate. The observation stays in the
 		// audit and in what the reviewer reads either way.
-		requiredRuns, requiredCorrelated := e.requiredTestEvidence(ctx, taskID, envelope, candidate, diff, audit)
+		requiredRuns, requiredCorrelated, requiredErr := e.requiredTestEvidence(ctx, taskID, envelope, candidate, diff, audit)
+		if requiredErr != nil {
+			// A named test's execution has no established teardown, or its
+			// boundary could not be recorded: nothing reaches the reviewer and
+			// the candidate is not revised, recaptured or published.
+			return candidateNotConverged, plan, lastReview, lastAudit, requiredErr
+		}
 		reviewedValidation := reviewValidationEvidence(evidence.Render(), requiredRuns, requiredCorrelated, taskID, validation.Digest(diff))
 		if len(requiredCorrelated) != 0 {
 			e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
@@ -10995,6 +11004,14 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 		fail(errors.New("no candidate identity was established for this task"))
 		return
 	}
+	// The durable record, not the in-memory copy, decides whether the
+	// candidate may be touched: an unsettled one (quarantined, or an
+	// execution recorded in flight and never settled -- after a crash too)
+	// is refused before its worktree is created or reused (RULING-358 §14).
+	if q := unsettledCandidate(e.Repo.Root, taskID); q != nil {
+		fail(q)
+		return
+	}
 
 	workspace, createErr := e.Repo.CreateWorktreeAt(ctx, taskID, identity.BaseSHA)
 	if createErr == nil {
@@ -11103,6 +11120,17 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			state.OpenFindings(nil)
 			_ = state.Save(e.Repo.Root)
 			accepted, finalPlan, review, audit, err = e.runCandidate(ctx, sc, start, taskID, tc, plan, worker, workspace, carried)
+		}
+		if isWorkspaceSafetyStop(err) {
+			// A confined execution of this candidate has no established
+			// teardown, or its in-flight boundary could not be recorded: no
+			// handoff, no later implementer, no review, no disposal. The run
+			// ends here on the typed refusal; the durable quarantine is what
+			// every later invocation reads (RULING-358 §14).
+			state.Evidence = tc.EvidenceSnapshot
+			_ = state.Save(e.Repo.Root)
+			fail(err)
+			return
 		}
 		if accepted == candidateReviewUnanswered {
 			// The candidate was validated and audited, a review request for that
@@ -12000,6 +12028,15 @@ func (e *Engine) withOperationGuard(ctx context.Context, taskID string, op func(
 // which is a fact somebody can act on — where deleting first and recording
 // second loses precisely the case that needs explaining.
 func (e *Engine) disposeIfEmpty(ctx context.Context, taskID string, identity candidate.Identity, tc *taskContext, workspace, reason string) {
+	// An unsettled candidate -- read from the durable record, not from the
+	// copy this run holds -- is neither observed nor removed: its workspace
+	// may still be written by an execution nobody proved ended (RULING-358
+	// §14). A record that cannot be read is not evidence of safety either.
+	if q := unsettledCandidate(e.Repo.Root, taskID); q != nil {
+		e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+			"candidate neither observed nor removed: "+q.Error(), nil))
+		return
+	}
 	// The candidate is read now, not recalled. See observeCandidate.
 	seen := observeCandidate(ctx, workspace, identity.BaseSHA)
 	if seen.HoldsWork() {
@@ -12371,7 +12408,7 @@ func (e *Engine) ResumeTask(ctx context.Context, task session.Interrupted) *Resu
 			// review of #194 at b23a8ae). So the inherited candidate is measured
 			// first, before anything here can fail.
 			if inherited, ok, err := candidate.Load(e.Repo.Root, task.TaskID); err == nil && ok {
-				e.noteInheritedCandidate(task.TaskID, observeCandidate(ctx, inherited.Worktree, inherited.BaseSHA))
+				e.noteInheritedCandidate(task.TaskID, observeInherited(ctx, inherited))
 			} else {
 				e.noteCandidateWorkUnmeasured(task.TaskID)
 			}
@@ -12480,6 +12517,10 @@ func (e *Engine) ResumeTask(ctx context.Context, task session.Interrupted) *Resu
 		}
 		if !ok {
 			fail(fmt.Errorf("cannot resume %s: no candidate identity was recorded for it", task.TaskID))
+			return
+		}
+		if q := identity.Quarantine(); q != nil {
+			fail(q)
 			return
 		}
 
@@ -12944,29 +12985,85 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	// attribution costs a second checkout and a second execution, and is worth
 	// paying only for a result something is about to act on.
 	var baselinePath string
+	// keepBaseline suppresses the baseline's ordinary removal when an
+	// execution of this validation has no established teardown: the baseline
+	// is a workspace of the task that execution may still be writing
+	// (RULING-358 §10).
+	var keepBaseline bool
+	// currentInvocation is the bounded invocation now in flight (boundedRun):
+	// a baseline execution is bound to it, never to an earlier one. A failed
+	// binding is kept in bindFailure and ends the batch as a boundary failure.
+	var currentInvocation string
+	var bindFailure error
 	runner := e.validationRunner(repo.Root, permits)
 	runner.Baseline = func() (string, error) {
-		if baselinePath != "" {
-			return baselinePath, nil
+		if baselinePath == "" {
+			if strings.TrimSpace(base) == "" {
+				return "", errors.New("no recorded base commit to compare against")
+			}
+			// Detached: a named branch would outlive this call's removal of
+			// the worktree and refuse the next cycle's checkout, leaving every
+			// later failure unattributed.
+			path, err := e.Repo.CreateObservationWorktree(ctx, taskID+"-baseline", base)
+			if err != nil {
+				return "", err
+			}
+			// The worktree exists from here on, and is retained or removed as
+			// a workspace of the task; it is not yet eligible to run in.
+			baselinePath = path
 		}
-		if strings.TrimSpace(base) == "" {
-			return "", errors.New("no recorded base commit to compare against")
+		if requiresExecutionBoundary(runner) {
+			// EVERY baseline execution -- in a newly created worktree or a
+			// cached one -- is first bound durably to the CURRENT invocation's
+			// in-flight record (RULING-358 §10, RULING-360 §4-§5). Unbound, it
+			// does not run, now or through a later call: the binding is
+			// attempted again each time and never remembered as done.
+			if err := candidate.NoteBaseline(e.Repo.Root, taskID, currentInvocation, baselinePath); err != nil {
+				if bindFailure == nil {
+					bindFailure = err
+				}
+				return "", fmt.Errorf("the baseline workspace could not be bound to the in-flight execution, so it is not run: %w", err)
+			}
 		}
-		// Detached: a named branch would outlive this call's removal of the
-		// worktree and refuse the next cycle's checkout, leaving every
-		// later failure unattributed.
-		path, err := e.Repo.CreateObservationWorktree(ctx, taskID+"-baseline", base)
-		if err != nil {
-			return "", err
-		}
-		baselinePath = path
-		return path, nil
+		return baselinePath, nil
 	}
 	defer func() {
-		if baselinePath != "" {
+		if baselinePath != "" && !keepBaseline {
 			_ = e.Repo.RemoveObservationWorktree(ctx, baselinePath)
 		}
 	}()
+	// bounded runs one batch of checks inside the durable in-flight boundary
+	// (boundedRun): no confined execution starts unless the boundary is
+	// recorded first, and an unsettled one ends validation here, before any
+	// capture of the workspace it may still be writing.
+	bounded := func(phase string, checks []validation.Check) (validation.Bundle, error) {
+		var b validation.Bundle
+		bindFailure = nil
+		err := e.boundedRun(ctx, taskID, phase, repo.Root, runner, func(invocation string) []validation.Evidence {
+			currentInvocation = invocation
+			b = runner.Run(ctx, taskID, validation.Digest(diff), checks)
+			return b.Checks
+		}, func() string { return baselinePath })
+		currentInvocation = ""
+		if err != nil {
+			// The batch did not settle -- an unresolved teardown, a settlement
+			// that failed, an existing quarantine: nothing proves the baseline
+			// free, so it is kept (RULING-361 §4). The one exception is a
+			// batch that never started over a record that protects nothing
+			// (RULING-362 §6): no execution acquired the baseline.
+			if !e.baselineFreeAfterPreStart(taskID, err) {
+				keepBaseline = true
+			}
+		} else if bindFailure != nil {
+			// No baseline ran unbound and the batch settled through its
+			// trusted settlement: the batch still ends on the typed safety
+			// stop (RULING-360 §5), but no execution holds the baseline, so
+			// its ordinary removal runs (RULING-361 §4-§5).
+			err = &ExecutionBoundaryFailure{TaskID: taskID, Phase: phase,
+				Err: fmt.Errorf("a baseline execution could not be bound to the in-flight invocation, so it did not run: %w", bindFailure)}
+		}
+		return b, err
+	}
 
 	// Formatting first, and its evidence is deliberately discarded from the
 	// certifying bundle: it describes the candidate before the rewrite.
@@ -12999,12 +13096,17 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 		}
 		var recapture gitx.Capture
 		for _, stage := range stages {
-			for _, c := range runner.Run(ctx, taskID, validation.Digest(diff), stage).Checks {
+			staged, err := bounded("format", stage)
+			if err != nil {
+				// No capture follows: the formatter may still be rewriting the
+				// workspace (RULING-358 §10, L).
+				return validation.Bundle{}, diff, err
+			}
+			for _, c := range staged.Checks {
 				if formatterBlocks(confined, c.Outcome) {
 					unsatisfiedFormat = append(unsatisfiedFormat, c)
 				}
 			}
-			var err error
 			recapture, err = repo.CandidateCapture(ctx, base, intended)
 			if err != nil {
 				// The formatter may have rewritten the candidate, and nobody could
@@ -13037,7 +13139,10 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	checks = append(checks, phaseChecks(validation.Vet, e.Config.Validation.Vet, false)...)
 	checks = append(checks, phaseChecks(validation.Build, e.Config.Validation.Build, false)...)
 	checks = append(checks, phaseChecks(validation.Test, e.Config.Validation.Test, false)...)
-	bundle := runner.Run(ctx, taskID, validation.Digest(diff), checks)
+	bundle, err := bounded("certify", checks)
+	if err != nil {
+		return validation.Bundle{}, diff, err
+	}
 	if len(unsatisfiedFormat) != 0 {
 		// Each original keeps its own binding -- the bytes the formatter was
 		// asked to run against -- and what enters the certifying bundle is a
@@ -13141,6 +13246,247 @@ func (e *Engine) validationRunner(workspace string, permits func(validation.Chec
 	return r
 }
 
+// WorkspaceUnsettled reports that a confined execution of the task ended
+// without an established teardown: a workspace of the task (the candidate's,
+// and the baseline's when attribution ran) may still be written by it. It is
+// the typed outcome of the one quarantine decision (boundedRun): validation
+// stops at once, nothing is captured, reviewed, revised, published or
+// removed, and the durable record says why (RULING-358 §10-§14).
+type WorkspaceUnsettled struct {
+	TaskID     string
+	Phase      string
+	Workspace  string
+	Baseline   string
+	Invocation string
+	Evidence   []validation.Evidence
+	// Recorded is whether the quarantine reached the durable candidate
+	// record. When it did not, RecordErr says why, and the in-flight record
+	// written before the execution started still marks the candidate
+	// unsettled for every later reader.
+	Recorded  bool
+	RecordErr error
+}
+
+func (u *WorkspaceUnsettled) Error() string {
+	var checks []string
+	for _, c := range u.Evidence {
+		checks = append(checks, fmt.Sprintf("%s %s (teardown %s, baseline %s)",
+			c.Kind, strings.TrimSpace(c.Command+" "+strings.Join(c.Args, " ")), teardownName(c.Teardown), teardownName(c.BaselineTeardown)))
+	}
+	msg := fmt.Sprintf("the %s execution %s of task %s has no established teardown (%s); its workspace %s",
+		u.Phase, u.Invocation, u.TaskID, strings.Join(checks, "; "), u.Workspace)
+	if u.Baseline != "" {
+		msg += " and baseline workspace " + u.Baseline
+	}
+	msg += " may still be written, so validation stopped and nothing further runs, is captured, reviewed, published or removed"
+	if u.Recorded {
+		return msg + "; the candidate is durably quarantined"
+	}
+	return msg + "; the quarantine could NOT be durably recorded (" + fmt.Sprint(u.RecordErr) + ") and the candidate stays unsettled by its in-flight record"
+}
+
+func teardownName(t validation.Teardown) string {
+	if t == "" {
+		return "none"
+	}
+	return string(t)
+}
+
+// ExecutionBoundaryFailure reports that the durable in-flight record could
+// not be written before a confined execution (so the execution did not
+// start), or could not be cleared after it (so the record still marks the
+// candidate unsettled): RULING-358 §12, §14. Either way the run stops.
+type ExecutionBoundaryFailure struct {
+	TaskID string
+	Phase  string
+	Err    error
+	// notStarted is execution-phase evidence, set only on the pre-execution
+	// boundary path of boundedRun: no execution of this batch started
+	// (RULING-362 §7). It is not teardown authority. invocation is the
+	// boundary that batch attempted, "" when none was drawn.
+	notStarted bool
+	invocation string
+}
+
+func (f *ExecutionBoundaryFailure) Error() string {
+	return fmt.Sprintf("the %s execution boundary of task %s could not be recorded durably: %v", f.Phase, f.TaskID, f.Err)
+}
+
+func (f *ExecutionBoundaryFailure) Unwrap() error { return f.Err }
+
+// isWorkspaceSafetyStop reports an outcome after which nothing ordinary may
+// continue on the task's candidate: an unsettled execution, a quarantined
+// candidate, or an in-flight boundary that could not be recorded.
+func isWorkspaceSafetyStop(err error) bool {
+	if err == nil {
+		return false
+	}
+	var u *WorkspaceUnsettled
+	var q *candidate.ErrQuarantined
+	var f *ExecutionBoundaryFailure
+	return errors.As(err, &u) || errors.As(err, &q) || errors.As(err, &f)
+}
+
+// unsettledCandidate reads the durable candidate record and returns its
+// quarantine refusal, or nil when it is settled or absent. A record that
+// exists but cannot be read is refused too: safety is not inferred from a
+// read that failed.
+func unsettledCandidate(repoRoot, taskID string) error {
+	id, ok, err := candidate.Load(repoRoot, taskID)
+	if err != nil {
+		return fmt.Errorf("the candidate record of %s could not be read, so its settlement is unknown: %w", taskID, err)
+	}
+	if !ok {
+		return nil
+	}
+	if q := id.Quarantine(); q != nil {
+		return q
+	}
+	return nil
+}
+
+// observeInherited measures an inherited candidate for the receipt, unless it
+// is unsettled: a quarantined workspace is not read, and the receipt records
+// why it is unknown (RULING-358 §14).
+func observeInherited(ctx context.Context, inherited candidate.Identity) observation {
+	if q := inherited.Quarantine(); q != nil {
+		return observation{Err: q}
+	}
+	return observeCandidate(ctx, inherited.Worktree, inherited.BaseSHA)
+}
+
+// requiresExecutionBoundary reports whether a runner executes through the
+// required-status confinement, the only mode whose executions the durable
+// in-flight boundary governs. The unconfined and legacy brokers the
+// configuration selects keep their behaviour exactly (RULING-358 §18 R).
+func requiresExecutionBoundary(r validation.Runner) bool {
+	return r.Confine != nil && r.Confine.RequireStatus
+}
+
+// boundedRun is the one owner of the quarantine decision (RULING-358 §11-§14).
+// Before run starts any confined execution it durably records the execution
+// as in flight on the candidate record; after run returns it either settles
+// that record -- every execution's teardown proven, or never acquired -- or
+// durably quarantines the candidate on the unsettled ones and returns
+// *WorkspaceUnsettled. run is the broker call; it stops by itself at an
+// unsettled execution (validation.Runner). baseline names the baseline
+// workspace the run may have created.
+func (e *Engine) boundedRun(ctx context.Context, taskID, phase, workspace string, r validation.Runner, run func(invocation string) []validation.Evidence, baseline func() string) error {
+	if !requiresExecutionBoundary(r) {
+		run("")
+		return nil
+	}
+	invocation, err := newExecutionInvocation()
+	if err == nil {
+		_, err = beginExecution(e.Repo.Root, taskID, candidate.InFlight{
+			Invocation: invocation, Phase: phase, Workspace: workspace, Profile: r.Confine.Describe(),
+		})
+	}
+	if err != nil {
+		var q *candidate.ErrQuarantined
+		if errors.As(err, &q) {
+			return q
+		}
+		return &ExecutionBoundaryFailure{TaskID: taskID, Phase: phase, notStarted: true, invocation: invocation,
+			Err: fmt.Errorf("the execution did not start: %w", err)}
+	}
+	// run learns the invocation now in flight, so every baseline execution it
+	// starts is bound to this one (RULING-360 §4).
+	checks := run(invocation)
+	var unsettled []validation.Evidence
+	for _, c := range checks {
+		if c.Unsettled() {
+			unsettled = append(unsettled, c)
+		}
+	}
+	if len(unsettled) == 0 {
+		if _, err := candidate.SettleExecution(e.Repo.Root, taskID, invocation); err != nil {
+			// The in-flight record could not be cleared: it stays on disk and
+			// keeps the candidate unsettled, so the run stops rather than
+			// continue against a record that says otherwise.
+			return &ExecutionBoundaryFailure{TaskID: taskID, Phase: phase,
+				Err: fmt.Errorf("the settled execution %s could not be cleared from the candidate record: %w", invocation, err)}
+		}
+		return nil
+	}
+	u := &WorkspaceUnsettled{TaskID: taskID, Phase: phase, Workspace: workspace, Baseline: baseline(),
+		Invocation: invocation, Evidence: unsettled}
+	var executed []string
+	reason := fmt.Sprintf("the %s execution %s under %s has no established teardown; workspace %s",
+		phase, invocation, r.Confine.Describe(), workspace)
+	if u.Baseline != "" {
+		reason += "; baseline workspace " + u.Baseline
+	}
+	for _, c := range unsettled {
+		command := strings.TrimSpace(c.Command + " " + strings.Join(c.Args, " "))
+		executed = append(executed, command)
+		reason += fmt.Sprintf("; %s check %q teardown %s, baseline teardown %s, bound to %s",
+			c.Kind, command, teardownName(c.Teardown), teardownName(c.BaselineTeardown), c.DiffDigest)
+	}
+	if _, err := candidate.QuarantineExecution(e.Repo.Root, taskID, candidate.Resolution{
+		Reason: reason, Evidence: candidate.Evidence{ExecutedCheck: executed},
+	}); err != nil {
+		u.RecordErr = err
+	} else {
+		u.Recorded = true
+	}
+	// Projected through the session ledger's existing vocabulary (an error):
+	// the durable candidate record above is the authority, and a new payload
+	// shape belongs to the recovery projection (P2), not to P1.
+	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status, u.Error(),
+		map[string]any{"error": u.Error()}))
+	return u
+}
+
+// beginExecution records a bounded execution's durable boundary
+// (candidate.BeginExecution). It is a variable only so a test can inject a
+// trusted pre-start boundary failure (RULING-362 §13); nothing else assigns it.
+var beginExecution = candidate.BeginExecution
+
+// baselineFreeAfterPreStart reports whether a batch that failed with err
+// leaves the baseline free for its ordinary removal (RULING-362 §6-§9): only
+// when no execution of that batch started, and the durable record -- read
+// now under its lock, not recalled -- shows nothing protecting it: no quarantine, and no
+// execution in flight other than the boundary this very batch attempted,
+// naming no baseline (a boundary written before its own durability step
+// failed stays on the record and keeps the candidate unsettled; only the
+// baseline decision is made here). Every earlier batch of the validation
+// settled proven, or the validation would have stopped there. An unreadable,
+// missing or contradictory record, or one that cannot be read under its lock,
+// keeps the baseline.
+func (e *Engine) baselineFreeAfterPreStart(taskID string, err error) bool {
+	f, ok := err.(*ExecutionBoundaryFailure)
+	if !ok || !f.notStarted {
+		return false
+	}
+	// The record is read under its own serialization authority, not as a
+	// bare snapshot: a lock that cannot be acquired -- perhaps the very cause
+	// of the pre-start failure -- leaves the state unestablished, and the
+	// baseline is kept (RULING-363 §2, §8). The task's invocation lease, held
+	// by this validation, keeps that observation current until the removal.
+	id, found, loadErr := candidate.LoadLocked(e.Repo.Root, taskID)
+	if loadErr != nil || !found {
+		return false
+	}
+	if id.Resolution != nil && id.Resolution.Disposition == candidate.Quarantined {
+		return false
+	}
+	if id.InFlight != nil && (f.invocation == "" || id.InFlight.Invocation != f.invocation || id.InFlight.Baseline != "") {
+		return false
+	}
+	return true
+}
+
+// newExecutionInvocation draws the nonsecret identifier of one bounded
+// execution.
+func newExecutionInvocation() (string, error) {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return "exec-" + hex.EncodeToString(b), nil
+}
+
 // validationConfinementOf decides validation's confinement from
 // configuration alone: nil and no refusal is the unconfined broker; otherwise
 // exactly one of a status-protocol confinement or a refusal.
@@ -13201,19 +13547,32 @@ func validationPermits(envelope broker.Envelope) func(validation.CheckKind) (boo
 // auditObservationsOf, so the path from the payload's own field names to the
 // correlation is one a witness can drive end to end. An audit that does not
 // decode yields no correlation, which satisfies nothing.
-func (e *Engine) requiredTestEvidence(ctx context.Context, taskID string, envelope broker.Envelope, repo gitx.Repo, diff string, audit sensei.ToolResult) ([]requiredTestRun, []correlatedRequiredTest) {
+//
+// The named tests run inside the same durable in-flight boundary as
+// validation (boundedRun): an unsettled one stops the sequence and the
+// boundary's refusal is returned, so no reviewer, revision or capture follows.
+func (e *Engine) requiredTestEvidence(ctx context.Context, taskID string, envelope broker.Envelope, repo gitx.Repo, diff string, audit sensei.ToolResult) ([]requiredTestRun, []correlatedRequiredTest, error) {
 	findings, err := auditObservationsOf(audit)
 	if err != nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	ids := requiredTestIDs(findings)
 	digest := validation.Digest(diff)
 	var runs []requiredTestRun
 	if len(ids) != 0 {
 		runner := e.validationRunner(repo.Root, validationPermits(envelope))
-		runs = runner.RunRequiredTests(ctx, taskID, digest, ids)
+		if err := e.boundedRun(ctx, taskID, "required-tests", repo.Root, runner, func(string) []validation.Evidence {
+			runs = runner.RunRequiredTests(ctx, taskID, digest, ids)
+			var checks []validation.Evidence
+			for _, r := range runs {
+				checks = append(checks, r.Evidence)
+			}
+			return checks
+		}, func() string { return "" }); err != nil {
+			return runs, nil, err
+		}
 	}
-	return runs, correlateRequiredTests(findings, runs, taskID, digest)
+	return runs, correlateRequiredTests(findings, runs, taskID, digest), nil
 }
 
 // certifiedAgainstCapture refuses unless the validation evidence and the diff

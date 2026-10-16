@@ -59,17 +59,25 @@ const (
 	// Disposed means the worktree and branch have been removed and only the
 	// evidence remains.
 	Disposed Disposition = "disposed"
+	// Quarantined means a confined execution against this candidate (or a
+	// baseline of it) ended without an established teardown, so its
+	// workspaces may still be written: they are kept, and nothing ordinary
+	// may reuse, observe, recapture, review, publish or remove them until a
+	// trusted settlement of that exact invocation (N5, RULING-358). It is a
+	// candidate disposition, distinct from the session store's quarantine of
+	// a torn task-history record.
+	Quarantined Disposition = "quarantined"
 )
 
 // Keeps reports whether this disposition retains the worktree and branch.
 func (d Disposition) Keeps() bool {
-	return d == Retained || d == Resumable
+	return d == Retained || d == Resumable || d == Quarantined
 }
 
 // Valid reports whether this is a disposition at all.
 func (d Disposition) Valid() bool {
 	switch d {
-	case Retained, Adopted, Rejected, Superseded, Resumable, Disposed:
+	case Retained, Adopted, Rejected, Superseded, Resumable, Disposed, Quarantined:
 		return true
 	}
 	return false
@@ -158,17 +166,96 @@ func (i Identity) Resolve(repoRoot string, r Resolution) (Identity, error) {
 	if err := r.Validate(); err != nil {
 		return i, err
 	}
+	if r.Disposition == Quarantined {
+		// A quarantine binds the durable in-flight record; it is written by
+		// QuarantineExecution, never by an ordinary resolution.
+		return i, fmt.Errorf("a quarantine is recorded by QuarantineExecution, not by an ordinary resolution")
+	}
 	if r.DecidedAt.IsZero() {
 		r.DecidedAt = time.Now().UTC()
 	}
 	if strings.TrimSpace(r.Evidence.BaseSHA) == "" {
 		r.Evidence.BaseSHA = i.BaseSHA
 	}
-	i.Resolution = &r
-	if err := i.Save(repoRoot); err != nil {
+	// One transaction against the durable record (RULING-360 §10): no ordinary
+	// resolution is recorded over a record that is unsettled -- an execution
+	// in flight or a quarantine -- whatever the caller's copy says.
+	//
+	// The durable record, not this receiver, is the transition input
+	// (RULING-361 §10): a resolution owns only the disposition, so the
+	// receiver's protected lifecycle state -- an execution it saw in flight
+	// before that execution settled -- is never written back.
+	target := path(repoRoot, i.TaskID)
+	out := i
+	err := withRecord(target, func() error {
+		onDisk, ok, err := load(target, i.TaskID)
+		if err != nil {
+			return fmt.Errorf("the existing candidate record of %s cannot be read, so it is not overwritten: %w", i.TaskID, err)
+		}
+		if ok && onDisk.Unsettled() {
+			return onDisk.Quarantine()
+		}
+		next := i
+		if ok {
+			next = onDisk
+		} else if err := mintsProtected(Identity{}, i); err != nil {
+			return err
+		}
+		next.Resolution = &r
+		if err := writeRecord(target, next); err != nil {
+			return err
+		}
+		out = next
+		return nil
+	})
+	if err != nil {
 		return i, err
 	}
-	return i, nil
+	return out, nil
+}
+
+// QuarantineExecution durably records that the task's confined execution
+// ended without an established teardown (RULING-358 §10-§13). It is written
+// over the durable record, never over a stale in-memory copy: an in-flight
+// record on disk is kept as the identity of the invocation the quarantine is
+// bound to, and an existing quarantine is kept as it is (the first unresolved
+// execution is the one a settlement must answer). The disposition keeps the
+// candidate and every workspace named in the reason.
+func QuarantineExecution(repoRoot, taskID string, r Resolution) (Identity, error) {
+	target := path(repoRoot, taskID)
+	var out Identity
+	err := withRecord(target, func() error {
+		id, ok, err := load(target, taskID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrNoIdentity
+		}
+		out = id
+		if id.Resolution != nil && id.Resolution.Disposition == Quarantined {
+			return nil
+		}
+		r.Disposition = Quarantined
+		if err := r.Validate(); err != nil {
+			return err
+		}
+		if r.DecidedAt.IsZero() {
+			r.DecidedAt = time.Now().UTC()
+		}
+		if strings.TrimSpace(r.Evidence.BaseSHA) == "" {
+			r.Evidence.BaseSHA = id.BaseSHA
+		}
+		r.WorktreeRemoved, r.BranchRemoved = false, false
+		id.Resolution = &r
+		if err := writeRecord(target, id); err != nil {
+			out = Identity{}
+			return err
+		}
+		out = id
+		return nil
+	})
+	return out, err
 }
 
 // Unresolved reports whether this candidate is still in the state this whole
