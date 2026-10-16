@@ -320,7 +320,7 @@ func TestL13MissingOrMalformedMembersAreClassified(t *testing.T) {
 		"invocation a number":  {quarantineEvent(verifiedPayload(map[string]string{"invocation": `5`})), runreceipt.Malformed},
 		"task_id an object":    {quarantineEvent(verifiedPayload(map[string]string{"task_id": `{}`})), runreceipt.Malformed},
 		"reason absent":        {quarantineEvent(verifiedPayload(nil, "reason")), runreceipt.Known},
-		"pending not object":   {quarantineEvent(verifiedPayload(map[string]string{"pending_refused_material": `"x"`})), runreceipt.Known},
+		"pending not object":   {quarantineEvent(verifiedPayload(map[string]string{"pending_refused_material": `"x"`})), runreceipt.Malformed},
 		"pending refusal list": {quarantineEvent(verifiedPayload(map[string]string{"pending_refused_material": `{"task_id":"task-q","refusal_id":[1],"disposition":"PENDING","reason":"r"}`})), runreceipt.Known},
 	}
 	for name, c := range cases {
@@ -367,9 +367,11 @@ func TestL13MissingOrMalformedMembersAreClassified(t *testing.T) {
 		t.Errorf("pending refusal_id = %+v, want MALFORMED", p)
 	}
 	rec = stream(cases["pending not object"].line)
-	if p := quarantineOf(t, rec).PendingRefusedMaterial; p == nil || p.Disposition != runreceipt.PendingDisposition ||
+	// RULING-371 §16-§18 (amended from PENDING): a disclosure that is not an
+	// object is not a valid disclosure; no disposition is inferred for it.
+	if p := quarantineOf(t, rec).PendingRefusedMaterial; p == nil || p.Disposition != "" ||
 		p.RefusalID.State != runreceipt.Malformed {
-		t.Errorf("unreadable pending disclosure = %+v, want PENDING with MALFORMED members", p)
+		t.Errorf("unreadable pending disclosure = %+v, want no inferred disposition and MALFORMED members", p)
 	}
 }
 

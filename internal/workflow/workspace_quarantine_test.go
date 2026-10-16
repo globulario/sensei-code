@@ -279,9 +279,15 @@ func TestW2AQuarantineUnderACancelledContextIsNotAStop(t *testing.T) {
 }
 
 // W4. RESTART: an execution recorded in flight, no terminal, and a fresh
-// engine resumes the task. Whatever the resume reaches first, its ending
-// reads the record and projects the quarantine; the record, the workspace and
-// the task all stand.
+// engine resumes the task. The record, the workspace and the task all stand.
+//
+// RULING-373 §6-§8 amends what the resume reaches: the engine's containment
+// gate refuses it, typed, before its session lineage is bound
+// (ErrResumeContainmentRefused wrapping the record's *candidate.ErrQuarantined),
+// so nothing is recorded or published and no terminal is written. The pre-fix
+// expectation (a7b41bd): the resume bound the lineage, ran until its ending
+// read the record, and projected the WORKSPACE_QUARANTINED terminal
+// (wqAssertQuarantined over the published events).
 func TestW4ARestartOverAnInFlightRecordEndsWorkspaceQuarantined(t *testing.T) {
 	e, events, task, _ := rootedResumeHarness(t, false)
 	id, _, err := candidate.Load(e.Repo.Root, task.TaskID)
@@ -290,9 +296,16 @@ func TestW4ARestartOverAnInFlightRecordEndsWorkspaceQuarantined(t *testing.T) {
 	}
 	wqInFlight(t, e.Repo.Root, task.TaskID, "exec-crashed", id.Worktree, "")
 	before := wqRecordBytes(t, e.Repo.Root, task.TaskID)
-	e.Resume(context.Background(), task)
-	seen := wqSettle(t, events)
-	wqAssertQuarantined(t, seen, task.TaskID, "exec-crashed", id.Worktree)
+	attempt := e.ResumeTask(context.Background(), task)
+	refusal := attempt.Binding().Refusal
+	var q *candidate.ErrQuarantined
+	if !errors.Is(refusal, ErrResumeContainmentRefused) || !errors.As(refusal, &q) || q.Workspace != id.Worktree {
+		t.Fatalf("the resume over an in-flight record was not the typed pre-binding containment refusal: %v", refusal)
+	}
+	<-attempt.Ended()
+	if seen := drainEvents(events); len(seen) != 0 {
+		t.Fatalf("the refused resume published %v", summaries(seen))
+	}
 	if after := wqRecordBytes(t, e.Repo.Root, task.TaskID); after != before {
 		t.Fatalf("the projection wrote the quarantine authority:\nbefore %s\nafter  %s", before, after)
 	}
@@ -309,9 +322,15 @@ func TestW4ARestartOverAnInFlightRecordEndsWorkspaceQuarantined(t *testing.T) {
 	}
 }
 
-// W5. A standing question and an unsettled record: the resume refuses at its
-// precondition, the question is not consumed, and the task is not ended
-// FAILED -- the question still stands exactly as it was asked.
+// W5. A standing question and an unsettled record: the resume refuses, the
+// question is not consumed, and the task is not ended FAILED -- the question
+// still stands exactly as it was asked.
+//
+// RULING-373 §4, §6-§8 amend where it refuses: at the engine's containment
+// gate, before the lineage is bound and before the question is re-asked, as
+// the typed pre-binding refusal, with no terminal at all. The pre-fix
+// expectation (a7b41bd): the resume refused at resumePrecondition, after
+// binding, and projected the WORKSPACE_QUARANTINED terminal.
 func TestW5ADeferredQuestionOverAQuarantineStandsAndTheTaskIsNotFailed(t *testing.T) {
 	ctx := context.Background()
 	e, events, _ := resumeHarness(t, false)
@@ -342,7 +361,7 @@ func TestW5ADeferredQuestionOverAQuarantineStandsAndTheTaskIsNotFailed(t *testin
 	if len(standing) != 1 || len(standing[0].AwaitingAuthority) == 0 {
 		t.Fatalf("premise: one task with a standing question: %+v", standing)
 	}
-	e.Resume(ctx, standing[0])
+	attempt := e.ResumeTask(ctx, standing[0])
 	consumed := false
 	var seen []event.Event
 	deadline := time.After(30 * time.Second)
@@ -353,18 +372,26 @@ func TestW5ADeferredQuestionOverAQuarantineStandsAndTheTaskIsNotFailed(t *testin
 		select {
 		case ev := <-events:
 			seen = append(seen, ev)
-			if _, terminal := event.RunTerminality(ev.Kind); terminal || ev.Kind == wqKind {
-				done = true
-			}
+		case <-attempt.Ended():
+			done = true
 		case <-time.After(10 * time.Millisecond):
 		case <-deadline:
 			t.Fatalf("the resumed invocation did not end: %v", kindsOf(seen))
 		}
 	}
+	seen = append(seen, drainEvents(events)...)
 	if consumed || contains(seen, event.AuthorityResolved) {
 		t.Fatal("the standing question was answered over a quarantined workspace")
 	}
-	wqAssertQuarantined(t, seen, taskID, "exec-question", id.Worktree)
+	refusal := attempt.Binding().Refusal
+	var quarantined *candidate.ErrQuarantined
+	if !errors.Is(refusal, ErrResumeContainmentRefused) || !errors.As(refusal, &quarantined) ||
+		quarantined.Workspace != id.Worktree {
+		t.Fatalf("the resume was not the typed pre-binding containment refusal: %v", refusal)
+	}
+	if len(seen) != 0 {
+		t.Fatalf("the refused resume published %v", summaries(seen))
+	}
 	after, err := e.Store.Load()
 	if err != nil {
 		t.Fatal(err)
@@ -521,8 +548,13 @@ func TestW13AnUnreadableRecordUnderASafetyStopProjectsAnUnverifiedQuarantine(t *
 	}
 }
 
-// W14. Ordinary failures keep FAILED: an error that is no safety stop over a
-// record that cannot be read, over no record at all, and over a settled one.
+// W14. Ordinary failures keep FAILED over no record at all and over a settled
+// one. RULING-372 §19 amends the unreadable-record subcase, because RULING-371
+// §2-§5 supersede RULING-366 §14. The pre-fix control: a7b41bd ended an error
+// that is no safety stop, over a record that cannot be read, on WorkflowFailed
+// (evidence/n5-p2/r371/controls-on-a7b41bd.txt). A failed locked read is not
+// proof of safe containment, so that subcase now expects the UNVERIFIED
+// WORKSPACE_QUARANTINED terminal.
 func TestW14AnOrdinaryFailureKeepsItsOrdinaryOutcome(t *testing.T) {
 	for name, setup := range map[string]func(t *testing.T, root string){
 		"settled record": func(*testing.T, string) {},
@@ -542,6 +574,16 @@ func TestW14AnOrdinaryFailureKeepsItsOrdinaryOutcome(t *testing.T) {
 			setup(t, root)
 			e.terminateRun(fixtureCtx(e, wqTask), wqTask, "the objective", errors.New("the worker died"))
 			seen := drainEvents(events)
+			if name == "unreadable record" {
+				// RULING-372 §19: the unverified quarantine, never FAILED.
+				if contains(seen, event.WorkflowFailed) {
+					t.Fatalf("an unreadable record under an ordinary failure closed FAILED: %v", summaries(seen))
+				}
+				if p, _ := wqPayload(t, seen); p["recorded"] != false {
+					t.Fatalf("an unreadable record is not the unverified quarantine: %v", p)
+				}
+				return
+			}
 			if contains(seen, wqKind) || !contains(seen, event.WorkflowFailed) {
 				t.Fatalf("an ordinary failure did not keep FAILED: %v", summaries(seen))
 			}

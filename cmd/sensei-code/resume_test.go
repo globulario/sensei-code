@@ -1478,7 +1478,10 @@ func TestB2a1R193W12ARefusedResumeBindingEndsTheCallerTyped(t *testing.T) {
 			defer unsubscribe()
 			observed, unobserve := bus.Subscribe(64)
 			defer unobserve()
-			engine := &workflow.Engine{Bus: bus, Store: store, SessionID: sessionID}
+			// A repository root of its own: the resume's containment gate
+			// reads the task's candidate record under its lock there
+			// (RULING-373), and creates that lock object.
+			engine := &workflow.Engine{Repo: gitx.Repo{Root: t.TempDir()}, Bus: bus, Store: store, SessionID: sessionID}
 			attempt := engine.ResumeTask(t.Context(), task)
 			if code := settleResumed(t.Context(), engine, events, attempt, false, true, 0); code != exitFailed {
 				t.Fatalf("a refused binding ended the invocation with %d, not %d", code, exitFailed)

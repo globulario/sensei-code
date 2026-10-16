@@ -934,18 +934,27 @@ func workspaceQuarantine(rec *runreceipt.Receipt, payload map[string]any, pstate
 // disclosure does not declare is returned, so the observation that carried it
 // is MALFORMED; the declared members are still preserved as stated. A
 // disclosure that states no disposition is not given one (RULING-370 §19).
+//
+// A member that is present but not a JSON object (a string, an array, a
+// number, a boolean or an explicit null) is not a valid disclosure
+// (RULING-371 §16-§18). It is returned as malformed, so the observation that
+// carried it is MALFORMED and names the member. Its members are MALFORMED,
+// and no disposition is inferred for it, so it is neither PENDING nor settled.
 func pendingRefusedMaterial(rec *runreceipt.Receipt, payload map[string]any, line int) (*runreceipt.PendingRefusedMaterial, []string) {
 	const source = "event:" + workspaceQuarantinedKind + ".payload.pending_refused_material"
-	obj, state, detail := object(payload, "pending_refused_material")
-	switch state {
-	case runreceipt.Unknown:
+	raw, present := payload["pending_refused_material"]
+	if !present {
 		return nil, nil
-	case runreceipt.Malformed:
-		// The disclosure is present but unreadable: it is still pending
-		// material, and nothing about it is established.
-		rec.Diagnostics = append(rec.Diagnostics, fmt.Sprintf("line %d (%s): %s", line, workspaceQuarantinedKind, detail))
+	}
+	obj, isObject := raw.(map[string]any)
+	if !isObject {
+		shape := fmt.Sprintf("%T", raw)
+		if raw == nil {
+			shape = "null"
+		}
+		detail := "pending_refused_material is " + shape + ", not an object, so it is not a valid pending disclosure"
 		return &runreceipt.PendingRefusedMaterial{RefusalID: runreceipt.MalformedValue(detail),
-			Workspace: runreceipt.MalformedValue(detail), Disposition: runreceipt.PendingDisposition}, nil
+			Workspace: runreceipt.MalformedValue(detail)}, []string{detail}
 	}
 	var malformed []string
 	member := func(key, what string) runreceipt.Value {

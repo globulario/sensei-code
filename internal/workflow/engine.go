@@ -2953,22 +2953,39 @@ func confinementUnsupportedBeforeStart(err error) bool {
 // reports whether it ended the invocation.
 //
 // It decides from the durable candidate record, read once under its lock
-// (candidate.LoadLocked), never from the error alone:
+// (candidate.LoadLocked), never from the error alone (terminateOnLockedRead):
 //
-//	record unsettled                     -> VERIFIED quarantine terminal
-//	record unreadable + safety-stop err  -> UNVERIFIED quarantine terminal
-//	record unreadable + ordinary err     -> not decided here
-//	record absent or settled             -> not decided here (a clean
-//	                                        pre-start boundary failure keeps
-//	                                        its ordinary outcome)
+//	record unsettled          -> VERIFIED quarantine terminal
+//	record absent or settled  -> not decided here (the ordinary outcome)
+//	locked read failed        -> UNVERIFIED quarantine terminal, whatever
+//	                             error, cancellation or timeout ended the
+//	                             invocation (RULING-371 §2-§7)
 //
-// One exception, and only for a record that cannot be read under its lock:
-// required confinement refused before start because the platform has no
-// cross-process lock (confinementUnsupportedBeforeStart) is the ordinary
-// unsupported-confinement failure when an ordinary read of the record shows
-// nothing unresolved -- absent, or neither in flight nor quarantined. A
-// record that read cannot read, or one naming unresolved state, keeps the
-// quarantine path: the exception never releases anything (RULING-367 §5-§8).
+// An invocation keeps its ordinary outcome only when containment is
+// positively established safe -- a successful locked read showing the record
+// absent or settled -- or when a trusted pre-start fact proves that no
+// confined execution could have started. A failed locked read is never an
+// absent record: a lock that is not released in time, an invalid lock object,
+// a refused lock, a torn record and a contradictory embedded identity
+// (candidate.ErrIdentityContradiction) all leave containment unestablished.
+//
+// The trusted pre-start facts, both typed and both read through an ordinary
+// candidate.Load that must show the record absent or readable and settled
+// (legacy visibility, never settlement proof; RULING-367 §5-§8, RULING-372
+// §14-§16):
+//
+//   - required confinement refused before start because the platform has no
+//     cross-process lock (confinementUnsupportedBeforeStart);
+//   - the locked read itself failed with candidate.ErrNoCrossProcessLock, on
+//     a platform where P1's BeginExecution refuses every required confined
+//     execution, and the ending is no workspace safety stop (which would
+//     itself name unresolved containment).
+//
+// A lockless Load that shows the record unsettled, or cannot read it, keeps
+// the UNVERIFIED quarantine: the exception never releases anything.
+//
+// The read failure is the reason; the initiating error, cancellation or
+// timeout is kept as context in the summary and never decides.
 //
 // Refused material pending at the quarantine is disclosed in the terminal and
 // its receipt, and left pending (RULING-367 §11-§13).
@@ -2979,22 +2996,42 @@ func confinementUnsupportedBeforeStart(err error) bool {
 // A cancellation or an expired budget is kept in the account, not lost.
 func (e *Engine) terminateQuarantined(ctx context.Context, taskID string, err error) bool {
 	id, ok, readErr := candidate.LoadLocked(e.Repo.Root, taskID)
+	return e.terminateOnLockedRead(ctx, taskID, err, id, ok, readErr)
+}
+
+// terminateOnLockedRead is terminateQuarantined's decision over the result of
+// its one locked read (id, ok, readErr), and reports whether it ended the
+// invocation. It is separate only so the typed lockless read result
+// (candidate.ErrNoCrossProcessLock), which Linux never produces, can be
+// witnessed; nothing but terminateQuarantined calls it in production.
+func (e *Engine) terminateOnLockedRead(ctx context.Context, taskID string, err error, id candidate.Identity, ok bool,
+	readErr error) bool {
 	var q WorkspaceQuarantine
 	var summary string
 	switch {
 	case readErr != nil:
-		if confinementUnsupportedBeforeStart(err) {
-			if id, ok, loadErr := candidate.Load(e.Repo.Root, taskID); loadErr == nil && (!ok || !id.Unsettled()) {
+		lockless := errors.Is(readErr, candidate.ErrNoCrossProcessLock) && !isWorkspaceSafetyStop(err)
+		var unlocked string
+		if confinementUnsupportedBeforeStart(err) || lockless {
+			loaded, found, loadErr := candidate.Load(e.Repo.Root, taskID)
+			switch {
+			case loadErr != nil:
+				unlocked = "; its unlocked read failed too: " + loadErr.Error()
+			case !found || !loaded.Unsettled():
 				return false
+			default:
+				unlocked = "; its unlocked read (legacy visibility, not a locked observation) names containment that is not settled"
 			}
 		}
-		if !isWorkspaceSafetyStop(err) {
-			return false
-		}
 		q = WorkspaceQuarantine{TaskID: taskID, Reason: "the candidate record of " + taskID +
-			" could not be read under its lock, so its containment state is not established: " + readErr.Error()}
-		summary = "the invocation ended on a workspace safety stop (" + err.Error() + ") and " + q.Reason +
-			"; the task stays blocked and is owed a trusted settlement"
+			" could not be read under its lock, so its containment state is not established: " + readErr.Error() + unlocked}
+		initiating := "no error"
+		if err != nil {
+			initiating = err.Error()
+		}
+		summary = "the invocation ended on " + initiating + " and " + q.Reason +
+			"; that ending does not establish containment, so the task stays blocked and is owed containment " +
+			"verification or a trusted settlement"
 	case !ok || !id.Unsettled():
 		return false
 	default:
@@ -3065,12 +3102,11 @@ func (e *Engine) refuseCandidatePrecondition(ctx context.Context, taskID string,
 // read once as the repository-wide condition -- no path is filtered, exempted
 // or ignored, so no second cleanliness policy exists beside it.
 func (e *Engine) resumePrecondition(ctx context.Context, taskID string) error {
-	existing, ok, err := candidate.Load(e.Repo.Root, taskID)
+	// Containment is decided by the one containment check, never by an
+	// unlocked read of its own (RULING-373 §11).
+	existing, ok, err := containmentCheck(e.Repo.Root, taskID)
 	if err != nil || !ok {
 		return err
-	}
-	if q := existing.Quarantine(); q != nil {
-		return q
 	}
 	head, err := e.Repo.Head(ctx)
 	if err != nil {
@@ -12521,6 +12557,19 @@ func (e *Engine) ResumeTask(ctx context.Context, task session.Interrupted) *Resu
 			attempt.settle(ResumeBinding{TaskID: task.TaskID, Refusal: refused})
 			return
 		}
+		// THE CONTAINMENT GATE (RULING-373 §6-§8), under the lease, before
+		// the lineage is bound and before any lane, question, answer or
+		// workspace is reached: no implementer write may start without an
+		// authoritative containment decision for the task being continued.
+		// An unsettled workspace, or one whose record cannot be observed
+		// under its lock, is the typed pre-binding refusal: nothing is
+		// recorded or published, no terminal is invented, and the standing
+		// question stays unanswered. The lease stays held from this
+		// observation through the continuation.
+		if refused := e.resumeContainmentRefusal(inv, task.TaskID); refused != nil {
+			attempt.settle(ResumeBinding{TaskID: task.TaskID, Refusal: refused})
+			return
+		}
 		// This session may record nothing of the task until the task's
 		// session lineage names it current (70B2a1).
 		lineage, refused := e.bindLineage(inv, task.TaskID)
@@ -12690,7 +12739,9 @@ func (e *Engine) ResumeTask(ctx context.Context, task session.Interrupted) *Resu
 		// than re-deriving one, which is what keeps the base immutable across a
 		// restart -- and it must not re-check cleanliness, because the tree may
 		// legitimately hold this task's own earlier governance writes.
-		identity, ok, idErr := candidate.Load(e.Repo.Root, task.TaskID)
+		// Its containment is decided by the one containment check, as strong
+		// as the admission's (RULING-373 §11).
+		identity, ok, idErr := containmentCheck(e.Repo.Root, task.TaskID)
 		if idErr != nil {
 			fail(idErr)
 			return
@@ -12854,6 +12905,20 @@ func (e *Engine) ResumeTask(ctx context.Context, task session.Interrupted) *Resu
 		e.implement(ctx, sc, start, task.TaskID, &tc, plan, carried, fail)
 	}()
 	return attempt
+}
+
+// resumeContainmentRefusal is ResumeTask's containment gate: nil when the
+// one containment check (containmentCheck) establishes the task's candidate
+// workspace absent or settled, else the typed pre-binding refusal
+// (ErrResumeContainmentRefused, wrapping the containment error), which halts
+// inv before anything of the task is recorded or published.
+func (e *Engine) resumeContainmentRefusal(inv *invocation, taskID string) *RecordAppendFailure {
+	if _, _, err := containmentCheck(e.Repo.Root, taskID); err != nil {
+		return e.fence(inv, newRecordAppendFailure(
+			event.New(inv.sessionID, taskID, event.SourceSystem, session.SessionLineageBound, "", nil),
+			fmt.Errorf("%w: %w", ErrResumeContainmentRefused, err)))
+	}
+	return nil
 }
 
 // applyPlanScope is the one mapping from a plan to the scope a candidate is
@@ -13507,22 +13572,99 @@ func isWorkspaceSafetyStop(err error) bool {
 	return errors.As(err, &u) || errors.As(err, &q) || errors.As(err, &f)
 }
 
-// unsettledCandidate reads the durable candidate record and returns its
-// quarantine refusal, or nil when it is settled or absent. A record that
-// exists but cannot be read is refused too: safety is not inferred from a
-// read that failed.
+// unsettledCandidate is the containment check (containmentCheck) as a
+// refusal: nil only when the task's candidate workspace is established safe
+// to use -- the record authoritatively absent or settled. It is the check
+// immediately before a worktree is created or reused and before an empty
+// candidate is observed or disposed, and it is exactly as strong as the one
+// that admitted the resume (RULING-373 §10).
 func unsettledCandidate(repoRoot, taskID string) error {
-	id, ok, err := candidate.Load(repoRoot, taskID)
-	if err != nil {
-		return fmt.Errorf("the candidate record of %s could not be read, so its settlement is unknown: %w", taskID, err)
+	_, _, err := containmentCheck(repoRoot, taskID)
+	return err
+}
+
+// ErrContainmentUnestablished classifies a task whose candidate record could
+// not be observed under its lock: whether its workspace may still be written
+// is unknown, and unknown is never absent or settled (RULING-372 §5 D).
+var ErrContainmentUnestablished = errors.New("CANNOT ESTABLISH CONTAINMENT STATE: the task's candidate record " +
+	"could not be read under its lock, so whether its workspace may still be written is unknown, never settled")
+
+// ErrResumeContainmentRefused classifies the typed PRE-BINDING REFUSAL of a
+// resume whose task's containment does not permit continuation (RULING-373
+// §6-§8). It is carried by ResumeBinding.Refusal, beside the containment
+// error itself (a *candidate.ErrQuarantined, or ErrContainmentUnestablished
+// with the read failure): no session lineage was bound, and nothing of the
+// task was recorded or published.
+var ErrResumeContainmentRefused = errors.New("the resume was refused before its session lineage was bound, " +
+	"because the containment state of the task's candidate workspace does not permit continuation")
+
+// containmentUnestablished is a failed containment observation: errors.Is
+// ErrContainmentUnestablished and the read failure itself.
+type containmentUnestablished struct {
+	taskID string
+	err    error
+}
+
+func (e *containmentUnestablished) Error() string {
+	return fmt.Sprintf("%v: task %s: %v", ErrContainmentUnestablished, e.taskID, e.err)
+}
+
+func (e *containmentUnestablished) Unwrap() []error {
+	return []error{ErrContainmentUnestablished, e.err}
+}
+
+// containmentCheck is the engine's ONE containment check of a task's
+// candidate workspace (RULING-373 §9): the resume admission (ResumeTask),
+// the question lane's precondition (resumePrecondition), the planned lane's
+// identity load, and the implementation and empty-candidate disposal gates
+// (unsettledCandidate) all decide through it, so there is one definition of
+// "safe to use". It observes the record once, under its lock, through the
+// canonical reader (candidate.LoadLocked); it owns no record, writes no
+// candidate JSON and touches no worktree. The read's documented metadata side
+// effect is the candidates directory and the task's lock object
+// (RULING-372 §10-§11).
+//
+//	A read ok, record absent     -> authoritative absence: ok=false, nil
+//	B read ok, record settled    -> the record, ok=true, nil
+//	C read ok, record unsettled  -> the record and its *candidate.ErrQuarantined
+//	D read failed                -> ErrContainmentUnestablished, never absence
+//
+// The one exception to D (RULING-372 §14-§16, RULING-373 §12): a read that
+// failed with candidate.ErrNoCrossProcessLock -- a platform where P1's
+// BeginExecution refuses every required confined execution -- is decided by
+// an ordinary candidate.Load, as legacy visibility only: absent or readable
+// and settled keeps the ordinary path; unsettled refuses as C; unreadable
+// refuses as D, naming both failures. No other read failure -- a lock not
+// released in time, an invalid lock object, a torn or contradictory record --
+// falls back to an unlocked read.
+func containmentCheck(repoRoot, taskID string) (candidate.Identity, bool, error) {
+	id, ok, err := candidate.LoadLocked(repoRoot, taskID)
+	return containmentFromRead(repoRoot, taskID, id, ok, err)
+}
+
+// containmentFromRead is containmentCheck's decision over the result of its
+// one locked read. It is separate only so the typed lockless read result,
+// which Linux never produces, can be witnessed; nothing but containmentCheck
+// calls it in production.
+func containmentFromRead(repoRoot, taskID string, id candidate.Identity, ok bool, readErr error) (candidate.Identity, bool, error) {
+	if readErr != nil {
+		if !errors.Is(readErr, candidate.ErrNoCrossProcessLock) {
+			return candidate.Identity{}, false, &containmentUnestablished{taskID: taskID, err: readErr}
+		}
+		loaded, found, loadErr := candidate.Load(repoRoot, taskID)
+		if loadErr != nil {
+			return candidate.Identity{}, false, &containmentUnestablished{taskID: taskID,
+				err: fmt.Errorf("%w, and its unlocked read failed: %w", readErr, loadErr)}
+		}
+		id, ok = loaded, found
 	}
 	if !ok {
-		return nil
+		return candidate.Identity{}, false, nil
 	}
 	if q := id.Quarantine(); q != nil {
-		return q
+		return id, true, q
 	}
-	return nil
+	return id, true, nil
 }
 
 // observeInherited measures an inherited candidate for the receipt, unless it

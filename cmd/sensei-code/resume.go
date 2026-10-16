@@ -718,7 +718,9 @@ func printActiveTasks(out io.Writer, scope string, active []session.Active, revi
 // discovered (tasks), and every record no discovered task holds that names an
 // unsettled workspace or cannot be read (orphans): a P1-era task its history
 // already ended, or one whose session is gone. listErr is set when the
-// records could not be listed at all; nothing is then read as settled.
+// records could not be listed at all. Orphans are then unknown, and nothing
+// is read as settled because of it. Each discovered task keeps its own locked
+// read.
 type containmentView struct {
 	tasks   map[string]containment
 	orphans []containment
@@ -729,50 +731,62 @@ type containmentView struct {
 // session history.
 func (v containmentView) owes() bool { return len(v.orphans) != 0 || v.listErr != nil }
 
-// loadContainment reads the current candidate record of each discovered task
-// and of every other recorded candidate, once, read-only. One unreadable
-// record makes that task's containment unknown and hides no other task.
+// loadContainment reads the current candidate record of each discovered task,
+// and of every other recorded candidate, once each, under its lock
+// (readContainment). Every discovered task gets its locked read: membership in
+// the candidate.List inventory never decides whether a task is read, because
+// absence from the inventory is not absence under the canonical record lock
+// (RULING-372 §2-§5, §9). List only discovers the further, orphan records,
+// and each of those gets its own locked read. One failed read makes that
+// task's containment unknown and hides no other task. A List failure is kept
+// (listErr) and hides no discovered task's read.
 func loadContainment(repoRoot string, discovered []session.Active) containmentView {
 	view := containmentView{tasks: map[string]containment{}}
-	recorded, listErr := candidate.List(repoRoot)
-	ids := map[string]bool{}
-	for _, id := range recorded {
-		ids[id.TaskID] = true
-	}
 	for _, entry := range discovered {
 		if _, seen := view.tasks[entry.Task.TaskID]; !seen {
-			view.tasks[entry.Task.TaskID] = readContainment(repoRoot, entry.Task.TaskID, ids, listErr)
+			view.tasks[entry.Task.TaskID] = readContainment(repoRoot, entry.Task.TaskID)
 		}
 	}
+	recorded, listErr := candidate.List(repoRoot)
 	if listErr != nil {
 		view.listErr = listErr
 		return view
 	}
 	sort.Slice(recorded, func(a, b int) bool { return recorded[a].TaskID < recorded[b].TaskID })
+	orphans := map[string]bool{}
 	for _, id := range recorded {
-		if _, held := view.tasks[id.TaskID]; held {
+		if _, held := view.tasks[id.TaskID]; held || orphans[id.TaskID] {
 			continue
 		}
-		if c := readContainment(repoRoot, id.TaskID, ids, nil); c.refusal() != nil {
+		orphans[id.TaskID] = true
+		if c := readContainment(repoRoot, id.TaskID); c.refusal() != nil {
 			view.orphans = append(view.orphans, c)
 		}
 	}
 	return view
 }
 
-// containmentOf is the current candidate record of one named task.
+// containmentOf is the current candidate record of one named task, read under
+// its lock whether or not the candidate inventory lists it (RULING-372 §4-§5).
 func containmentOf(repoRoot, taskID string) containment {
-	recorded, listErr := candidate.List(repoRoot)
-	ids := map[string]bool{}
-	for _, id := range recorded {
-		ids[id.TaskID] = true
-	}
-	return readContainment(repoRoot, strings.TrimSpace(taskID), ids, listErr)
+	return readContainment(repoRoot, strings.TrimSpace(taskID))
 }
 
-// readContainment reads one task's record under its lock (candidate.LoadLocked)
-// when the repository records one for it; a task with no record owns no
-// confined execution. A read that fails is UNKNOWN, never settled.
+// readContainment reads one task's record under its lock (candidate.LoadLocked).
+// It always reads, and never skips the read because the candidate inventory
+// has no entry for the task (RULING-372 §4-§5). The read decides:
+//
+//	ok, record absent     -> authoritative absence: the ordinary lanes
+//	ok, record settled    -> ordinary eligibility, subject to the other gates
+//	ok, record unsettled  -> WORKSPACE QUARANTINED
+//	read failed           -> CANNOT ESTABLISH CONTAINMENT STATE, never absence
+//
+// The locked read is not filesystem-write-free. It creates the repository's
+// candidates metadata directory (.sensei-code/candidates) when that is
+// missing, and the named task's lock object (<task>.json.lock) when that is
+// missing (RULING-372 §10-§11). It writes no candidate JSON and touches no
+// worktree. It changes no disposition, does not replace or follow an invalid
+// lock object, and does not fall back to another read after a lock refusal.
 //
 // On a platform with no cross-process lock (candidate.ErrNoCrossProcessLock,
 // typed) the record is read as P1's own gates read it (candidate.Load), for
@@ -781,15 +795,8 @@ func containmentOf(repoRoot, taskID string) containment {
 // shows is refused as owed settlement; a record it cannot read is refused as
 // CANNOT ESTABLISH, naming both failures; only a readable settled (or absent)
 // record keeps the ordinary legacy behaviour, and nothing here releases one.
-func readContainment(repoRoot, taskID string, recorded map[string]bool, listErr error) containment {
+func readContainment(repoRoot, taskID string) containment {
 	c := containment{TaskID: taskID}
-	if listErr != nil {
-		c.Err = fmt.Errorf("the candidate records of this repository could not be listed: %w", listErr)
-		return c
-	}
-	if !recorded[taskID] {
-		return c
-	}
 	id, ok, err := loadLockedRecord(repoRoot, taskID)
 	if errors.Is(err, candidate.ErrNoCrossProcessLock) {
 		var loadErr error

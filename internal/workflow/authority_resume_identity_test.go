@@ -20,6 +20,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1021,6 +1023,15 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 	}
 
 	repo, _ := mintRepo(t)
+	// RULING-373: the resume's containment gate reads the candidate record
+	// under its lock, which creates <repo>/.sensei-code/candidates and the
+	// task's lock object (RULING-372 §10-§11). This record lives outside the
+	// repository, so <repo>/.sensei-code is not otherwise present; it is
+	// excluded here as every repository that holds a session record must
+	// exclude it, so the gate's lock object does not read as uncommitted work.
+	if err := os.WriteFile(filepath.Join(repo.Root, ".git", "info", "exclude"), []byte(".sensei-code/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	bus := event.NewBus()
 	events, cancel := bus.Subscribe(1024)
 	defer cancel()

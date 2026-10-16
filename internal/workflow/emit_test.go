@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/session"
 )
 
@@ -300,7 +301,10 @@ func TestB2a1W3RootlessResumeHalts(t *testing.T) {
 		bus := event.NewBus()
 		seen, cancel := bus.Subscribe(64)
 		defer cancel()
-		e := &Engine{Bus: bus, Store: store, SessionID: fresh, pending: map[string]chan string{}}
+		// A repository root of its own: the resume's containment gate reads
+		// the task's candidate record under its lock there (RULING-373), and
+		// creates that lock object, so it must not be the package directory.
+		e := &Engine{Repo: gitx.Repo{Root: t.TempDir()}, Bus: bus, Store: store, SessionID: fresh, pending: map[string]chan string{}}
 		attempt := e.ResumeTask(caller, task)
 		select {
 		case <-attempt.Bound():
