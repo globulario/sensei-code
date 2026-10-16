@@ -8969,6 +8969,18 @@ code_symbols:
     file: internal/config/config.go
     symbol: Validation.Build
     kind: var
+  - id: internal/config/config.go:Validation.Confined
+    namespace: structural.scip
+    language: go
+    file: internal/config/config.go
+    symbol: Validation.Confined
+    kind: var
+  - id: internal/config/config.go:Validation.Confinement
+    namespace: structural.scip
+    language: go
+    file: internal/config/config.go
+    symbol: Validation.Confinement
+    kind: var
   - id: internal/config/config.go:Validation.Format
     namespace: structural.scip
     language: go
@@ -44873,6 +44885,12 @@ code_symbols:
     file: internal/validation/evidence.go
     symbol: Confinement.Profile
     kind: var
+  - id: internal/validation/evidence.go:Confinement.RequireStatus
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: Confinement.RequireStatus
+    kind: var
   - id: internal/validation/evidence.go:Confinement.SHA256
     namespace: structural.scip
     language: go
@@ -44891,11 +44909,23 @@ code_symbols:
     file: internal/validation/evidence.go
     symbol: Confinement.failureExit
     kind: method
+  - id: internal/validation/evidence.go:Confinement.launch
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: Confinement.launch
+    kind: method
   - id: internal/validation/evidence.go:Confinement.open
     namespace: structural.scip
     language: go
     file: internal/validation/evidence.go
     symbol: Confinement.open
+    kind: method
+  - id: internal/validation/evidence.go:Confinement.statusEnv
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: Confinement.statusEnv
     kind: method
   - id: internal/validation/evidence.go:Confinement~type
     namespace: structural.scip
@@ -45131,6 +45161,12 @@ code_symbols:
     file: internal/validation/evidence.go
     symbol: Runner.Permits
     kind: var
+  - id: internal/validation/evidence.go:Runner.Refusal
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: Runner.Refusal
+    kind: var
   - id: internal/validation/evidence.go:Runner.RequestedBy
     namespace: structural.scip
     language: go
@@ -45161,11 +45197,11 @@ code_symbols:
     file: internal/validation/evidence.go
     symbol: Runner.attribute
     kind: method
-  - id: internal/validation/evidence.go:Runner.command
+  - id: internal/validation/evidence.go:Runner.execute
     namespace: structural.scip
     language: go
     file: internal/validation/evidence.go
-    symbol: Runner.command
+    symbol: Runner.execute
     kind: method
   - id: internal/validation/evidence.go:Runner.one
     namespace: structural.scip
@@ -45184,6 +45220,12 @@ code_symbols:
     language: go
     file: internal/validation/evidence.go
     symbol: SandboxUnavailable
+    kind: const
+  - id: internal/validation/evidence.go:StatusProtocol
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: StatusProtocol
     kind: const
   - id: internal/validation/evidence.go:Test
     namespace: structural.scip
@@ -45209,17 +45251,77 @@ code_symbols:
     file: internal/validation/evidence.go
     symbol: asExitError
     kind: function
+  - id: internal/validation/evidence.go:baselineRole
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: baselineRole
+    kind: const
+  - id: internal/validation/evidence.go:candidateRole
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: candidateRole
+    kind: const
+  - id: internal/validation/evidence.go:execution.err
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: execution.err
+    kind: var
+  - id: internal/validation/evidence.go:execution.exit
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: execution.exit
+    kind: var
+  - id: internal/validation/evidence.go:execution.output
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: execution.output
+    kind: var
+  - id: internal/validation/evidence.go:execution.refused
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: execution.refused
+    kind: var
+  - id: internal/validation/evidence.go:execution~type
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: execution
+    kind: type
+  - id: internal/validation/evidence.go:exited
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: exited
+    kind: function
   - id: internal/validation/evidence.go:maxOutput
     namespace: structural.scip
     language: go
     file: internal/validation/evidence.go
     symbol: maxOutput
     kind: const
+  - id: internal/validation/evidence.go:maxStatus
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: maxStatus
+    kind: const
   - id: internal/validation/evidence.go:namedVerdict
     namespace: structural.scip
     language: go
     file: internal/validation/evidence.go
     symbol: namedVerdict
+    kind: function
+  - id: internal/validation/evidence.go:parseStatus
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: parseStatus
     kind: function
   - id: internal/validation/evidence.go:release
     namespace: structural.scip
@@ -45233,11 +45335,29 @@ code_symbols:
     file: internal/validation/evidence.go
     symbol: requiredTestTarget
     kind: function
+  - id: internal/validation/evidence.go:role~type
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: role
+    kind: type
   - id: internal/validation/evidence.go:short
     namespace: structural.scip
     language: go
     file: internal/validation/evidence.go
     symbol: short
+    kind: function
+  - id: internal/validation/evidence.go:statusGrace
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: statusGrace
+    kind: const
+  - id: internal/validation/evidence.go:terminallyInvalid
+    namespace: structural.scip
+    language: go
+    file: internal/validation/evidence.go
+    symbol: terminallyInvalid
     kind: function
   - id: internal/validation/evidence_test.go:TestABaseThatAlsoFailsDifferentlyDoesNotMakeTheFailurePreExisting
     namespace: structural.scip
@@ -45365,6 +45485,252 @@ code_symbols:
     file: internal/validation/evidence_test.go
     symbol: writeFile
     kind: function
+  - id: internal/validation/runner_confine_test.go:TestABaselineRefusalIsNotAttributed
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestABaselineRefusalIsNotAttributed
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestACandidateCannotForgeALauncherStatus
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestACandidateCannotForgeALauncherStatus
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestACandidateExitCannotImpersonateARefusal
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestACandidateExitCannotImpersonateARefusal
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestADescendantHoldingTheDescriptorAfterADelayedExitIsBounded
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestADescendantHoldingTheDescriptorAfterADelayedExitIsBounded
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestALongRunningValidCheckIsNotCutByTheGrace
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestALongRunningValidCheckIsNotCutByTheGrace
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAMalformedCompleteLineFromAWrapperThatStaysAliveIsBounded
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAMalformedCompleteLineFromAWrapperThatStaysAliveIsBounded
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAPartialRecordUnderTheBoundIsWaitedFor
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAPartialRecordUnderTheBoundIsWaitedFor
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestARecordOfExactlyTheBoundEndingInItsTerminatorIsRead
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestARecordOfExactlyTheBoundEndingInItsTerminatorIsRead
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestARefusalRecordFromAWrapperThatStaysAliveIsNotTheLaunchers
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestARefusalRecordFromAWrapperThatStaysAliveIsNotTheLaunchers
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestARefusingRunnerRunsNothing
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestARefusingRunnerRunsNothing
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAStatusAtTheBoundWithoutATerminatorIsTerminated
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAStatusAtTheBoundWithoutATerminatorIsTerminated
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAStatusDescriptorHeldByADescendantIsBounded
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAStatusDescriptorHeldByADescendantIsBounded
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAStatusWithDataAfterItsRecordIsTerminated
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAStatusWithDataAfterItsRecordIsTerminated
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAValidRecordWithANonZeroExitStaysTheCandidates
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAValidRecordWithANonZeroExitStaysTheCandidates
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAWrapperAliveAfterClosingAnEmptyStatusIsTerminated
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAWrapperAliveAfterClosingAnEmptyStatusIsTerminated
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAWrapperAliveAfterClosingItsStatusIsTerminated
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAWrapperAliveAfterClosingItsStatusIsTerminated
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAWrapperAliveAfterItsRecordIsTerminated
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAWrapperAliveAfterItsRecordIsTerminated
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAWrapperThatExitsAfterClosingItsStatusKeepsItsResult
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAWrapperThatExitsAfterClosingItsStatusKeepsItsResult
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAWrapperThatExitsAfterItsRecordKeepsItsResult
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAWrapperThatExitsAfterItsRecordKeepsItsResult
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAWrapperWithoutStatusFailsClosed
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAWrapperWithoutStatusFailsClosed
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAnEmptyClosedStatusWithAPromptExitIsRefusedOnItsParsing
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAnEmptyClosedStatusWithAPromptExitIsRefusedOnItsParsing
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAnExactlyBoundedMalformedRecordIsRefusedOnItsParsing
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAnExactlyBoundedMalformedRecordIsRefusedOnItsParsing
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAnIncompleteCaptureIsNotAResultWhateverTheExit
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAnIncompleteCaptureIsNotAResultWhateverTheExit
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAnInterruptedBaselineIsNotTheCandidatesFailure
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAnInterruptedBaselineIsNotTheCandidatesFailure
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAnOutputDescriptorHeldAfterTheWrapperExitsIsBounded
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAnOutputDescriptorHeldAfterTheWrapperExitsIsBounded
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAnOversizedStatusCannotWaitForItsWriter
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAnOversizedStatusCannotWaitForItsWriter
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestAnUnboundedStatusWriterIsTerminatedAndRefused
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestAnUnboundedStatusWriterIsTerminatedAndRefused
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestCancellationDuringARequiredStatusRunIsBounded
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestCancellationDuringARequiredStatusRunIsBounded
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestNamedRequiredTestsRunUnderTheLauncher
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestNamedRequiredTestsRunUnderTheLauncher
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestOnlyAValidLauncherRecordIsAResult
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestOnlyAValidLauncherRecordIsAResult
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestTheEndOfTheStreamDoesNotRestartTheCompletionGrace
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestTheEndOfTheStreamDoesNotRestartTheCompletionGrace
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestTheLauncherGetsOnlyItsWorkspaceAndNoHostEnvironment
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestTheLauncherGetsOnlyItsWorkspaceAndNoHostEnvironment
+    kind: function
+  - id: internal/validation/runner_confine_test.go:TestUnconfinedExit125IsAnOrdinaryFailure
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: TestUnconfinedExit125IsAnOrdinaryFailure
+    kind: function
+  - id: internal/validation/runner_confine_test.go:boundedExecute
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: boundedExecute
+    kind: function
+  - id: internal/validation/runner_confine_test.go:closingLauncher
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: closingLauncher
+    kind: function
+  - id: internal/validation/runner_confine_test.go:completingLauncher
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: completingLauncher
+    kind: function
+  - id: internal/validation/runner_confine_test.go:confinedRun
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: confinedRun
+    kind: function
+  - id: internal/validation/runner_confine_test.go:mustOpen
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: mustOpen
+    kind: function
+  - id: internal/validation/runner_confine_test.go:refused
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: refused
+    kind: function
+  - id: internal/validation/runner_confine_test.go:terminalStatusLauncher
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: terminalStatusLauncher
+    kind: function
+  - id: internal/validation/runner_confine_test.go:unboundedStatus
+    namespace: structural.scip
+    language: go
+    file: internal/validation/runner_confine_test.go
+    symbol: unboundedStatus
+    kind: const
   - id: internal/validation/wrap_test.go:TestAConfinedCheckRunsThroughItsPinnedWrapper
     namespace: structural.scip
     language: go
@@ -45425,6 +45791,12 @@ code_symbols:
     file: internal/validation/wrap_test.go
     symbol: ran
     kind: function
+  - id: internal/validation/wrap_test.go:silentPassThrough
+    namespace: structural.scip
+    language: go
+    file: internal/validation/wrap_test.go
+    symbol: silentPassThrough
+    kind: const
   - id: internal/validation/wrap_test.go:touch
     namespace: structural.scip
     language: go
@@ -52205,6 +52577,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.validate
     kind: method
+  - id: internal/workflow/engine.go:Engine.validationRunner
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.validationRunner
+    kind: method
   - id: internal/workflow/engine.go:Engine.verifiedCommittedCheckpoint
     namespace: structural.scip
     language: go
@@ -53369,6 +53747,18 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: firstText
     kind: function
+  - id: internal/workflow/engine.go:formatterBlocker
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: formatterBlocker
+    kind: function
+  - id: internal/workflow/engine.go:formatterBlocks
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: formatterBlocks
+    kind: function
   - id: internal/workflow/engine.go:gapClosurePrompt
     namespace: structural.scip
     language: go
@@ -53788,6 +54178,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: parseFindingResponses
+    kind: function
+  - id: internal/workflow/engine.go:phaseChecks
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: phaseChecks
     kind: function
   - id: internal/workflow/engine.go:planAdmissionEvidenceID
     namespace: structural.scip
@@ -55235,11 +55631,23 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: unmetProof
     kind: function
+  - id: internal/workflow/engine.go:validationConfinementOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: validationConfinementOf
+    kind: function
   - id: internal/workflow/engine.go:validationPermits
     namespace: structural.scip
     language: go
     file: internal/workflow/engine.go
     symbol: validationPermits
+    kind: function
+  - id: internal/workflow/engine.go:validationRequiresConfinement
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: validationRequiresConfinement
     kind: function
   - id: internal/workflow/engine.go:verifyCheckpoint
     namespace: structural.scip
@@ -69275,6 +69683,258 @@ code_symbols:
     file: internal/workflow/validate_body_test.go
     symbol: wellFormedReview
     kind: const
+  - id: internal/workflow/validation_confine_test.go:Engine.n4Validate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: Engine.n4Validate
+    kind: method
+  - id: internal/workflow/validation_confine_test.go:TestAConfinedFormatterRewriteIsRecapturedAndCertified
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestAConfinedFormatterRewriteIsRecapturedAndCertified
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestAFailedIntermediateRecaptureRunsNoLaterFormatter
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestAFailedIntermediateRecaptureRunsNoLaterFormatter
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestAFailingFormatterBlocksConfinedValidation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestAFailingFormatterBlocksConfinedValidation
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestAFormatVerifierAsksForAReadOnlyWorkspace
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestAFormatVerifierAsksForAReadOnlyWorkspace
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestAFormatterAsksForAWritableWorkspace
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestAFormatterAsksForAWritableWorkspace
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestAFormatterRefusedForWantOfAProfileBlocksConfinedValidation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestAFormatterRefusedForWantOfAProfileBlocksConfinedValidation
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestANotPermittedFormatterBlocksConfinedValidation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestANotPermittedFormatterBlocksConfinedValidation
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestARefusedFormatterBlocksTheCaptureItWasRefusedBefore
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestARefusedFormatterBlocksTheCaptureItWasRefusedBefore
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestARewriteFollowedByAFailingFormatterKeepsBothObservations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestARewriteFollowedByAFailingFormatterKeepsBothObservations
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestARewriteFollowedByARefusedFormatterKeepsBothObservations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestARewriteFollowedByARefusedFormatterKeepsBothObservations
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestAnErroredFormatterBlocksConfinedValidation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestAnErroredFormatterBlocksConfinedValidation
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestAnErroredFormatterBlocksConfinedValidationOnTheRealPath
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestAnErroredFormatterBlocksConfinedValidationOnTheRealPath
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestCertifyingChecksAskForAReadOnlyWorkspace
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestCertifyingChecksAskForAReadOnlyWorkspace
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestConfinedValidationCandidateExit125IsItsOwnFailure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestConfinedValidationCandidateExit125IsItsOwnFailure
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestConfinedValidationHasNoUnconfinedFallback
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestConfinedValidationHasNoUnconfinedFallback
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestConfinedValidationRunsEveryCheckThroughTheLauncher
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestConfinedValidationRunsEveryCheckThroughTheLauncher
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestDefaultOffValidationIsUnchanged
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestDefaultOffValidationIsUnchanged
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestEachFormatterIsBoundToTheCaptureItRanOn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestEachFormatterIsBoundToTheCaptureItRanOn
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestEveryFormatterStageKeepsItsOwnBinding
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestEveryFormatterStageKeepsItsOwnBinding
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestEveryValidationRunnerIsBuiltUnderThePolicy
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestEveryValidationRunnerIsBuiltUnderThePolicy
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestLegacyHandsNoWorkspaceMode
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestLegacyHandsNoWorkspaceMode
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestLegacyRunsTheFormatterListAsOneExecution
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestLegacyRunsTheFormatterListAsOneExecution
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestLegacyValidationStillDiscardsFormatterEvidence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestLegacyValidationStillDiscardsFormatterEvidence
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestOneSuccessfulFormatterIsTheSingleStagePath
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestOneSuccessfulFormatterIsTheSingleStagePath
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestTheOrdinaryFormatterAndVerifierAskForTheirOwnModes
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestTheOrdinaryFormatterAndVerifierAskForTheirOwnModes
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:TestValidationConfinementPolicy
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: TestValidationConfinementPolicy
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:anyRan
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: anyRan
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:blockerRig
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: blockerRig
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:confinedFormattingRig
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: confinedFormattingRig
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:confinedValidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: confinedValidate
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:confinedValidateUnder
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: confinedValidateUnder
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:derivedFormatRecord
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: derivedFormatRecord
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:erringCtx.Context
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: erringCtx.Context
+    kind: var
+  - id: internal/workflow/validation_confine_test.go:erringCtx.Err
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: erringCtx.Err
+    kind: method
+  - id: internal/workflow/validation_confine_test.go:erringCtx~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: erringCtx
+    kind: type
+  - id: internal/workflow/validation_confine_test.go:modeWitness
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: modeWitness
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:n4Engine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: n4Engine
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:n4GarbageStatusLauncher
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: n4GarbageStatusLauncher
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:n4Launcher
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: n4Launcher
+    kind: const
+  - id: internal/workflow/validation_confine_test.go:n4RefusingLauncher
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: n4RefusingLauncher
+    kind: function
+  - id: internal/workflow/validation_confine_test.go:stageBinding
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validation_confine_test.go
+    symbol: stageBinding
+    kind: function
   - id: internal/workflow/w3_grant_proof_test.go:TestW3ControlTestIsGrantedByItsAuthoredNeighbour
     namespace: structural.scip
     language: go
