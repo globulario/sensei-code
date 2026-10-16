@@ -118,6 +118,40 @@ func TestAStaleSaveCannotClearAnInFlightRecord(t *testing.T) {
 	}
 }
 
+// A record that exists but cannot be read is not overwritten by an ordinary
+// save: whether it held a quarantine is unknown.
+func TestAnUnreadableRecordIsNotOverwritten(t *testing.T) {
+	root, id := recorded(t)
+	target := filepath.Join(root, ".sensei-code", "candidates", "task-1.json")
+	if err := os.WriteFile(target, []byte("{torn"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := id.Save(root); err == nil {
+		t.Fatal("an unreadable record was overwritten")
+	}
+	if b, _ := os.ReadFile(target); string(b) != "{torn" {
+		t.Fatalf("the unreadable record was changed: %q", b)
+	}
+}
+
+// The baseline workspace is named on the in-flight record, and never
+// without an execution in flight.
+func TestTheBaselineIsBoundToTheInFlightRecord(t *testing.T) {
+	root, _ := recorded(t)
+	if err := NoteBaseline(root, "task-1", "/base"); err == nil {
+		t.Fatal("a baseline was bound with no execution in flight")
+	}
+	if _, err := BeginExecution(root, "task-1", inflight("exec-1")); err != nil {
+		t.Fatal(err)
+	}
+	if err := NoteBaseline(root, "task-1", "/base"); err != nil {
+		t.Fatal(err)
+	}
+	if fresh, _, _ := Load(root, "task-1"); fresh.InFlight == nil || fresh.InFlight.Baseline != "/base" {
+		t.Fatalf("the baseline is not on the durable record: %+v", fresh)
+	}
+}
+
 // The record is replaced atomically: no temporary file is left beside it,
 // and the listing sees exactly the one record.
 func TestTheRecordIsReplacedAtomically(t *testing.T) {

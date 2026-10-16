@@ -98,6 +98,10 @@ type InFlight struct {
 	// baseline observation worktree the same execution may create is part of
 	// the same boundary.
 	Workspace string `json:"workspace"`
+	// Baseline is the baseline observation worktree the execution created
+	// for attribution, recorded before any baseline execution starts in it
+	// (NoteBaseline). Empty while no baseline exists.
+	Baseline string `json:"baseline,omitempty"`
 	// Profile is the pinned confinement profile the execution runs under.
 	Profile   string    `json:"profile,omitempty"`
 	StartedAt time.Time `json:"started_at"`
@@ -233,17 +237,52 @@ var recordMu sync.Mutex
 // a record whose in-flight execution or quarantine is on disk is replaced only
 // by one that keeps it (the in-flight boundary is settled by SettleExecution,
 // and nothing here releases a quarantine). The write is atomic and durable:
-// a crash leaves either the previous record or this one, never a torn file.
+// a crash leaves either the previous record or this one, never a torn file
+// (durability of the rename itself is established on Linux and other unix
+// systems; see syncDir). A record that exists but cannot be read is not
+// overwritten: whether it holds an unsettled state is unknown, and an
+// ordinary write must not be the thing that erases one.
 func (i Identity) Save(repoRoot string) error {
 	recordMu.Lock()
 	defer recordMu.Unlock()
 	target := path(repoRoot, i.TaskID)
-	if onDisk, ok, err := load(target, i.TaskID); err == nil && ok && onDisk.Unsettled() {
+	onDisk, ok, err := load(target, i.TaskID)
+	if err != nil {
+		return fmt.Errorf("the existing candidate record of %s cannot be read, so it is not overwritten: %w", i.TaskID, err)
+	}
+	if ok && onDisk.Unsettled() {
 		if q := dropsUnsettled(onDisk, i); q != nil {
 			return q
 		}
 	}
 	return writeRecord(target, i)
+}
+
+// NoteBaseline durably names, on the in-flight record of the task, the
+// baseline observation worktree an execution is about to run in (RULING-358
+// §10): it is written after the worktree exists and before the baseline
+// execution can acquire write authority over it, so a crash during
+// attribution leaves the baseline's identity on the record. It refuses when
+// no execution is in flight -- a baseline is never run outside the boundary.
+func NoteBaseline(repoRoot, taskID, baseline string) error {
+	recordMu.Lock()
+	defer recordMu.Unlock()
+	target := path(repoRoot, taskID)
+	id, ok, err := load(target, taskID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNoIdentity
+	}
+	if id.InFlight == nil {
+		return fmt.Errorf("candidate %s records no in-flight execution to bind the baseline %s to", taskID, baseline)
+	}
+	if id.InFlight.Baseline == baseline {
+		return nil
+	}
+	id.InFlight.Baseline = baseline
+	return writeRecord(target, id)
 }
 
 // dropsUnsettled reports the refusal for a write of next over a durable record

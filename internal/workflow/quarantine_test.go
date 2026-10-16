@@ -75,6 +75,11 @@ func TestAnUnresolvedBaselineQuarantinesTheTaskAndKeepsItsWorktree(t *testing.T)
 	if !strings.Contains(id.Resolution.Reason, u.Baseline) || !strings.Contains(id.Resolution.Reason, u.Invocation) {
 		t.Fatalf("the quarantine does not name the baseline workspace and the invocation: %q", id.Resolution.Reason)
 	}
+	// The baseline was named on the durable in-flight record before its
+	// execution started, so a crash during attribution keeps its identity.
+	if id.InFlight.Baseline != u.Baseline {
+		t.Fatalf("the in-flight record does not name the baseline workspace: %+v", id.InFlight)
+	}
 }
 
 // The in-flight boundary is durable BEFORE the confined command can act: the
@@ -171,6 +176,22 @@ func TestAnUnresolvedFinalValidationNeverReachesTheReviewer(t *testing.T) {
 	quarantinedRecord(t, h.engine.Repo.Root)
 	if _, statErr := os.Stat(h.work); statErr != nil {
 		t.Fatalf("the quarantined candidate's worktree is gone: %v", statErr)
+	}
+	// The quarantine's projection is a record the session ledger accepts: it
+	// is durably recorded, and the invocation was not fenced as a ledger
+	// fault for writing it.
+	history, err := h.engine.Store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorded := false
+	for _, ev := range history {
+		if ev.TaskID == "task-1" && ev.Kind == event.Status && strings.Contains(ev.Summary, "the candidate is durably quarantined") {
+			recorded = true
+		}
+	}
+	if !recorded {
+		t.Fatal("the quarantine was not recorded in the session ledger")
 	}
 }
 

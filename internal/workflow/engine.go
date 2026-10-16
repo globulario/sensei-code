@@ -13006,6 +13006,14 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 			return "", err
 		}
 		baselinePath = path
+		if requiresExecutionBoundary(runner) {
+			// The baseline is a workspace of the task: named durably on the
+			// in-flight record before its execution starts (RULING-358 §10).
+			// Unrecorded, no baseline runs; attribution reports it unavailable.
+			if err := candidate.NoteBaseline(e.Repo.Root, taskID, path); err != nil {
+				return "", fmt.Errorf("the baseline workspace could not be bound to the in-flight execution, so it is not run: %w", err)
+			}
+		}
 		return path, nil
 	}
 	defer func() {
@@ -13386,9 +13394,11 @@ func (e *Engine) boundedRun(ctx context.Context, taskID, phase, workspace string
 	} else {
 		u.Recorded = true
 	}
+	// Projected through the session ledger's existing vocabulary (an error):
+	// the durable candidate record above is the authority, and a new payload
+	// shape belongs to the recovery projection (P2), not to P1.
 	e.emitIn(ctx, event.New(e.SessionID, taskID, event.SourceSystem, event.Status, u.Error(),
-		map[string]any{"quarantine": map[string]any{"invocation": invocation, "phase": phase, "workspace": workspace,
-			"baseline": u.Baseline, "recorded": u.Recorded, "checks": unsettled}}))
+		map[string]any{"error": u.Error()}))
 	return u
 }
 
