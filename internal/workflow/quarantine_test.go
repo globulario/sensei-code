@@ -10,12 +10,14 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -709,6 +711,13 @@ func TestABoundaryThatFailedAfterItsWriteKeepsTheCandidateUnsettled(t *testing.T
 	if id.InFlight == nil || id.InFlight.Invocation != attempted {
 		t.Fatalf("the written boundary was cleared instead of protecting the candidate: %+v", id.InFlight)
 	}
+	// W14 (RULING-363 §7, §12). The locked record holds only this attempted
+	// boundary, with no baseline bound to it, and every other condition is
+	// established: the baseline no execution holds is removed, while the
+	// boundary itself stays on the record.
+	if _, statErr := os.Stat(observationPath(repo)); !os.IsNotExist(statErr) {
+		t.Fatalf("the baseline was not removed although only the unstarted boundary is recorded: %v", statErr)
+	}
 	refusesEverything(t, repo.Root, repo.Root)
 }
 
@@ -760,5 +769,135 @@ func TestAnUnreadableRecordKeepsTheBaselineAfterAPreStartFailure(t *testing.T) {
 	}
 	if st, statErr := os.Stat(observationPath(repo)); statErr != nil || !st.IsDir() {
 		t.Fatalf("a baseline was removed although the record's safety state was not established: %v", statErr)
+	}
+}
+
+func recordFile(root string) string {
+	return filepath.Join(root, ".sensei-code", "candidates", "task-1.json")
+}
+
+func assertBaselineKept(t *testing.T, repo gitx.Repo, err error, why string) {
+	t.Helper()
+	var stop *ExecutionBoundaryFailure
+	if !errors.As(err, &stop) || stop.Phase != "certify" || !errors.Is(err, errInjectedPreStart) {
+		t.Fatalf("premise: certification did not stop on its pre-start boundary failure: %v", err)
+	}
+	if st, statErr := os.Stat(observationPath(repo)); statErr != nil || !st.IsDir() {
+		t.Fatalf("%s, yet the baseline was removed: %v", why, statErr)
+	}
+}
+
+// W10 (RULING-363 §8, §12). The pre-start failure is the record lock being
+// held by an independent owner -- this test, through its own descriptor on
+// the disposable fixture's lock file -- and the locked read cannot acquire it
+// either (bounded by the record's lock wait): the durable state is not
+// established, so the baseline is kept.
+func TestALockHeldElsewhereKeepsTheBaseline(t *testing.T) {
+	e, repo, base, diff, _ := preStartRig(t)
+	var held *os.File
+	t.Cleanup(func() {
+		if held != nil {
+			_ = syscall.Flock(int(held.Fd()), syscall.LOCK_UN)
+			_ = held.Close()
+		}
+	})
+	injectPreStart(t, func(n int, root, _ string, _ candidate.InFlight) (candidate.Identity, error, bool) {
+		if n != 2 {
+			return candidate.Identity{}, nil, false
+		}
+		f, err := os.OpenFile(recordFile(root)+".lock", os.O_RDWR, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+			t.Fatal(err)
+		}
+		held = f
+		return candidate.Identity{}, errInjectedPreStart, true
+	})
+	_, _, err := e.validate(context.Background(), "task-1", base, broker.New(e.Config.Permissions), repo, diff, nil)
+	assertBaselineKept(t, repo, err, "the record lock was held elsewhere so no serialized read was possible")
+}
+
+// W11. The record's lock object has been replaced by a symlink: the locked
+// read refuses, the baseline is kept, and the record is not written.
+func TestAnInvalidLockObjectKeepsTheBaseline(t *testing.T) {
+	e, repo, base, diff, _ := preStartRig(t)
+	var before []byte
+	injectPreStart(t, func(n int, root, _ string, _ candidate.InFlight) (candidate.Identity, error, bool) {
+		if n != 2 {
+			return candidate.Identity{}, nil, false
+		}
+		lock := recordFile(root) + ".lock"
+		if err := os.Remove(lock); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(filepath.Join(t.TempDir(), "elsewhere"), lock); err != nil {
+			t.Fatal(err)
+		}
+		before, _ = os.ReadFile(recordFile(root))
+		return candidate.Identity{}, errInjectedPreStart, true
+	})
+	_, _, err := e.validate(context.Background(), "task-1", base, broker.New(e.Config.Permissions), repo, diff, nil)
+	assertBaselineKept(t, repo, err, "the lock object was invalid")
+	if after, _ := os.ReadFile(recordFile(repo.Root)); string(after) != string(before) {
+		t.Fatal("the record was written through an invalid lock object")
+	}
+}
+
+// W12. The locked record names another invocation's execution in flight:
+// the pre-start failure proves nothing about that execution, so the baseline
+// is kept and the record is left exactly as it is.
+func TestAnotherInvocationInFlightKeepsTheBaseline(t *testing.T) {
+	e, repo, base, diff, _ := preStartRig(t)
+	injectPreStart(t, func(n int, root, taskID string, _ candidate.InFlight) (candidate.Identity, error, bool) {
+		if n != 2 {
+			return candidate.Identity{}, nil, false
+		}
+		if _, err := candidate.BeginExecution(root, taskID, candidate.InFlight{Invocation: "exec-other", Phase: "certify", Workspace: root, Profile: "d2-v3"}); err != nil {
+			t.Fatal(err)
+		}
+		return candidate.Identity{}, errInjectedPreStart, true
+	})
+	_, _, err := e.validate(context.Background(), "task-1", base, broker.New(e.Config.Permissions), repo, diff, nil)
+	assertBaselineKept(t, repo, err, "another invocation is recorded in flight")
+	if id, _, _ := candidate.Load(repo.Root, "task-1"); id.InFlight == nil || id.InFlight.Invocation != "exec-other" {
+		t.Fatalf("the other invocation's record was not preserved: %+v", id.InFlight)
+	}
+}
+
+// W13 (RULING-363 §11). The pre-start error is NOT ErrQuarantined, so the
+// type gate admits it to the durable check; the locked record is
+// quarantined (a trusted fixture writes that recorded state, with no
+// execution in flight, so only the quarantine check can refuse). The
+// baseline is kept, the quarantine is not overwritten, the typed stop
+// stands.
+func TestADurableQuarantineKeepsTheBaselineAfterAPreStartFailure(t *testing.T) {
+	e, repo, base, diff, _ := preStartRig(t)
+	var before []byte
+	injectPreStart(t, func(n int, root, taskID string, _ candidate.InFlight) (candidate.Identity, error, bool) {
+		if n != 2 {
+			return candidate.Identity{}, nil, false
+		}
+		id, _, err := candidate.Load(root, taskID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id.InFlight = nil
+		id.Resolution = &candidate.Resolution{Disposition: candidate.Quarantined, Reason: "an earlier unresolved execution", DecidedAt: time.Now().UTC()}
+		body, err := json.MarshalIndent(id, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(recordFile(root), body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		before = body
+		return candidate.Identity{}, errInjectedPreStart, true
+	})
+	_, _, err := e.validate(context.Background(), "task-1", base, broker.New(e.Config.Permissions), repo, diff, nil)
+	assertBaselineKept(t, repo, err, "the durable record is quarantined")
+	if after, _ := os.ReadFile(recordFile(repo.Root)); string(after) != string(before) {
+		t.Fatal("the quarantine was overwritten")
 	}
 }

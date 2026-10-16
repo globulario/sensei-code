@@ -207,6 +207,32 @@ func Load(repoRoot, taskID string) (Identity, bool, error) {
 	return load(path(repoRoot, taskID), taskID)
 }
 
+// LoadLocked reads the identity inside one record transaction (withRecord):
+// under the in-process mutex and the record's cross-process lock, released
+// on return, writing nothing (RULING-363 §3-§4). It is the authoritative,
+// serialized observation a safety decision needs; ordinary reads keep Load.
+// A record that is absent is reported as such (false, nil); one that cannot
+// be read, a lock that cannot be acquired, a lock object that is not the
+// expected regular file, and a platform with no cross-process lock are
+// errors -- never an empty, settled record.
+func LoadLocked(repoRoot, taskID string) (Identity, bool, error) {
+	if !crossProcessLock {
+		return Identity{}, false, ErrNoCrossProcessLock
+	}
+	target := path(repoRoot, taskID)
+	var id Identity
+	var ok bool
+	err := withRecord(target, func() error {
+		var err error
+		id, ok, err = load(target, taskID)
+		return err
+	})
+	if err != nil {
+		return Identity{}, false, err
+	}
+	return id, ok, nil
+}
+
 func load(target, taskID string) (Identity, bool, error) {
 	body, err := os.ReadFile(target)
 	if os.IsNotExist(err) {

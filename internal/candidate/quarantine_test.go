@@ -337,3 +337,56 @@ func TestOrdinaryUpdatesStillWorkAroundASettledExecution(t *testing.T) {
 		t.Fatalf("an ordinary resolution of a settled record failed: %v", err)
 	}
 }
+
+// RULING-363 §3-§4. LoadLocked reads inside one record transaction and
+// writes nothing: a present record is returned as it is, an absent one as
+// absent, and every way the serialized observation cannot be made -- an
+// unreadable record, a lock held elsewhere, a lock object that is not the
+// expected regular file -- is an error, never an empty settled record.
+func TestLoadLockedIsASerializedReadOnlyObservation(t *testing.T) {
+	root, id := recorded(t)
+	target := path(root, "task-1")
+	before, _ := os.ReadFile(target)
+	got, ok, err := LoadLocked(root, "task-1")
+	if err != nil || !ok || got.BaseSHA != id.BaseSHA {
+		t.Fatalf("a present record was not returned: %+v %v %v", got, ok, err)
+	}
+	if after, _ := os.ReadFile(target); string(after) != string(before) {
+		t.Fatal("the locked read wrote the record")
+	}
+	if _, ok, err := LoadLocked(root, "task-absent"); ok || err != nil {
+		t.Fatalf("an absent record was not reported as absent: %v %v", ok, err)
+	}
+
+	saved := lockWait
+	lockWait = 200 * time.Millisecond
+	t.Cleanup(func() { lockWait = saved })
+	unlock, err := lockRecord(target + ".lock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := LoadLocked(root, "task-1"); !errors.Is(err, errLockTimeout) {
+		t.Fatalf("a read was made while another holder kept the record lock: %v", err)
+	}
+	unlock()
+
+	if err := os.Remove(target + ".lock"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(t.TempDir(), "elsewhere"), target+".lock"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := LoadLocked(root, "task-1"); err == nil {
+		t.Fatal("a read was made through a symlinked lock object")
+	}
+	if err := os.Remove(target + ".lock"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(target, []byte("{torn"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := LoadLocked(root, "task-1"); err == nil {
+		t.Fatal("an unreadable record was returned as a record")
+	}
+}

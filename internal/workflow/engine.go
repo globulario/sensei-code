@@ -13446,19 +13446,25 @@ var beginExecution = candidate.BeginExecution
 // baselineFreeAfterPreStart reports whether a batch that failed with err
 // leaves the baseline free for its ordinary removal (RULING-362 §6-§9): only
 // when no execution of that batch started, and the durable record -- read
-// now, not recalled -- shows nothing protecting it: no quarantine, and no
+// now under its lock, not recalled -- shows nothing protecting it: no quarantine, and no
 // execution in flight other than the boundary this very batch attempted,
 // naming no baseline (a boundary written before its own durability step
 // failed stays on the record and keeps the candidate unsettled; only the
 // baseline decision is made here). Every earlier batch of the validation
 // settled proven, or the validation would have stopped there. An unreadable,
-// missing or contradictory record keeps the baseline.
+// missing or contradictory record, or one that cannot be read under its lock,
+// keeps the baseline.
 func (e *Engine) baselineFreeAfterPreStart(taskID string, err error) bool {
 	f, ok := err.(*ExecutionBoundaryFailure)
 	if !ok || !f.notStarted {
 		return false
 	}
-	id, found, loadErr := candidate.Load(e.Repo.Root, taskID)
+	// The record is read under its own serialization authority, not as a
+	// bare snapshot: a lock that cannot be acquired -- perhaps the very cause
+	// of the pre-start failure -- leaves the state unestablished, and the
+	// baseline is kept (RULING-363 §2, §8). The task's invocation lease, held
+	// by this validation, keeps that observation current until the removal.
+	id, found, loadErr := candidate.LoadLocked(e.Repo.Root, taskID)
 	if loadErr != nil || !found {
 		return false
 	}
