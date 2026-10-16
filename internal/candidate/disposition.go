@@ -180,7 +180,13 @@ func (i Identity) Resolve(repoRoot string, r Resolution) (Identity, error) {
 	// One transaction against the durable record (RULING-360 §10): no ordinary
 	// resolution is recorded over a record that is unsettled -- an execution
 	// in flight or a quarantine -- whatever the caller's copy says.
+	//
+	// The durable record, not this receiver, is the transition input
+	// (RULING-361 §10): a resolution owns only the disposition, so the
+	// receiver's protected lifecycle state -- an execution it saw in flight
+	// before that execution settled -- is never written back.
 	target := path(repoRoot, i.TaskID)
+	out := i
 	err := withRecord(target, func() error {
 		onDisk, ok, err := load(target, i.TaskID)
 		if err != nil {
@@ -189,13 +195,23 @@ func (i Identity) Resolve(repoRoot string, r Resolution) (Identity, error) {
 		if ok && onDisk.Unsettled() {
 			return onDisk.Quarantine()
 		}
-		i.Resolution = &r
-		return writeRecord(target, i)
+		next := i
+		if ok {
+			next = onDisk
+		} else if err := mintsProtected(Identity{}, i); err != nil {
+			return err
+		}
+		next.Resolution = &r
+		if err := writeRecord(target, next); err != nil {
+			return err
+		}
+		out = next
+		return nil
 	})
 	if err != nil {
 		return i, err
 	}
-	return i, nil
+	return out, nil
 }
 
 // QuarantineExecution durably records that the task's confined execution

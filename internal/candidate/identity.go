@@ -284,8 +284,35 @@ func (i Identity) Save(repoRoot string) error {
 				return q
 			}
 		}
+		if err := mintsProtected(onDisk, i); err != nil {
+			return err
+		}
 		return writeRecord(target, i)
 	})
+}
+
+// errProtectedState refuses an ordinary write that would introduce protected
+// execution lifecycle state the durable record does not hold.
+var errProtectedState = errors.New("an ordinary write cannot introduce protected execution state")
+
+// mintsProtected enforces the single authority over the protected lifecycle
+// state (RULING-361 §9-§10): only BeginExecution introduces an execution in
+// flight and only QuarantineExecution records a quarantine. An ordinary write
+// may carry the exact durable state (dropsUnsettled) but never mint one the
+// durable record -- durable, possibly absent -- does not hold, so a copy
+// loaded before a settlement cannot bring the settled execution back.
+func mintsProtected(durable, next Identity) error {
+	if next.InFlight != nil && durable.InFlight == nil {
+		return fmt.Errorf("%w: candidate %s has no execution in flight, so %s is not recorded by an ordinary write", errProtectedState, next.TaskID, next.InFlight.Invocation)
+	}
+	if quarantined(next) && !quarantined(durable) {
+		return fmt.Errorf("%w: candidate %s is not quarantined, and a quarantine is recorded only by QuarantineExecution", errProtectedState, next.TaskID)
+	}
+	return nil
+}
+
+func quarantined(i Identity) bool {
+	return i.Resolution != nil && i.Resolution.Disposition == Quarantined
 }
 
 // NoteBaseline durably names, on the in-flight record of exactly this

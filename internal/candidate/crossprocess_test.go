@@ -231,3 +231,27 @@ func TestAnInvalidLockObjectRefusesWithoutWriting(t *testing.T) {
 		t.Fatal("the record was overwritten")
 	}
 }
+
+// S7 (RULING-361 §12). Another process loaded the record while A's execution
+// was in flight; A settles; B's ordinary save and B's ordinary resolution
+// arrive afterwards. Neither resurrects the settled execution.
+func TestAnotherProcessCannotResurrectASettledExecution(t *testing.T) {
+	for _, action := range []string{"stale-save", "stale-resolve"} {
+		t.Run(action, func(t *testing.T) {
+			root, _ := recorded(t)
+			if _, err := BeginExecution(root, "task-1", inflight("exec-1")); err != nil {
+				t.Fatal(err)
+			}
+			b := startHelper(t, action, root, "b")
+			waitFor(filepath.Join(root, "loaded-b"))
+			if _, err := SettleExecution(root, "task-1", "exec-1"); err != nil {
+				t.Fatal(err)
+			}
+			os.WriteFile(filepath.Join(root, "go"), nil, 0o644)
+			res := resultOf(t, b, root, "b")
+			if fresh, _, _ := Load(root, "task-1"); fresh.InFlight != nil {
+				t.Fatalf("another process resurrected a settled execution (%s: %q): %+v", action, res, fresh.InFlight)
+			}
+		})
+	}
+}

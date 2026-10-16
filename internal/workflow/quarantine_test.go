@@ -205,6 +205,17 @@ func TestABaselineThatCannotBeBoundNeverRuns(t *testing.T) {
 	if _, statErr := os.Stat(marker); statErr == nil {
 		t.Fatal("a baseline execution ran without a durable binding to the in-flight invocation")
 	}
+	// B5 (RULING-361 §7). The batch's settlement could not be established
+	// either, so nothing proves the workspace is free: the baseline is kept.
+	if st, statErr := os.Stat(observationPath(repo)); statErr != nil || !st.IsDir() {
+		t.Fatalf("a baseline whose batch never settled was removed: %v", statErr)
+	}
+}
+
+// observationPath is the deterministic baseline observation worktree of
+// task-1 (gitx.CreateObservationWorktree).
+func observationPath(repo gitx.Repo) string {
+	return repo.WorktreePath("task-1-baseline") + "-observe"
 }
 
 // C1-F2, the conversion (RULING-360 §5; independent review finding 1). The
@@ -236,6 +247,60 @@ func TestAFailedBaselineBindingAloneEndsOnTheBoundaryStop(t *testing.T) {
 	}
 	if fresh, _, _ := candidate.Load(repo.Root, "task-1"); fresh.InFlight != nil {
 		t.Fatalf("the batch's own boundary did not settle, so the stop is not the binding's: %+v", fresh.InFlight)
+	}
+	// B1 (RULING-361 §7). No baseline ran and the batch settled: the detached
+	// observation worktree no execution holds is removed, not retained.
+	if _, statErr := os.Stat(observationPath(repo)); !os.IsNotExist(statErr) {
+		t.Fatalf("an unbound baseline that never ran was retained after its batch settled: %v", statErr)
+	}
+	// B2. A second validation of the task recreates the same deterministic
+	// observation worktree and runs its baseline, bound, normally.
+	e.Config.Validation.Vet = []config.Command{{Command: "sh", Args: []string{"-c", "exit 1"}}}
+	e.Config.Validation.Test = nil
+	if _, _, err := e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, before.Diff, nil); err != nil {
+		t.Fatalf("the next validation could not recreate the observation worktree: %v", err)
+	}
+	if _, statErr := os.Stat(marker); statErr != nil {
+		t.Fatal("the next validation did not run its bound baseline")
+	}
+}
+
+// B3 (RULING-361 §5, §7). The formatter's baseline execution ran, proven and
+// settled; certification then fails to bind the cached baseline, and its
+// batch settles. No later baseline ran, nothing is unresolved, so the
+// baseline is removed -- the earlier settled execution holds no workspace.
+func TestASettledEarlierBaselineDoesNotKeepAnUnboundOne(t *testing.T) {
+	marker := t.TempDir() + "/baseline-runs"
+	launcher := "#!/bin/sh\nread nonce <&5\nexec 5<&-\nif [ \"$SENSEI_CONFINE_ROLE\" = baseline ]; then echo run >> '" + marker + "'; fi\n" +
+		"while [ \"$1\" != \"--\" ]; do shift; done\nshift\n\"$@\" 3<&- 4>&-\nrc=$?\necho \"" + validation.StatusProtocol + " $nonce ran $rc\" >&4\nexit $rc\n"
+	e, repo, base := confinedFormattingRig(t, launcher)
+	candidates := repo.Root + "/.sensei-code/candidates"
+	t.Cleanup(func() { _ = os.Chmod(candidates, 0o755) })
+	e.Config.Validation.Format = []config.Command{{Command: "sh", Args: []string{"-c", "exit 1"}}}
+	e.Config.Validation.FormatVerify = nil
+	e.Config.Validation.Test = []config.Command{
+		{Command: "sh", Args: []string{"-c", "chmod 555 .sensei-code/candidates; exit 1"}},
+		{Command: "sh", Args: []string{"-c", "chmod 755 .sensei-code/candidates; exit 0"}},
+	}
+	e.Config.Permissions.RunTests = true
+	ctx := context.Background()
+	before, err := repo.CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, before.Diff, nil)
+	var stop *ExecutionBoundaryFailure
+	if !errors.As(err, &stop) || stop.Phase != "certify" {
+		t.Fatalf("premise: certification's failed binding did not end on its boundary stop: %v", err)
+	}
+	if runs, _ := os.ReadFile(marker); strings.Count(string(runs), "run") != 1 {
+		t.Fatalf("premise: exactly the formatter's baseline should have run, ran %q", runs)
+	}
+	if fresh, _, _ := candidate.Load(repo.Root, "task-1"); fresh.Unsettled() {
+		t.Fatalf("premise: the batches did not settle: %+v", fresh)
+	}
+	if _, statErr := os.Stat(observationPath(repo)); !os.IsNotExist(statErr) {
+		t.Fatalf("a baseline whose only execution was proven and settled was retained: %v", statErr)
 	}
 }
 

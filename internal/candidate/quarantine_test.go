@@ -238,3 +238,102 @@ func TestTheRecordIsReplacedAtomically(t *testing.T) {
 		t.Fatalf("the listing does not see exactly one record: %v %v", list, err)
 	}
 }
+
+// S1 (RULING-361 §12). A copy loaded while an execution was in flight is
+// saved after that execution settled: the write is refused and the durable
+// record stays settled -- no fabricated unresolved execution appears.
+func TestAStaleSaveCannotResurrectASettledExecution(t *testing.T) {
+	root, _ := recorded(t)
+	if _, err := BeginExecution(root, "task-1", inflight("exec-1")); err != nil {
+		t.Fatal(err)
+	}
+	stale, _, _ := Load(root, "task-1")
+	if _, err := SettleExecution(root, "task-1", "exec-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := stale.Save(root); err == nil {
+		t.Fatal("a stale copy re-introduced a settled execution")
+	}
+	if _, err := stale.BindGraph(root, "g", "s"); err == nil {
+		t.Fatal("a stale BindGraph re-introduced a settled execution")
+	}
+	if fresh, _, _ := Load(root, "task-1"); fresh.Unsettled() {
+		t.Fatalf("a settled execution was resurrected: %+v", fresh.InFlight)
+	}
+}
+
+// S2. A stale resolution after settlement records its disposition on the
+// durable record and cannot carry the settled execution back with it.
+func TestAStaleResolveCannotResurrectASettledExecution(t *testing.T) {
+	root, _ := recorded(t)
+	if _, err := BeginExecution(root, "task-1", inflight("exec-1")); err != nil {
+		t.Fatal(err)
+	}
+	stale, _, _ := Load(root, "task-1")
+	if _, err := SettleExecution(root, "task-1", "exec-1"); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := stale.Resolve(root, Resolution{Disposition: Resumable, Reason: "ordinary path"})
+	fresh, _, _ := Load(root, "task-1")
+	if fresh.InFlight != nil || resolved.InFlight != nil {
+		t.Fatalf("a stale resolution resurrected a settled execution: durable %+v, returned %+v", fresh.InFlight, resolved.InFlight)
+	}
+	if err != nil || fresh.Resolution == nil || fresh.Resolution.Disposition != Resumable {
+		t.Fatalf("the ordinary resolution of a settled record was not recorded: %v %+v", err, fresh.Resolution)
+	}
+}
+
+// S4. An ordinary save cannot introduce a quarantine: only
+// QuarantineExecution records one.
+func TestAnOrdinarySaveCannotIntroduceAQuarantine(t *testing.T) {
+	root, id := recorded(t)
+	id.Resolution = &Resolution{Disposition: Quarantined, Reason: "minted by an ordinary write", DecidedAt: time.Now().UTC()}
+	if err := id.Save(root); err == nil {
+		t.Fatal("an ordinary save introduced a quarantine")
+	}
+	if fresh, _, _ := Load(root, "task-1"); fresh.Unsettled() {
+		t.Fatalf("the durable record was quarantined by an ordinary write: %+v", fresh.Resolution)
+	}
+}
+
+// An ordinary save cannot introduce an execution in flight either: only
+// BeginExecution does, and a first record cannot be born unsettled.
+func TestAnOrdinarySaveCannotIntroduceAnExecution(t *testing.T) {
+	root, id := recorded(t)
+	f := inflight("exec-minted")
+	id.InFlight = &f
+	if err := id.Save(root); err == nil {
+		t.Fatal("an ordinary save introduced an execution in flight")
+	}
+	other := id
+	other.TaskID = "task-2"
+	if err := other.Save(root); err == nil {
+		t.Fatal("a new record was born with an execution in flight")
+	}
+	if fresh, _, _ := Load(root, "task-1"); fresh.Unsettled() {
+		t.Fatalf("the durable record gained an execution by an ordinary write: %+v", fresh.InFlight)
+	}
+}
+
+// S8. Ordinary identity updates are unchanged where no protected transition
+// is involved: a copy taken before an execution, or a fresh one after it
+// settled, saves, binds and resolves normally.
+func TestOrdinaryUpdatesStillWorkAroundASettledExecution(t *testing.T) {
+	root, before := recorded(t)
+	if _, err := BeginExecution(root, "task-1", inflight("exec-1")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SettleExecution(root, "task-1", "exec-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := before.BindGraph(root, "g", "s"); err != nil {
+		t.Fatalf("a pre-execution copy could not bind its graph after settlement: %v", err)
+	}
+	fresh, _, _ := Load(root, "task-1")
+	if fresh.GraphBuildCommit != "g" {
+		t.Fatalf("the ordinary field was not written: %+v", fresh)
+	}
+	if _, err := fresh.Resolve(root, Resolution{Disposition: Retained, Reason: "kept for review"}); err != nil {
+		t.Fatalf("an ordinary resolution of a settled record failed: %v", err)
+	}
+}

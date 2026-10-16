@@ -13045,14 +13045,18 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 			return b.Checks
 		}, func() string { return baselinePath })
 		currentInvocation = ""
-		if err == nil && bindFailure != nil {
-			// No baseline ran unbound; the batch still ends on the typed
-			// safety stop, with the baseline worktree kept (RULING-360 §5).
+		if err != nil {
+			// The batch did not settle -- an unresolved teardown, a boundary
+			// that could not be recorded or settled: nothing proves the
+			// baseline free, so it is kept (RULING-361 §4).
+			keepBaseline = true
+		} else if bindFailure != nil {
+			// No baseline ran unbound and the batch settled through its
+			// trusted settlement: the batch still ends on the typed safety
+			// stop (RULING-360 §5), but no execution holds the baseline, so
+			// its ordinary removal runs (RULING-361 §4-§5).
 			err = &ExecutionBoundaryFailure{TaskID: taskID, Phase: phase,
 				Err: fmt.Errorf("a baseline execution could not be bound to the in-flight invocation, so it did not run: %w", bindFailure)}
-		}
-		if err != nil {
-			keepBaseline = true
 		}
 		return b, err
 	}
