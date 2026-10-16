@@ -294,9 +294,16 @@ func TestL12AnUnverifiedPayloadStaysUnverified(t *testing.T) {
 			t.Errorf("%s: an unverified quarantine must not explain candidate_state UNKNOWN as complete", name)
 		}
 	}
-	rec := stream(quarantineEvent(p))
+	// The exact unverified shape is UNKNOWN carrying the read failure; one
+	// carrying members the unverified variant does not declare is MALFORMED
+	// (RULING-370 B6), and neither promotes them.
+	rec := stream(quarantineEvent(unverifiedPayload()))
 	if q := quarantineOf(t, rec); q.State != runreceipt.Unknown || !strings.Contains(q.Detail, "permission denied") {
 		t.Errorf("recorded=false: observation = %+v, want UNKNOWN carrying the read failure", q)
+	}
+	rec = stream(quarantineEvent(p))
+	if q := quarantineOf(t, rec); q.State != runreceipt.Malformed || !strings.Contains(q.Detail, "invocation") {
+		t.Errorf("recorded=false with verified members: observation = %+v, want MALFORMED naming them", q)
 	}
 }
 
