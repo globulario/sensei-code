@@ -12,9 +12,12 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/globulario/sensei-code/internal/agent"
 	"github.com/globulario/sensei-code/internal/broker"
@@ -23,6 +26,7 @@ import (
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/session"
 	"github.com/globulario/sensei-code/internal/validation"
 )
 
@@ -410,5 +414,87 @@ func TestTheExecutionServiceRefusesAQuarantinedTask(t *testing.T) {
 	var q *candidate.ErrQuarantined
 	if _, err := r.e.startImplementerExec(fixtureCtx(r.e, n3Task), n3Task, r.work, n3Runner); !errors.As(err, &q) {
 		t.Fatalf("a service was bound to a quarantined task: %v", err)
+	}
+}
+
+// RULING-360 §12. The candidate record's lock serializes record transactions,
+// not task operations. What keeps a second process from acting on a task's
+// worktree after its safety check went stale is the task's INVOCATION LEASE
+// (session.Store.AcquireTaskInvocation): one kernel lock per task at the
+// repository's level, taken by Run (openRun) and Resume (ResumeTask) before
+// either reaches implement or validate, and held until the invocation ends.
+// TestHelperLeaseHolder is the other process: it holds the lease as a live
+// invocation of the task would.
+func TestHelperLeaseHolder(t *testing.T) {
+	root := os.Getenv("N5_LEASE_ROOT")
+	if root == "" {
+		t.Skip("helper")
+	}
+	store, err := session.New(root, "session-holder")
+	if err != nil {
+		os.Exit(3)
+	}
+	lease, err := store.AcquireTaskInvocation(context.Background(), "t-lease")
+	if err != nil {
+		os.Exit(4)
+	}
+	_ = lease
+	os.WriteFile(filepath.Join(root, "leased"), nil, 0o644)
+	time.Sleep(time.Minute)
+	os.Exit(0)
+}
+
+func TestAnotherProcessCannotOperateATaskWhoseInvocationIsLive(t *testing.T) {
+	root := t.TempDir()
+	child := exec.Command(os.Args[0], "-test.run=^TestHelperLeaseHolder$")
+	child.Env = append(os.Environ(), "N5_LEASE_ROOT="+root)
+	if err := child.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = child.Process.Kill(); _ = child.Wait() })
+	for i := 0; i < 4000; i++ {
+		if _, err := os.Stat(filepath.Join(root, "leased")); err == nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	for _, sessionID := range []string{"session-holder", "session-fresh"} {
+		store, err := session.New(root, sessionID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.AcquireTaskInvocation(t.Context(), "t-lease"); !errors.Is(err, session.ErrTaskInvocationLeased) {
+			t.Fatalf("%s: a second invocation of a task another process is running was not refused: %v", sessionID, err)
+		}
+	}
+	// The kernel ends the lease with its holder, so a crash leaves the task
+	// resumable -- and the resumer then meets the durable record's gates.
+	_ = child.Process.Kill()
+	_ = child.Wait()
+	store, _ := session.New(root, "session-holder")
+	lease, err := store.AcquireTaskInvocation(t.Context(), "t-lease")
+	if err != nil {
+		t.Fatalf("the lease of a dead holder was not released: %v", err)
+	}
+	lease.Release()
+
+	// Both entries take the lease before any worktree operation.
+	src, err := os.ReadFile("engine.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(src)
+	run := s[strings.Index(s, "func (e *Engine) openRun("):]
+	run = run[:strings.Index(run, "\n}\n")]
+	if !strings.Contains(run, "e.leaseInvocation(leaseCtx, inv, e.Store, event.TaskCreated)") {
+		t.Fatal("Run does not take the task's invocation lease when it opens")
+	}
+	if open, impl := strings.Index(s, "inv, ok := e.openRun(ctx, taskID, task)"), strings.Index(s, "e.implement(ctx, sc, start, taskID, &tc, plan, \"\", fail)"); open < 0 || impl < 0 || open > impl {
+		t.Fatalf("Run reaches implement before it opens its leased invocation (%d, %d)", open, impl)
+	}
+	resume := s[strings.Index(s, "func (e *Engine) ResumeTask("):]
+	lease2, impl2 := strings.Index(resume, "e.leaseInvocation(ctx, inv, e.Store, session.SessionLineageBound)"), strings.Index(resume, "e.implement(ctx, sc, start, task.TaskID, &tc, plan, carried, fail)")
+	if lease2 < 0 || impl2 < 0 || lease2 > impl2 {
+		t.Fatalf("Resume reaches implement before it takes the task's lease (%d, %d)", lease2, impl2)
 	}
 }
