@@ -233,7 +233,7 @@ func TestAnInterruptedExecutionIsUnsettledAfterRestart(t *testing.T) {
 // root against task-1's durable record.
 func refusesEverything(t *testing.T, root, worktree string) {
 	t.Helper()
-	fresh := &Engine{Repo: gitx.Repo{Root: root}, Bus: event.NewBus()}
+	fresh := &Engine{Repo: gitx.Repo{Root: root}, Bus: event.NewBus(), SessionID: "session-fresh"}
 	ctx := context.Background()
 	var q *candidate.ErrQuarantined
 	if err := fresh.resumePrecondition(ctx, "task-1"); !errors.As(err, &q) {
@@ -246,9 +246,14 @@ func refusesEverything(t *testing.T, root, worktree string) {
 	if seen := observeInherited(ctx, id); !errors.As(seen.Err, &q) {
 		t.Fatalf("an unsettled candidate was observed: %+v", seen)
 	}
+	// Disposal speaks on behalf of an admitted invocation of the task, as the
+	// run does: a durable record and the task's root, so its refusal is
+	// published where this witness can read it.
+	withFixtureStore(t, fresh)
+	rootFixtureTaskOnce(t, fresh, "task-1", "task")
 	events, cancel := fresh.Bus.Subscribe(64)
 	defer cancel()
-	fresh.disposeIfEmpty(ctx, "task-1", id, &taskContext{}, worktree, "nothing produced")
+	fresh.disposeIfEmpty(fixtureCtx(fresh, "task-1"), "task-1", id, &taskContext{}, worktree, "nothing produced")
 	if _, err := os.Stat(worktree); err != nil {
 		t.Fatalf("an unsettled candidate's worktree was removed: %v", err)
 	}
