@@ -903,3 +903,198 @@ func TestASubjectIsAnythingTheClassifierDoesNotKnow(t *testing.T) {
 		}
 	}
 }
+
+// --- F4a: AN INCIDENTAL "TO PRODUCTION" IS NOT A DECLARED OUTWARD ACTION ----
+//
+// Two architects planning the same in-worktree fixture repair wrote that they
+// would bring the fixtures "to production evidence shape", and each plan was
+// parked at a human question about a deployment nobody proposed. "to
+// production" was its only outward match. The phrase stays, because it is the
+// only match for a real deployment worded without a listed verb; what changes
+// is that THIS occurrence, read as a quality standard, is not a declaration.
+
+// f4aR1Step0 is step 0 of attempt e3d912a97f5d (task-1791579822131338712), verbatim.
+const f4aR1Step0 = "Bring the five existing test fixtures to production evidence shape first: add bundle and per-check candidate binding and remove every assumption that an ExecutedBy string authenticates the producer."
+
+// f4aR2Step0 is step 0 of attempt 1e4c829fe563 (task-1791644041512476630), verbatim.
+const f4aR2Step0 = "Bring all affected workflow fixtures to production evidence shape by supplying bundle and per-check candidate bindings before adding stricter guards; do not compare or trust ExecutedBy."
+
+// f4aOutwardStep is a genuine outward step with a listed verb.
+const f4aOutwardStep = "then deploy the binary to production"
+
+func f4aAssess(steps ...string) ConsequenceAssessment {
+	return AssessConsequences(Action{Stage: StageCandidateEdit, Files: []string{"internal/workflow/engine.go"}, DeclaredSteps: steps})
+}
+
+func f4aBounded(t *testing.T, step string) {
+	t.Helper()
+	if got := declaredOutwardActions([]string{step}, ""); len(got) != 0 {
+		t.Fatalf("%q was read as declaring an outward action %v: it describes a production-quality standard for in-worktree material", step, got)
+	}
+	if a := f4aAssess(step); a.Result != ConsequenceBounded {
+		t.Fatalf("%q assessed %s (%v), want BOUNDED", step, a.Result, a.Effects)
+	}
+}
+
+func f4aOutward(t *testing.T, step string) {
+	t.Helper()
+	if got := declaredOutwardActions([]string{step}, ""); len(got) == 0 {
+		t.Errorf("UNDER-ESCALATION: %q declares an outward action and was not read as one", step)
+	}
+	if a := f4aAssess(step); a.Result != ConsequenceUnacceptable {
+		t.Errorf("UNDER-ESCALATION: %q assessed %s, want UNACCEPTABLE", step, a.Result)
+	}
+}
+
+// W1: the r1 sentence declares no outward action.
+func TestF4aW1R1FixtureStandardIsNotAnOutwardAction(t *testing.T) {
+	f4aBounded(t, f4aR1Step0)
+}
+
+// W2: the r2 sentence declares no outward action.
+func TestF4aW2R2FixtureStandardIsNotAnOutwardAction(t *testing.T) {
+	f4aBounded(t, f4aR2Step0)
+}
+
+// W3: a listed verb to production.
+func TestF4aW3DeployTheBinaryToProductionIsOutward(t *testing.T) {
+	f4aOutward(t, "deploy the binary to production")
+}
+
+// W4.
+func TestF4aW4PushToProductionIsOutward(t *testing.T) {
+	f4aOutward(t, "push to production")
+}
+
+// W5.
+func TestF4aW5ReleaseToProductionIsOutward(t *testing.T) {
+	f4aOutward(t, "release to production")
+}
+
+// W6: polarity is unchanged. A negated deploy is bounded; a doubly negated one
+// is asserted.
+func TestF4aW6NegationParityIsUnchanged(t *testing.T) {
+	if got := declaredOutwardActions([]string{"the run must never deploy to production"}, ""); len(got) != 0 {
+		t.Fatalf("a negated deploy was read as an outward action: %v", got)
+	}
+	f4aOutward(t, "the run cannot avoid a deploy to production")
+}
+
+// W7: every sentence whose ONLY outward match is "to production" stays outward.
+// These are the under-escalation counterexamples: no listed verb, the same verb
+// as the specimen, and "production" used attributively on an outward noun.
+func TestF4aW7AmbiguousToProductionStaysOutward(t *testing.T) {
+	for _, s := range []string{
+		"ship the binary to production",
+		"roll the change out to production",
+		"promote the build to production",
+		"bring the service to production",
+		"move the fixtures to production servers",
+		"apply the config to production hosts",
+		"take the new parser to production",
+		// A quality-standard noun that is not where its phrase ends.
+		"ship the binary to production grade servers",
+		// A quality noun outside the phrase "to production" ends: a separate
+		// coordinated predicate, or a prepositional phrase.
+		"ship the binary to production and check parity",
+		"take the new parser to production for quality",
+		"ship the binary to production with fidelity",
+		"take the new parser to production then verify parity",
+	} {
+		f4aOutward(t, s)
+	}
+}
+
+// W8: the publish stage is a structural boundary, whatever the plan says. With
+// the fixture wording no longer read as a declaration, it is the stage itself
+// that answers UNACCEPTABLE, and names its own boundary.
+func TestF4aW8PublishStageKeepsItsStructuralBoundary(t *testing.T) {
+	for _, step := range []string{f4aR1Step0, f4aR2Step0} {
+		a := AssessConsequences(Action{Stage: StagePublish, Files: []string{"internal/workflow/engine.go"}, DeclaredSteps: []string{step}})
+		if a.Result != ConsequenceUnacceptable || a.Boundary != "none established: this stage is what makes a change observable outside the repository" {
+			t.Fatalf("a publish-stage action lost its structural boundary under fixture wording: %s %q", a.Result, a.Boundary)
+		}
+	}
+}
+
+// W9: the suppression binds only its own occurrence. A plan carrying the
+// fixture wording AND a genuine outward step escalates, in a separate step or
+// in the same clause.
+func TestF4aW9SuppressionBindsOnlyItsOwnOccurrence(t *testing.T) {
+	if a := f4aAssess(f4aR2Step0, f4aOutwardStep); a.Result != ConsequenceUnacceptable {
+		t.Fatalf("a genuine outward step beside the fixture wording assessed %s", a.Result)
+	}
+	for _, s := range []string{
+		"bring the fixtures to production evidence shape first and ship the binary to production",
+		"ship the binary to production and bring the fixtures to production evidence shape first",
+	} {
+		if got := declaredOutwardActions([]string{s}, ""); len(got) != 1 || got[0] != "to production" {
+			t.Fatalf("%q: one suppressed occurrence cleared another: %v", s, got)
+		}
+	}
+}
+
+// f4aR2Plan is attempt 1e4c829fe563 as the run recorded it (F4-replay-r2/plans.json).
+func f4aR2Plan() Action {
+	return Action{
+		Stage: StageCandidateEdit,
+		Files: []string{"internal/workflow/engine.go", "internal/roles/verdict.go", "internal/workflow/reviewconsistency_test.go",
+			"internal/workflow/finding_accounting_test.go", "internal/workflow/nonconvergence_test.go", "internal/workflow/engine_test.go",
+			"internal/roles/roles_test.go"},
+		DeclaredSteps: []string{
+			f4aR2Step0,
+			"Add TestTD1S1W1 through TestTD1S1W6 around the shared accounting, retention, read-back, and replay paths, covering citation mismatch, wrong candidate, unauthorized provenance, missing check, incomplete or wrong outcome, unrelated proof, and prose-only negative controls.",
+			"Replace exact citation equality with canonical matching between the finding obligation and an engine-owned broker check definition, requiring whole-bundle certification and returning distinct existing accounting reasons for missing, inapplicable, unauthorized, incomplete, or proposition-mismatched evidence.",
+			"Build retained evidence only from the matched canonical broker execution, retain its canonical command rather than the worker citation, and require candidate-bound, integrity-preserving, authenticated durable read-back before discharge.",
+			"Update Finding.Line so Correction and ProofGap are both visible when both are set, and add TestTD1S1W7 directly in internal/roles/roles_test.go to prove the rendered requirement equals the matcher input.",
+			"Add TestTD1S1W8 to prove every broker-executed discharge accepted at the pinned base still succeeds, including objective 52 rule-6/W3 behavior, while replay continues through the unchanged shared consumer.",
+			"Run the two Sensei-required governed-record tests, the eight TD-1 S1 witnesses, gofmt -w cmd internal, go vet ./..., go test ./..., architecture edit checks, and the final awareness diff audit.",
+			"Run the operator-supplied TD-1 S1 staged mutation suite through broker validation and require intended-reason kills for T1 through T7; treat zero mutants, compile failures, and panics as non-evaluation rather than kills.",
+			"Stop for architectural remeasurement if implementation requires another production file, a refused grant, an edit to internal/validation/evidence.go or internal/workflow/implementer_incomplete.go, a new evidence store, or S2, S3, or TD-2 semantics.",
+		},
+		DeclaredConsequences: "Evidence findings will be discharged by candidate-bound broker facts and durable canonical read-back rather than by implementer wording. Citation spelling differences such as an extra -count=1 will no longer defeat valid proof, while stale candidates, unauthorized producers, absent or incomplete checks, unrelated propositions, and prose alone will fail closed. Workers will see the same complete Correction and ProofGap requirement that the matcher enforces. Existing legitimate discharges and replay behavior remain valid.",
+	}
+}
+
+// f4aR2Preflight is the routing-relevant part of the scoped preflight recorded
+// for attempt 1e4c829fe563 (F4-replay-r2/pre.json).
+const f4aR2Preflight = `{"status":"PREFLIGHT_STATUS_OK","risk_class":"ARCHITECTURE_SENSITIVE","confidence":"CONFIDENCE_HIGH",` +
+	`"coverage":{"direct_anchor_count":24,"file_count":7,"indexed_file_count":7,"note":"24 direct anchor(s) matched","sufficient":true},` +
+	`"change_risk":{"approval_gate":"APPROVAL_GATE_NONE","blast_radius":"BLAST_RADIUS_LOCAL"},` +
+	`"blind_spots":["anchor with severity=critical"],` +
+	`"authority":{"authoritative":true,"verdict":"authoritative","state":"current",` +
+	`"graph_freshness_state":"GRAPH_FRESHNESS_STATE_CURRENT","seed_state":"SEED_STATE_CURRENT",` +
+	`"build_provenance_state":"BUILD_PROVENANCE_STATE_STAMPED","embedded_transaction_matches_seed":true,` +
+	`"graph_build_commit":"05feaf64d2694e97ac42b6bb93fbb49b9851a1f1","source_repo_commit":"39a8d2809ef239f203d5365d7f6e170349186cc4",` +
+	`"reachability":{"asserts_absence":false,"commits_ahead":0,"reachable":true,"state":"current"}}}`
+
+// W10: through the router, the r2 plan is granted architectural authority, and
+// the same plan with a genuine outward step is human-owned.
+func TestF4aW10RoutingFollowsTheDeclaredActionNotTheWording(t *testing.T) {
+	scoped := scopedPreflight(t, f4aR2Preflight)
+	plan := f4aR2Plan()
+	if r := routeAuthorityForAction(scoped, nil, plan); r.Route != RouteArchitectural || !r.Granted() {
+		t.Fatalf("attempt 1e4c829fe563 routed %s (%q), want %s", r.Route, r.Condition, RouteArchitectural)
+	}
+	outward := plan
+	outward.DeclaredSteps = append(append([]string(nil), plan.DeclaredSteps...), f4aOutwardStep)
+	if r := routeAuthorityForAction(scoped, nil, outward); r.Route != RouteHuman || !r.RequiresHuman() {
+		t.Fatalf("attempt 1e4c829fe563 with a genuine outward step routed %s (%q), want %s", r.Route, r.Condition, RouteHuman)
+	}
+}
+
+// W11: a multiword quality head. "quality" in "production-quality standard" is
+// a quality noun that does NOT end its phrase; the head is "standard", later in
+// the same window. Returning on the first quality noun read "quality" as not
+// the end of the phrase and asserted the occurrence. A quality noun that does
+// not end the phrase must also never become the evidence on its own, so a
+// destination after it still escalates.
+func TestF4aW11ALaterQualityHeadInTheWindowIsConsidered(t *testing.T) {
+	f4aBounded(t, "Bring the fixture to production-quality standard by supplying complete evidence")
+	for _, s := range []string{
+		"ship the binary to production-quality servers",
+		"move the fixtures to production quality grade hosts",
+	} {
+		f4aOutward(t, s)
+	}
+}
