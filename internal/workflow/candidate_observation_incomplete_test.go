@@ -164,7 +164,9 @@ func typedOutcomeOf(t *testing.T, r *completionRig, x incompleteTerminal) {
 	if x.receipt.Outcome != runreceipt.OutcomeFailed || x.receipt.Terminal.Text != string(event.WorkflowFailed) {
 		t.Fatalf("the receipt does not bind the failed terminal: outcome %s terminal %+v", x.receipt.Outcome, x.receipt.Terminal)
 	}
-	if x.receipt.Schema != runreceipt.SchemaVersion || runreceipt.SchemaVersion != "sensei-code.governed-run-receipt/v13" {
+	// v14 (RULING-366) moved the OUTCOME vocabulary only; the candidate
+	// vocabulary is v13's.
+	if x.receipt.Schema != runreceipt.SchemaVersion || runreceipt.SchemaVersion != "sensei-code.governed-run-receipt/v14" {
 		t.Fatalf("schema %q / %q: the candidate vocabulary did not change, so neither may the version", x.receipt.Schema, runreceipt.SchemaVersion)
 	}
 }

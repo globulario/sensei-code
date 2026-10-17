@@ -128,6 +128,9 @@ func governed(sessionID string, kind event.Kind, summary string) event.Event {
 	case event.WorkflowPlanAdmissionRefused:
 		payload = map[string]string{"plan_attempt_id": "attempt-1", "task_id": lineageTask, "reason": "refused again",
 			"refusal_id": "refusal-1", "continuation": PlanAdmissionContinuationArchitectTurn}
+	case event.WorkflowWorkspaceQuarantined:
+		payload = map[string]any{"task_id": lineageTask, "recorded": true, "invocation": "exec-1", "phase": "certify",
+			"workspace": "/repo/.worktrees/t", "reason": "no established teardown"}
 	case event.DecisionRecorded:
 		source = event.SourceSensei
 	case event.GuidanceDelivered:

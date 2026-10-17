@@ -245,11 +245,38 @@ func load(target, taskID string) (Identity, bool, error) {
 	if err := json.Unmarshal(body, &id); err != nil {
 		return Identity{}, false, fmt.Errorf("candidate identity for %s is unreadable: %w", taskID, err)
 	}
+	// The requested task id is the identity of the record being read; the
+	// embedded task_id is a claim, accepted only when the two agree exactly
+	// (RULING-370 §2-§5). Nothing here selects the embedded identity, repairs
+	// the record or infers anything from it.
+	if id.TaskID == "" || id.TaskID != taskID {
+		return Identity{}, false, &identityContradiction{requested: taskID, embedded: id.TaskID}
+	}
 	if strings.TrimSpace(id.BaseSHA) == "" {
 		return Identity{}, false, fmt.Errorf("candidate identity for %s records no base commit", taskID)
 	}
 	return id, true, nil
 }
+
+// ErrIdentityContradiction classifies a candidate record whose embedded
+// task_id is missing, empty or not the task it is recorded and read for
+// (RULING-370). Such a record is unreadable: no Identity is returned, the
+// record is not changed, and no reader or writer may treat it as absent,
+// settled or owned by the identity it claims.
+var ErrIdentityContradiction = errors.New("the candidate record's embedded task identity contradicts the task it is recorded for")
+
+// identityContradiction is the identity-read error, errors.Is
+// ErrIdentityContradiction, naming both identities.
+type identityContradiction struct{ requested, embedded string }
+
+func (e *identityContradiction) Error() string {
+	if e.embedded == "" {
+		return fmt.Sprintf("candidate identity for %s is unreadable: %v: it records no task_id", e.requested, ErrIdentityContradiction)
+	}
+	return fmt.Sprintf("candidate identity for %s is unreadable: %v: it records task_id %q", e.requested, ErrIdentityContradiction, e.embedded)
+}
+
+func (e *identityContradiction) Unwrap() error { return ErrIdentityContradiction }
 
 // recordMu serializes every candidate-record transaction in this process; the
 // record's cross-process lock (lockRecord) serializes it between processes.

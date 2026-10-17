@@ -1024,6 +1024,18 @@ type Interrupted struct {
 	// question included, and this says why the last attempt did not execute.
 	PreconditionRefusal       event.Kind
 	PreconditionRefusalReason string
+	// WorkspaceQuarantined is the newest WorkflowWorkspaceQuarantined payload,
+	// byte for byte: an invocation of this task ended while its candidate
+	// record said workspace containment was not established (RULING-366
+	// §17). It is an INVOCATION terminal, so the task stays here, and it
+	// leaves every other obligation -- a standing question, an owed review,
+	// the plan -- exactly as it was. Nothing in the session clears it: no
+	// status line, no candidate resolution.
+	//
+	// It is HISTORY, not authority. The durable candidate record is the one
+	// quarantine authority, and whether the workspace is quarantined now is
+	// read from that record, never from this field.
+	WorkspaceQuarantined json.RawMessage
 	// Unavailable is set, by CanonicalInterrupted, when the task's history in
 	// this record cannot be projected onto its canonical session lineage
 	// (ProjectTaskHistory): a
@@ -1549,6 +1561,12 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// so the question stands exactly as it was asked.
 			p.PreconditionRefusal = e.Kind
 			p.PreconditionRefusalReason = e.Summary
+		case event.WorkflowWorkspaceQuarantined:
+			// Not terminal for the task: the invocation ended while the
+			// workspace may still be written, and the task owes a trusted
+			// settlement. Deliberately NOT a clearing of anything else -- a
+			// standing question stays standing behind the obligation.
+			p.WorkspaceQuarantined = e.Payload
 		case event.WorkflowNotConverged:
 			// Not terminal: the candidate stands and the task is owed an
 			// architect re-plan. Emitted as WorkflowFailed it was final here while

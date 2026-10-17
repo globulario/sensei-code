@@ -593,7 +593,7 @@ func TestADeferredRunWithAVerdictIsInconsistent(t *testing.T) {
 // moving the version fails here, rather than being caught by someone reading a
 // receipt from a live run.
 func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
-	const version = "sensei-code.governed-run-receipt/v13"
+	const version = "sensei-code.governed-run-receipt/v14"
 	if SchemaVersion != version {
 		t.Fatalf("SchemaVersion = %q, pinned %q. If the vocabulary below changed, move BOTH.", SchemaVersion, version)
 	}
@@ -601,7 +601,7 @@ func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
 		OutcomeUnreviewed, OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
 		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged,
 		OutcomeRestorationRefused, OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused,
-		OutcomePlanAdmissionRefused, OutcomeUnknown}
+		OutcomePlanAdmissionRefused, OutcomeWorkspaceQuarantined, OutcomeUnknown}
 	for _, o := range outcomes {
 		if !o.Valid() {
 			t.Errorf("%q is enumerated here but not Valid()", o)
@@ -614,7 +614,7 @@ func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
 			t.Errorf("%q is valid but not pinned by this test", candidate)
 		}
 	}
-	if len(outcomes) != 15 {
+	if len(outcomes) != 16 {
 		t.Fatalf("%d outcomes pinned; if the set changed, the version must move with it", len(outcomes))
 	}
 }

@@ -492,9 +492,10 @@ func TestDF35W8EveryCandidateFieldReadsOneObservation(t *testing.T) {
 // its COMPLETE rules, so the receipt it emits still says v13, and the v13
 // semantics hold of it: PRESENT without measured identity is INCOMPLETE and
 // names the missing identity, and UNATTEMPTED with unstated identity is not
-// incomplete about its candidate.
+// incomplete about its candidate. v14 (RULING-366) moved only the outcome
+// vocabulary, so these candidate rules are v13's, unchanged, under v14.
 func TestDF35W9TheRepairedReceiptIsStillV13(t *testing.T) {
-	const pinned = "sensei-code.governed-run-receipt/v13"
+	const pinned = "sensei-code.governed-run-receipt/v14"
 	e := &Engine{}
 	e.beginReceipt("task-1")
 	e.noteCandidateWork("task-1", "some-tree", "a-different-base-tree")

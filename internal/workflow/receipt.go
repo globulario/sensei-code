@@ -68,7 +68,10 @@ type receiptFacts struct {
 	restorationRefusal runreceipt.Value
 	// planAdmissionRefusal is the exact canonical plan-admission refusal an
 	// invocation parked on, copied from its refusal record.
-	planAdmissionRefusal                  runreceipt.PlanAdmissionRefusal
+	planAdmissionRefusal runreceipt.PlanAdmissionRefusal
+	// workspaceQuarantine is the observation of the candidate record a
+	// WORKSPACE_QUARANTINED invocation ended on; nil until one is made.
+	workspaceQuarantine                   *runreceipt.WorkspaceQuarantine
 	formatterMutation                     runreceipt.Value
 	provider, executable, verdict, digest runreceipt.Value
 	serving                               runreceipt.Value
@@ -630,6 +633,7 @@ func (e *Engine) receiptOf(taskID string, terminal event.Kind, outcome runreceip
 		NotConverged:              facts.notConverged,
 		RestorationRefusal:        facts.restorationRefusal,
 		PlanAdmissionRefusal:      &facts.planAdmissionRefusal,
+		WorkspaceQuarantine:       facts.workspaceQuarantine,
 		FormatterMutationState:    facts.formatterMutation,
 		CandidateCommitDiffDigest: cand.candRendering,
 		CandidateDigestRelation:   cand.digestRelation,
@@ -913,6 +917,18 @@ func (e *Engine) noteServingProducer(taskID string, pid int, launched bool) {
 // nor fence a later one, and a ctx of no invocation ends nothing.
 func (e *Engine) emitRunTerminal(ctx context.Context, taskID string, kind event.Kind, source event.Source,
 	outcome runreceipt.Outcome, cand runreceipt.CandidateState, summary string, payload any) {
+	// A quarantined candidate refuses every disposition (candidate.Resolve
+	// over an unsettled record), so settling pending material there could only
+	// fail and suppress the one truthful ending into FAILED (RULING-366 §15,
+	// F8). The material stays bound to the quarantined record, which outlives
+	// this invocation as the authority over it. Skipping the disposition does
+	// not discharge it: the classifier discloses the pending material, its
+	// governing refusal and that its disposition remains owed, in this same
+	// terminal and its receipt (RULING-367 §11-§13).
+	if outcome == runreceipt.OutcomeWorkspaceQuarantined {
+		e.emitTerminalIn(ctx, taskID, kind, source, outcome, cand, summary, payload)
+		return
+	}
 	if err := e.settleRefusedMaterial(ctx, taskID, kind, source, outcome); err != nil {
 		// The failed ending is recorded directly: the material stays pending,
 		// so settling it again here would only repeat the failure.
@@ -1015,6 +1031,68 @@ func (e *Engine) noteRestorationRefusal(taskID string, r RestorationRefusal) {
 			f.candidateState = runreceipt.CandidateUnattempted
 		}
 	})
+}
+
+// noteWorkspaceQuarantine records what the locked read of the candidate record
+// established at a WORKSPACE_QUARANTINED terminal (RULING-366 §8-§11).
+//
+// A verified observation states every fact the record names, each with its
+// source, and states an absent one as UNKNOWN rather than empty. An
+// unverified one states nothing but the task and the read failure. Either
+// way the candidate is UNKNOWN and replaced whole: the workspace may still be
+// written, so no tree, digest, commit or empty candidate is claimed for it,
+// and no earlier measurement survives beside it.
+func (e *Engine) noteWorkspaceQuarantine(taskID string, q WorkspaceQuarantine) {
+	const recordSource = "the durable candidate record, read under its lock (candidate.LoadLocked)"
+	named := func(v, what string) runreceipt.Value {
+		if strings.TrimSpace(v) == "" {
+			return runreceipt.UnknownValue("the candidate record names no " + what)
+		}
+		return runreceipt.MeasuredValue(v, "the "+what+" "+recordSource+" names")
+	}
+	observed := &runreceipt.WorkspaceQuarantine{TaskID: q.TaskID, Recorded: q.Recorded, Reason: q.Reason}
+	if q.Recorded {
+		observed.State, observed.Source = runreceipt.Known, recordSource+", naming the task's containment state unsettled"
+		observed.Invocation = named(q.Invocation, "in-flight invocation")
+		observed.Phase = named(q.Phase, "in-flight phase")
+		observed.Workspace = named(q.Workspace, "workspace")
+		observed.Baseline = named(q.Baseline, "baseline workspace")
+	} else {
+		unread := runreceipt.UnknownValue("not measured: the candidate record could not be read")
+		observed.State, observed.Detail = runreceipt.Unknown, q.Reason
+		observed.Invocation, observed.Phase, observed.Workspace, observed.Baseline = unread, unread, unread, unread
+	}
+	if p := q.PendingRefusedMaterial; p != nil {
+		// The pending refused material, as the invocation's own pending record
+		// names it; a member it cannot establish is UNKNOWN, never guessed.
+		const pendingSource = "the invocation's pending refused-material record (DF-48 production_scope refusal)"
+		known := func(v, what string) runreceipt.Value {
+			if strings.TrimSpace(v) == "" {
+				return runreceipt.UnknownValue("not established: the pending record names no " + what)
+			}
+			return runreceipt.MeasuredValue(v, "the "+what+" "+pendingSource+" names")
+		}
+		observed.PendingRefusedMaterial = &runreceipt.PendingRefusedMaterial{TaskID: p.TaskID,
+			RefusalID: known(p.RefusalID, "governing refusal"), Workspace: known(p.Workspace, "workspace"),
+			Disposition: p.Disposition, Reason: p.Reason}
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.receipts == nil {
+		e.receipts = map[string]*receiptFacts{}
+	}
+	f := e.receipts[taskID]
+	if f == nil {
+		// A terminal reached with no open record -- a resumed question
+		// refuses at its precondition before any is opened -- still states
+		// what the read established; every other fact says it was not
+		// measured, as receiptOf would state it.
+		f = freshFacts()
+		e.receipts[taskID] = f
+	}
+	f.workspaceQuarantine = observed
+	f.replaceCurrentCandidate(candidateWith(runreceipt.CandidateUnknown,
+		"the task's workspace is quarantined and may still be written, so nothing about its candidate is measured"))
 }
 
 // notePlanAdmissionRefused records the exact canonical refusal an invocation

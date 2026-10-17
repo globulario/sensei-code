@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/globulario/sensei-code/internal/candidate"
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/gitx"
@@ -47,7 +48,68 @@ var (
 	// record claims: its identity is reserved and visible, and it is never an
 	// ordinary resumable task -- nor an absent one.
 	errTaskQuarantined = errors.New("that task is claimed by a quarantined session record; its identity stays reserved and it is not resumable")
+	// errWorkspaceQuarantined is the refusal for a task whose CURRENT candidate
+	// record says its workspace containment is not established: a confined
+	// execution is in flight or quarantined, and the workspace may still be
+	// written (RULING-366 §19). It is not the session-level QUARANTINED above,
+	// which is a torn session record. No settlement capability exists, so no
+	// continuation and no answer is taken for the task.
+	errWorkspaceQuarantined = errors.New("WORKSPACE QUARANTINED - OWED SETTLEMENT: the task's candidate record says a confined execution's teardown was never established, so its workspace may still be written; no settlement capability exists, so the task is not continued, no answer is taken for it and its workspace is not touched")
+	// errContainmentUnknown is the refusal for a task whose candidate record
+	// cannot be read: whether its workspace may still be written is unknown,
+	// and unknown is never settled (RULING-366 §20).
+	errContainmentUnknown = errors.New("CANNOT ESTABLISH CONTAINMENT STATE: the task's candidate record could not be read, so whether its workspace may still be written is unknown, never settled; the task is not continued")
 )
+
+// containment is what the CURRENT durable candidate record of one task says
+// about its workspace, read once before anything about the task is decided
+// (RULING-366 §19-§20). The record is the one quarantine authority: a session
+// payload never stands in for it, and nothing here writes it.
+type containment struct {
+	TaskID string
+	// Record is the record read, when one exists and could be read.
+	Record candidate.Identity
+	// Unsettled reports that the record names an execution in flight or a
+	// quarantine: the workspace may still be written.
+	Unsettled bool
+	// Err is why the record could not be read. It is never read as settled.
+	Err error
+}
+
+// refusal is the typed refusal this containment state imposes on every lane,
+// or nil when the record is absent or settled.
+func (c containment) refusal() error {
+	switch {
+	case c.Err != nil:
+		return fmt.Errorf("%w: task %s: %v", errContainmentUnknown, c.TaskID, c.Err)
+	case c.Unsettled:
+		invocation, workspace, baseline, reason := c.facts()
+		return fmt.Errorf("%w: task %s, %s, workspace %s, baseline %s: %s", errWorkspaceQuarantined, c.TaskID,
+			invocation, workspace, baseline, reason)
+	}
+	return nil
+}
+
+// facts are what the record names about the unsettled execution, for display
+// only: the invocation (and phase), the workspace, the baseline workspace and
+// the reason. Nothing is guessed; an absent fact is said to be absent.
+func (c containment) facts() (invocation, workspace, baseline, reason string) {
+	invocation, workspace, baseline = "no invocation recorded", c.Record.Worktree, "none recorded"
+	if f := c.Record.InFlight; f != nil {
+		invocation = "invocation " + f.Invocation + " (" + f.Phase + ")"
+		workspace = f.Workspace
+		if strings.TrimSpace(f.Baseline) != "" {
+			baseline = f.Baseline
+		}
+	}
+	if q := c.Record.Quarantine(); q != nil {
+		reason = strings.TrimSpace(q.Reason)
+	}
+	if reason == "" {
+		reason = "the record names an execution whose teardown was never established"
+	}
+	return invocation, workspace, baseline, reason
+}
 
 // resumeLane is what a task named WITHOUT an answer is continued as.
 //
@@ -58,11 +120,17 @@ var (
 type resumeLane int
 
 const (
+	// laneWorkspaceQuarantined is not a lane, and it is decided before every
+	// other one, from the CURRENT candidate record rather than the session
+	// history (containment): the task's workspace may still be written, and
+	// nothing -- a question, a review, a blocked turn, architecture or
+	// implementation -- continues it while it owes a settlement.
+	laneWorkspaceQuarantined resumeLane = iota
 	// laneRefused is not a lane, and it precedes every other decision: the
 	// task's history could not be projected onto its session lineage
 	// (Interrupted.Unavailable), so nothing read from it -- not even its
 	// objective -- may decide how it is continued.
-	laneRefused resumeLane = iota
+	laneRefused
 	// laneUnusable is not a lane either, and it comes first because it is the
 	// one condition no continuation survives: the task recorded no objective,
 	// so there is no work to continue, not even by answering its question --
@@ -85,6 +153,8 @@ const (
 
 func (l resumeLane) String() string {
 	switch l {
+	case laneWorkspaceQuarantined:
+		return "WORKSPACE QUARANTINED - OWED SETTLEMENT"
 	case laneRefused:
 		return "nothing: its history cannot be read as its own session lineage"
 	case laneUnusable:
@@ -120,6 +190,11 @@ func (l resumeLane) String() string {
 // back to a worker; then a turn a provider blocked or a re-plan that did not
 // converge; then the architect turn an unplanned task never took; and last, the
 // implementation of a plan that already exists.
+//
+// Ahead of ALL of it stands laneWorkspaceQuarantined, which this function does
+// not decide because no session record can: the caller reads the current
+// candidate record (containment) first, and a task whose record names an
+// unsettled workspace, or cannot be read, never reaches this selection.
 func selectResumeLane(task session.Interrupted, reviewOwed bool) (resumeLane, error) {
 	switch {
 	case task.Unavailable != nil:

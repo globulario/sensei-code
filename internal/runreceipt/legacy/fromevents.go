@@ -25,6 +25,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/globulario/sensei-code/internal/event"
@@ -228,12 +230,24 @@ func FromEvents(r io.Reader) runreceipt.Receipt {
 			rec.Terminal = runreceipt.MeasuredValue(kind, "event:"+kind)
 			cand.settle(&rec)
 			// A later terminal ends a later invocation; a refusal that parked
-			// an earlier one is not this record's ending.
+			// an earlier one, or a quarantine that ended an earlier one, is not
+			// this record's ending.
 			rec.PlanAdmissionRefusal = nil
+			rec.WorkspaceQuarantine = nil
 		case planAdmissionRefusedKind:
 			rec.Terminal = runreceipt.MeasuredValue(kind, "event:"+kind)
 			cand.settle(&rec)
 			rec.PlanAdmissionRefusal = planAdmissionRefusal(raw, payload, pstate, pdetail, refusals)
+			rec.WorkspaceQuarantine = nil
+		case workspaceQuarantinedKind:
+			// The measured ending of the invocation (RULING-369 §2-§3). The
+			// workspace may still be written, so the invocation's candidate is
+			// closed as UNKNOWN whatever it observed earlier, and the
+			// observation is read from this event's payload alone.
+			rec.Terminal = runreceipt.MeasuredValue(kind, "event:"+kind)
+			cand.quarantine()
+			rec.PlanAdmissionRefusal = nil
+			rec.WorkspaceQuarantine = workspaceQuarantine(&rec, payload, pstate, pdetail, line)
 		case "plan.attempt.refused":
 			// A refusal returned to the architect does not end the invocation.
 			// It is kept as evidence a later terminal may bind to by identity.
@@ -262,6 +276,13 @@ func FromEvents(r io.Reader) runreceipt.Receipt {
 			// survive into a later one across it.
 			if _, ok := event.RunTerminality(event.Kind(kind)); ok {
 				cand.settle(&rec)
+				// A quarantine that ended an earlier invocation is not the
+				// ending of this one, which is not modelled; it is never kept
+				// as a permanent override (RULING-369 §6).
+				if rec.Terminal.State == runreceipt.Known && rec.Terminal.Text == workspaceQuarantinedKind {
+					rec.Terminal = runreceipt.UnknownValue("the latest run ending, " + kind + ", is not modelled by this adapter")
+					rec.WorkspaceQuarantine = nil
+				}
 			}
 			if kind == "" {
 				unknownKinds["(no kind)"]++
@@ -312,6 +333,11 @@ func OutcomeFrom(r runreceipt.Receipt) runreceipt.Outcome {
 	if r.Terminal.State == runreceipt.Known && r.Terminal.Text == planAdmissionRefusedKind {
 		return runreceipt.OutcomePlanAdmissionRefused
 	}
+	// A workspace-quarantine terminal is the measured ending of the invocation
+	// on the same principle: an earlier verdict does not name it (RULING-369).
+	if r.Terminal.State == runreceipt.Known && r.Terminal.Text == workspaceQuarantinedKind {
+		return runreceipt.OutcomeWorkspaceQuarantined
+	}
 	if r.ReviewVerdict.State == runreceipt.Known {
 		if strings.EqualFold(r.ReviewVerdict.Text, "accept") {
 			return runreceipt.OutcomeAccepted
@@ -330,6 +356,11 @@ func OutcomeFrom(r runreceipt.Receipt) runreceipt.Outcome {
 // planAdmissionRefusedKind is the terminal event of an invocation parked on a
 // repeated plan-admission refusal (receipt schema v13).
 const planAdmissionRefusedKind = "workflow.plan_admission_refused"
+
+// workspaceQuarantinedKind is the terminal event of an invocation that ended
+// while its task's workspace containment was unsettled (receipt schema v14).
+// It is the canonical vocabulary's kind, not a second copy of it.
+const workspaceQuarantinedKind = string(event.WorkflowWorkspaceQuarantined)
 
 // candidateKeys are the receipt's candidate identity fields, in the order a
 // candidateSnapshot holds them.
@@ -408,6 +439,26 @@ func (c *candidateReconstruction) settle(rec *runreceipt.Receipt) {
 		s := c.current(rec)
 		c.settled = &s
 	}
+	c.reset()
+}
+
+// quarantinedCandidate is what each identity field says of an invocation that
+// ended WORKSPACE_QUARANTINED.
+const quarantinedCandidate = "not measured: the invocation ended WORKSPACE_QUARANTINED, and a quarantined workspace may still be written, " +
+	"so no candidate identity is established for it"
+
+// quarantine closes the current invocation at a WORKSPACE_QUARANTINED
+// terminal. Unlike settle, it always replaces the settled account, with
+// candidate_state UNKNOWN and no identity: neither an earlier invocation's
+// candidate nor anything this invocation observed (a receipt, a reviewed
+// digest, candidate work) is the measured content of a workspace that may
+// still be written. Earlier identities stay in the events they came from.
+func (c *candidateReconstruction) quarantine() {
+	s := candidateSnapshot{state: runreceipt.CandidateUnknown}
+	for i := range s.ids {
+		s.ids[i] = runreceipt.UnknownValue(quarantinedCandidate)
+	}
+	c.settled = &s
 	c.reset()
 }
 
@@ -717,4 +768,228 @@ func planAdmissionRefusal(line string, payload map[string]any, pstate runreceipt
 		p.Detail = "the plan-admission refusal events carry values schema v13 rejects: " + strings.Join(rejected, "; ")
 	}
 	return p
+}
+
+// quarantineMembers are the record facts a verified observation names, with
+// what each one is.
+var quarantineMembers = [4][2]string{
+	{"invocation", "in-flight invocation"}, {"phase", "in-flight phase"},
+	{"workspace", "workspace"}, {"baseline", "baseline workspace"},
+}
+
+// The closed v14 member sets of the quarantine terminal, spelled exactly as
+// internal/session/lineage.go declares them (workspaceQuarantinedShape,
+// workspaceUnverifiedShape and pendingRefusedMaterialShape; RULING-370
+// §13-§18). The event grammar is the canonical one: no broader compatibility
+// schema is read here.
+var (
+	verifiedQuarantineMembers = []string{"task_id", "recorded", "invocation", "phase", "workspace", "baseline", "reason",
+		"pending_refused_material"}
+	unverifiedQuarantineMembers = []string{"task_id", "recorded", "reason", "pending_refused_material"}
+	pendingMaterialMembers      = []string{"task_id", "refusal_id", "workspace", "disposition", "reason"}
+)
+
+// undeclared names every member of m that the closed shape does not declare,
+// whatever its value -- a null or empty undeclared member included.
+func undeclared(m map[string]any, declared []string, at, shape string) []string {
+	var out []string
+	for k := range m {
+		if !slices.Contains(declared, k) {
+			out = append(out, fmt.Sprintf("undeclared member %s%s is not part of %s", at, k, shape))
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// workspaceQuarantine reconstructs the v14 workspace_quarantine observation a
+// WORKSPACE_QUARANTINED terminal carried, from that event's payload alone
+// (RULING-369 §8-§11).
+//
+// It is what the run reported its locked read of the durable candidate record
+// showed: a recorded observation, never settlement proof. recorded=true is the
+// VERIFIED shape, and each member it names is carried with its payload path;
+// a member it omits stays UNKNOWN. recorded=false, or no recorded flag at all,
+// is UNVERIFIED and states no member, whatever else the payload carries. An
+// absent payload is the stream's insufficiency, UNKNOWN; a member in a shape
+// v14 does not model makes the observation MALFORMED with its reason. Nothing
+// is inferred from an earlier review, receipt, candidate or summary, and the
+// receipt's own v14 checks judge the result: recognizing the terminal is not
+// completeness.
+func workspaceQuarantine(rec *runreceipt.Receipt, payload map[string]any, pstate runreceipt.Knownness, pdetail string,
+	line int) *runreceipt.WorkspaceQuarantine {
+	const source = "event:" + workspaceQuarantinedKind + ".payload"
+	q := &runreceipt.WorkspaceQuarantine{}
+	unread := func(why string) {
+		v := runreceipt.UnknownValue(why)
+		q.Invocation, q.Phase, q.Workspace, q.Baseline = v, v, v, v
+	}
+	switch pstate {
+	case runreceipt.Malformed:
+		q.State, q.Detail = runreceipt.Malformed, "the quarantine terminal's payload is unreadable: "+pdetail
+		unread("not reconstructed: the quarantine terminal's payload is unreadable")
+		return q
+	case runreceipt.Unknown:
+		q.State = runreceipt.Unknown
+		q.Detail = "the quarantine terminal carries no payload (" + pdetail +
+			"), so the stream does not establish what the candidate record showed"
+		unread("not reconstructed: the quarantine terminal carries no payload")
+		return q
+	}
+
+	var malformed []string
+	read := func(key string) string {
+		v := text(payload, key, source+"."+key)
+		if v.State == runreceipt.Malformed {
+			malformed = append(malformed, v.Detail)
+		}
+		return v.Text
+	}
+	q.TaskID, q.Reason = read("task_id"), read("reason")
+
+	recorded, stated := false, false
+	switch v := payload["recorded"].(type) {
+	case bool:
+		recorded, stated = v, true
+	case nil:
+	default:
+		malformed = append(malformed, fmt.Sprintf("recorded is %T, not a boolean", v))
+	}
+
+	// recorded=true admits only the verified variant's members and
+	// recorded=false only the unverified variant's; with no usable recorded
+	// flag no variant is established, and a member neither declares is
+	// still undeclared.
+	switch {
+	case stated && !recorded:
+		malformed = append(malformed, undeclared(payload, unverifiedQuarantineMembers, "", "the unverified quarantine (recorded=false)")...)
+	case stated:
+		malformed = append(malformed, undeclared(payload, verifiedQuarantineMembers, "", "the verified quarantine (recorded=true)")...)
+	default:
+		malformed = append(malformed, undeclared(payload, verifiedQuarantineMembers, "", "either quarantine variant")...)
+	}
+
+	if stated && recorded {
+		q.State, q.Recorded = runreceipt.Known, true
+		q.Source = source + " (recorded=true: the run's locked read of its durable candidate record, as its terminal reported it;" +
+			" a recorded observation, not settlement proof)"
+		for i, m := range quarantineMembers {
+			v := text(payload, m[0], source+"."+m[0])
+			switch v.State {
+			case runreceipt.Unknown:
+				v = runreceipt.UnknownValue("the quarantine terminal names no " + m[1])
+			case runreceipt.Malformed:
+				malformed = append(malformed, v.Detail)
+			}
+			switch i {
+			case 0:
+				q.Invocation = v
+			case 1:
+				q.Phase = v
+			case 2:
+				q.Workspace = v
+			case 3:
+				q.Baseline = v
+			}
+		}
+	} else {
+		q.State = runreceipt.Unknown
+		switch {
+		case stated:
+			unread("not measured: the quarantine terminal reports the candidate record was not read (recorded=false)")
+			q.Detail = q.Reason
+			if strings.TrimSpace(q.Detail) == "" {
+				q.Detail = "the quarantine terminal reports the candidate record was not read, and states no reason"
+			}
+		default:
+			unread("not measured: the quarantine terminal does not establish whether the candidate record was read")
+			q.Detail = "the quarantine terminal does not state whether the candidate record was read (recorded), " +
+				"so its observation is not established"
+		}
+		for _, m := range quarantineMembers {
+			if v, ok := payload[m[0]]; ok && v != nil {
+				rec.Diagnostics = append(rec.Diagnostics, fmt.Sprintf(
+					"line %d (%s): an unverified observation carries %s, which is not read as a measurement", line, workspaceQuarantinedKind, m[0]))
+			}
+		}
+	}
+
+	var pendingUndeclared []string
+	q.PendingRefusedMaterial, pendingUndeclared = pendingRefusedMaterial(rec, payload, line)
+	malformed = append(malformed, pendingUndeclared...)
+
+	if len(malformed) > 0 {
+		q.State, q.Source = runreceipt.Malformed, ""
+		q.Detail = "the quarantine terminal carries members in a shape schema v14 does not model: " + strings.Join(malformed, "; ")
+		rec.Diagnostics = append(rec.Diagnostics, fmt.Sprintf("line %d (%s): %s", line, workspaceQuarantinedKind, q.Detail))
+	}
+	return q
+}
+
+// pendingRefusedMaterial reconstructs the pending refused-material disclosure
+// a quarantine terminal carried, or nil when it carried none. The disclosure
+// states an obligation: it is PENDING, and nothing here resolves, disposes or
+// releases it. A member it does not supply is UNKNOWN, never guessed; a member
+// in a shape v14 does not model is MALFORMED and reported. A member the closed
+// disclosure does not declare is returned, so the observation that carried it
+// is MALFORMED; the declared members are still preserved as stated. A
+// disclosure that states no disposition is not given one (RULING-370 §19).
+//
+// A member that is present but not a JSON object (a string, an array, a
+// number, a boolean or an explicit null) is not a valid disclosure
+// (RULING-371 §16-§18). It is returned as malformed, so the observation that
+// carried it is MALFORMED and names the member. Its members are MALFORMED,
+// and no disposition is inferred for it, so it is neither PENDING nor settled.
+func pendingRefusedMaterial(rec *runreceipt.Receipt, payload map[string]any, line int) (*runreceipt.PendingRefusedMaterial, []string) {
+	const source = "event:" + workspaceQuarantinedKind + ".payload.pending_refused_material"
+	raw, present := payload["pending_refused_material"]
+	if !present {
+		return nil, nil
+	}
+	obj, isObject := raw.(map[string]any)
+	if !isObject {
+		shape := fmt.Sprintf("%T", raw)
+		if raw == nil {
+			shape = "null"
+		}
+		detail := "pending_refused_material is " + shape + ", not an object, so it is not a valid pending disclosure"
+		return &runreceipt.PendingRefusedMaterial{RefusalID: runreceipt.MalformedValue(detail),
+			Workspace: runreceipt.MalformedValue(detail)}, []string{detail}
+	}
+	var malformed []string
+	member := func(key, what string) runreceipt.Value {
+		v := text(obj, key, source+"."+key)
+		switch v.State {
+		case runreceipt.Unknown:
+			return runreceipt.UnknownValue("not established: the pending disclosure names no " + what)
+		case runreceipt.Malformed:
+			malformed = append(malformed, v.Detail)
+		}
+		return v
+	}
+	p := &runreceipt.PendingRefusedMaterial{
+		RefusalID: member("refusal_id", "governing refusal"),
+		Workspace: member("workspace", "workspace"),
+	}
+	p.TaskID = member("task_id", "task").Text
+	p.Reason = member("reason", "reason").Text
+	// The disclosure states pending material and no other disposition. A
+	// stated one is kept as stated -- PENDING, or another the receipt's v14
+	// check rejects rather than this adapter rewriting it. One not stated is
+	// left missing, never supplied as PENDING because PENDING is its only
+	// legal value; the absence is diagnosed and v14 rejects it.
+	switch d := text(obj, "disposition", source+".disposition"); d.State {
+	case runreceipt.Known:
+		p.Disposition = d.Text
+	case runreceipt.Malformed:
+		malformed = append(malformed, d.Detail)
+	default:
+		rec.Diagnostics = append(rec.Diagnostics, fmt.Sprintf("line %d (%s): pending_refused_material states no disposition (%s); "+
+			"PENDING is not supplied for it, so the disclosure is insufficient", line, workspaceQuarantinedKind, d.Detail))
+	}
+	if len(malformed) > 0 {
+		rec.Diagnostics = append(rec.Diagnostics, fmt.Sprintf("line %d (%s): pending_refused_material carries members in a shape schema v14 does not model: %s",
+			line, workspaceQuarantinedKind, strings.Join(malformed, "; ")))
+	}
+	return p, undeclared(obj, pendingMaterialMembers, "pending_refused_material.", "the pending refused-material disclosure")
 }

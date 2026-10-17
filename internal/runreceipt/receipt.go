@@ -60,7 +60,13 @@ import (
 // COMPLETE receipt means, so the version moves with them: a reader on the wrong
 // version misreads the record, which is the fabricated specimen this comment
 // warns about.
-const SchemaVersion = "sensei-code.governed-run-receipt/v13"
+//
+// v14 adds WORKSPACE_QUARANTINED and the workspace_quarantine observation it
+// requires, and under exactly that outcome an UNKNOWN candidate explained by a
+// verified observation is a complete statement (RULING-366 §7-§10). The
+// observation may disclose refused material left pending there
+// (pending_refused_material, RULING-367 §13).
+const SchemaVersion = "sensei-code.governed-run-receipt/v14"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?
@@ -173,6 +179,19 @@ const (
 	// implementer started. FAILED would end a task whose objective nothing
 	// showed impossible; the task stands and is resumable.
 	OutcomePlanAdmissionRefused Outcome = "PLAN_ADMISSION_REFUSED"
+	// OutcomeWorkspaceQuarantined: the invocation ended while the durable
+	// candidate record says the task's workspace containment is not
+	// established -- a confined execution in flight or quarantined, whose
+	// workspace may still be written. The task stands, owing a trusted
+	// settlement, and is not executable while it owes one.
+	//
+	// Every existing word is false here. FAILED says the work failed and ends
+	// the task. STOPPED and TIMED_OUT name who ended the invocation and imply a
+	// candidate left as it stands. The precondition refusals say nothing was
+	// executed, and something was. It is never ACCEPTED, so it is outside every
+	// mint path, and the candidate it ends over is UNKNOWN: its contents may
+	// still change.
+	OutcomeWorkspaceQuarantined Outcome = "WORKSPACE_QUARANTINED"
 	// OutcomeUnknown: the record does not say. This is an admission of
 	// ignorance the reader can act on, not a default that hides one.
 	OutcomeUnknown Outcome = "UNKNOWN"
@@ -186,7 +205,8 @@ func (o Outcome) Valid() bool {
 	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
 		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeReviewObligationUnmet,
 		OutcomeBlockedExternal, OutcomeNotConverged, OutcomeRestorationRefused,
-		OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused, OutcomePlanAdmissionRefused, OutcomeUnknown:
+		OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused, OutcomePlanAdmissionRefused,
+		OutcomeWorkspaceQuarantined, OutcomeUnknown:
 		return true
 	}
 	return false
@@ -274,6 +294,16 @@ var vocabularies = map[string][]Outcome{
 		OutcomeRestorationRefused, OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused,
 		OutcomePlanAdmissionRefused, OutcomeUnknown,
 	},
+	// v14 adds WORKSPACE_QUARANTINED, and the workspace_quarantine field it
+	// requires: an invocation that ended while its workspace containment was
+	// not established.
+	"sensei-code.governed-run-receipt/v14": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
+		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged,
+		OutcomeRestorationRefused, OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused,
+		OutcomePlanAdmissionRefused, OutcomeWorkspaceQuarantined, OutcomeUnknown,
+	},
 }
 
 // candidateVocabularies pins the CANDIDATE vocabulary per version, for the same
@@ -314,6 +344,10 @@ var candidateVocabularies = map[string][]CandidateState{
 	},
 	// v13 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
 	"sensei-code.governed-run-receipt/v13": {
+		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
+	},
+	// v14 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
+	"sensei-code.governed-run-receipt/v14": {
 		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
 	},
 }
@@ -733,6 +767,18 @@ type Receipt struct {
 	// one that stated it was not measured.
 	PlanAdmissionRefusal *PlanAdmissionRefusal `json:"plan_admission_refusal,omitempty"`
 
+	// WorkspaceQuarantine is the observation of the durable candidate record a
+	// WORKSPACE_QUARANTINED invocation ended on: the task, whether the record
+	// was read and names its containment state, the invocation, phase,
+	// workspace and baseline it names, and why.
+	//
+	// Required when the outcome is WORKSPACE_QUARANTINED and contradictory
+	// beside any other outcome. It is the one fact that makes candidate_state
+	// UNKNOWN a complete statement at that terminal, so an observation that is
+	// absent, unverified or inconsistent explains nothing. A pointer, for the
+	// reason PlanAdmissionRefusal is one.
+	WorkspaceQuarantine *WorkspaceQuarantine `json:"workspace_quarantine,omitempty"`
+
 	// ReviewedTree is the content the verdict's envelope named. A receipt that
 	// states a candidate tree and a reviewed digest, while proving nothing about
 	// whether the verdict was bound to THAT tree, sends a later adjudicator back
@@ -798,6 +844,7 @@ func (r Receipt) Fields() []Field {
 	notConverged := r.Outcome == OutcomeNotConverged
 	restorationRefused := r.Outcome == OutcomeRestorationRefused
 	planAdmissionRefused := r.Outcome == OutcomePlanAdmissionRefused
+	workspaceQuarantined := r.Outcome == OutcomeWorkspaceQuarantined
 	return []Field{
 		{"governor_commit", r.GovernorCommit, Rederivable, true},
 		{"governor_binary_sha256", r.GovernorBinarySHA256, Rederivable, true},
@@ -821,6 +868,7 @@ func (r Receipt) Fields() []Field {
 		{"not_converged", r.NotConverged, Observed, notConverged},
 		{"restoration_refusal", r.RestorationRefusal, Observed, restorationRefused},
 		{"plan_admission_refusal", r.PlanAdmissionRefusal.value(), Observed, planAdmissionRefused},
+		{"workspace_quarantine", r.WorkspaceQuarantine.value(), Observed, workspaceQuarantined},
 		{"formatter_mutation", r.FormatterMutationState, Observed, worked},
 		{"terminal", r.Terminal, Observed, true},
 	}
@@ -903,7 +951,7 @@ func (r Receipt) Completeness() (Completeness, []string) {
 		missing = append(missing, fmt.Sprintf("candidate_state %q is not a value this schema defines", r.CandidateState))
 	case SpeaksItsCandidateVocabulary(r.Schema, r.CandidateState) != nil:
 		missing = append(missing, SpeaksItsCandidateVocabulary(r.Schema, r.CandidateState).Error())
-	case r.CandidateState == CandidateUnknown:
+	case r.CandidateState == CandidateUnknown && !r.quarantineExplainsUnknownCandidate():
 		missing = append(missing, "candidate_state UNKNOWN: a record that cannot say whether a candidate exists is not complete")
 	case r.CandidateState == CandidateUnattempted:
 		// The claim is that no canonical identity was ever created, so any
@@ -962,6 +1010,7 @@ func (r Receipt) Completeness() (Completeness, []string) {
 	}
 
 	missing = append(missing, r.checkPlanAdmissionRefusal()...)
+	missing = append(missing, r.checkWorkspaceQuarantine()...)
 
 	if r.FormatterMutationState.State == Known &&
 		!FormatterMutation(r.FormatterMutationState.Text).Valid() {
@@ -1113,6 +1162,189 @@ func (r Receipt) checkPlanAdmissionRefusal() []string {
 		bad = append(bad, "plan_admission_refusal.reason: absent")
 	}
 	return bad
+}
+
+// WorkspaceQuarantine is the observation of the durable candidate record a
+// WORKSPACE_QUARANTINED invocation ended on (RULING-366 §10-§11). The record
+// is the one quarantine authority; this is what one locked read of it showed.
+//
+// Its State and Source obey the law every Value obeys, and they are the
+// verification: KNOWN only when the record was read and names an unsettled
+// containment state, and then Recorded is true and every fact the record
+// names is stated with its source. When the record could not be read the
+// observation is UNKNOWN, Recorded is false, Detail and Reason carry the
+// actual read failure, and no fact is stated: an unverified observation never
+// carries a measurement it did not make.
+type WorkspaceQuarantine struct {
+	State  Knownness `json:"state"`
+	Source string    `json:"source,omitempty"`
+	Detail string    `json:"detail,omitempty"`
+
+	TaskID string `json:"task_id,omitempty"`
+	// Recorded is whether the durable record was read and names the task's
+	// containment state as unsettled.
+	Recorded   bool   `json:"recorded"`
+	Invocation Value  `json:"invocation"`
+	Phase      Value  `json:"phase"`
+	Workspace  Value  `json:"workspace"`
+	Baseline   Value  `json:"baseline"`
+	Reason     string `json:"reason,omitempty"`
+	// PendingRefusedMaterial discloses refused production-scope material whose
+	// ordinary disposition the containment boundary suspended at this terminal;
+	// nil when none was pending (RULING-367 §11-§13).
+	PendingRefusedMaterial *PendingRefusedMaterial `json:"pending_refused_material,omitempty"`
+}
+
+// PendingDisposition is the one disposition a pending refused-material
+// disclosure states: owed, not resolved.
+const PendingDisposition = "PENDING"
+
+// PendingRefusedMaterial is the receipt form of the disclosure of refused
+// material pending at a WORKSPACE_QUARANTINED terminal: the task it is bound
+// to (the observation's own), its governing refusal and the workspace its
+// candidate identity names, each with its source or UNKNOWN, Disposition
+// PendingDisposition, and why it is owed. A projection only: it states an
+// obligation and grants no release.
+type PendingRefusedMaterial struct {
+	TaskID      string `json:"task_id"`
+	RefusalID   Value  `json:"refusal_id"`
+	Workspace   Value  `json:"workspace"`
+	Disposition string `json:"disposition"`
+	Reason      string `json:"reason"`
+}
+
+// value projects the observation onto the axis every field shares. A record
+// that never stated it is an absence, stated.
+func (q *WorkspaceQuarantine) value() Value {
+	if q == nil {
+		return UnknownValue("absent: the record states no workspace quarantine")
+	}
+	v := Value{State: q.State, Source: q.Source, Detail: q.Detail}
+	if q.State == Known {
+		v.Text = fmt.Sprintf("task %s's workspace %s is quarantined (invocation %s): %s",
+			q.TaskID, q.Workspace.Text, q.Invocation.Text, q.Reason)
+		if p := q.PendingRefusedMaterial; p != nil {
+			v.Text += fmt.Sprintf("; refused material (refusal %s) is %s its disposition", p.RefusalID.Text, p.Disposition)
+		}
+	}
+	return v
+}
+
+// checkPendingRefusedMaterial holds a pending disclosure to its closed shape:
+// bound to the observation's task, PENDING and nothing else, a stated reason,
+// valid members, and a governing refusal that is established. An unknown
+// refusal is disclosed honestly and is not a complete statement.
+func (q *WorkspaceQuarantine) checkPendingRefusedMaterial() []string {
+	p := q.PendingRefusedMaterial
+	if p == nil {
+		return nil
+	}
+	const at = "workspace_quarantine.pending_refused_material"
+	bad := validateValue(at+".refusal_id", p.RefusalID)
+	bad = append(bad, validateValue(at+".workspace", p.Workspace)...)
+	if strings.TrimSpace(p.TaskID) == "" || p.TaskID != q.TaskID {
+		bad = append(bad, fmt.Sprintf("%s.task_id %q is not the quarantined task %q", at, p.TaskID, q.TaskID))
+	}
+	if p.Disposition != PendingDisposition {
+		bad = append(bad, fmt.Sprintf("%s.disposition %q: the disclosure states pending material, never a disposition", at, p.Disposition))
+	}
+	if strings.TrimSpace(p.Reason) == "" {
+		bad = append(bad, at+".reason: absent")
+	}
+	if p.RefusalID.State != Known {
+		bad = append(bad, at+".refusal_id: the governing refusal of the pending material is not established")
+	}
+	return bad
+}
+
+// checkWorkspaceQuarantine holds the quarantine outcome and its observation
+// to each other and the observation to its own discriminated shape.
+// Requiredness and an unknown state are read by Fields; this reads what Fields
+// cannot: a candidate stated over a workspace that may still be written, an
+// observation beside an outcome it does not explain, and an observation whose
+// members contradict its verification.
+func (r Receipt) checkWorkspaceQuarantine() []string {
+	var bad []string
+	quarantined := r.Outcome == OutcomeWorkspaceQuarantined
+	if quarantined {
+		if r.CandidateState != CandidateUnknown {
+			bad = append(bad, fmt.Sprintf(
+				"candidate_state %s while the outcome is WORKSPACE_QUARANTINED: the quarantined workspace may still be written, so no candidate state is measurable", r.CandidateState))
+		}
+		for _, f := range []struct {
+			name string
+			v    Value
+		}{
+			{"candidate_commit", r.CandidateCommit},
+			{"candidate_tree", r.CandidateTree},
+			{"candidate_first_parent", r.CandidateFirstParent},
+			{"candidate_digest", r.CandidateDigest},
+			{"candidate_commit_diff_digest", r.CandidateCommitDiffDigest},
+		} {
+			if f.v.State == Known {
+				bad = append(bad, fmt.Sprintf(
+					"%s is stated while the outcome is WORKSPACE_QUARANTINED: nothing is measured of a workspace that may still be written", f.name))
+			}
+		}
+	}
+	q := r.WorkspaceQuarantine
+	if q == nil {
+		return bad
+	}
+	if !quarantined {
+		bad = append(bad, fmt.Sprintf(
+			"workspace_quarantine is stated while the outcome is %s: the record names a quarantine that did not end this invocation", r.Outcome))
+	}
+	members := []struct {
+		name string
+		v    Value
+	}{
+		{"invocation", q.Invocation}, {"phase", q.Phase}, {"workspace", q.Workspace}, {"baseline", q.Baseline},
+	}
+	for _, m := range members {
+		bad = append(bad, validateValue("workspace_quarantine."+m.name, m.v)...)
+	}
+	bad = append(bad, q.checkPendingRefusedMaterial()...)
+	if q.State != Known {
+		if q.Recorded {
+			bad = append(bad, fmt.Sprintf(
+				"workspace_quarantine.recorded is true while the observation is %s: a record that was not read names no recorded state", q.State))
+		}
+		for _, m := range members {
+			if m.v.State == Known {
+				bad = append(bad, fmt.Sprintf(
+					"workspace_quarantine.%s is measured while the observation is unverified: the failed read established nothing", m.name))
+			}
+		}
+		return bad
+	}
+	if !q.Recorded {
+		bad = append(bad, "workspace_quarantine is measured while recorded is false: an unverified observation is not a measurement")
+	}
+	if strings.TrimSpace(q.TaskID) == "" {
+		bad = append(bad, "workspace_quarantine.task_id: absent")
+	}
+	if strings.TrimSpace(q.Reason) == "" {
+		bad = append(bad, "workspace_quarantine.reason: absent")
+	}
+	if q.Workspace.State != Known {
+		bad = append(bad, "workspace_quarantine.workspace: the quarantined workspace the record names is not stated")
+	}
+	return bad
+}
+
+// quarantineExplainsUnknownCandidate reports whether candidate_state UNKNOWN is
+// the complete, truthful statement of this receipt: only under a version that
+// speaks WORKSPACE_QUARANTINED, only with that outcome, and only when a
+// verified, source-backed and consistent observation of the candidate record
+// says why nothing about the candidate can be measured (RULING-366 §9). It is
+// never generally sufficient.
+func (r Receipt) quarantineExplainsUnknownCandidate() bool {
+	q := r.WorkspaceQuarantine
+	return SpeaksItsVersion(r.Schema, OutcomeWorkspaceQuarantined) == nil &&
+		r.Outcome == OutcomeWorkspaceQuarantined &&
+		q != nil && q.State == Known && strings.TrimSpace(q.Source) != "" &&
+		len(r.checkWorkspaceQuarantine()) == 0
 }
 
 func shortSHA(s string) string {

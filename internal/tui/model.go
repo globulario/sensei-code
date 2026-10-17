@@ -433,7 +433,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if e.Kind == event.WorkflowCompleted || e.Kind == event.WorkflowFailed ||
 			e.Kind == event.WorkflowStopped || e.Kind == event.WorkflowAwaitingAuthority ||
 			e.Kind == event.WorkflowBlockedExternal || e.Kind == event.WorkflowNotConverged ||
-			e.Kind == event.WorkflowRestorationRefused {
+			e.Kind == event.WorkflowRestorationRefused || e.Kind == event.WorkflowWorkspaceQuarantined {
 			m.busy = false
 			m.pending = nil
 			m.pendingTask = ""
@@ -794,6 +794,16 @@ func renderEvent(e event.Event) string {
 		prefix = senseiStyle.Render("✓ READY")
 		indent = "  "
 	}
+	if e.Kind == event.WorkflowWorkspaceQuarantined {
+		// Not a success, a failure, a stop or a timeout: the invocation ended
+		// while the candidate record says the workspace may still be written.
+		// It states the obligation and invites nothing -- no resume, retry or
+		// settlement exists here to offer.
+		prefix = authorityStyle.Render("⚠ WORKSPACE QUARANTINED") + "\n  task " + e.TaskID +
+			": the invocation ended, workspace containment is unresolved, the task is owed a trusted " +
+			"settlement, and ordinary continuation is blocked"
+		indent = "  "
+	}
 	if strings.TrimSpace(e.Summary) == "" {
 		return prefix
 	}
@@ -979,7 +989,7 @@ func isConversation(e event.Event) bool {
 	switch e.Kind {
 	case event.ArchitectSpoke, event.PlanProposed, event.ChangeReported, event.AuthorityRequired, event.AuthorityResolved,
 		event.WorkflowFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority, event.WorkflowBlockedExternal,
-		event.WorkflowNotConverged, event.WorkflowRestorationRefused:
+		event.WorkflowNotConverged, event.WorkflowRestorationRefused, event.WorkflowWorkspaceQuarantined:
 		return true
 	case event.ArchitectReconciliation:
 		// Why the loop took the branch it took when two agents disagreed. Filed
