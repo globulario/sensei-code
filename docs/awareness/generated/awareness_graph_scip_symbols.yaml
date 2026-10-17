@@ -1913,6 +1913,42 @@ code_symbols:
     file: cmd/sensei-code/resume.go
     symbol: authorityResume
     kind: type
+  - id: cmd/sensei-code/resume.go:containmentOf
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: containmentOf
+    kind: function
+  - id: cmd/sensei-code/resume.go:containmentView.listErr
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: containmentView.listErr
+    kind: var
+  - id: cmd/sensei-code/resume.go:containmentView.orphans
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: containmentView.orphans
+    kind: var
+  - id: cmd/sensei-code/resume.go:containmentView.owes
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: containmentView.owes
+    kind: method
+  - id: cmd/sensei-code/resume.go:containmentView.tasks
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: containmentView.tasks
+    kind: var
+  - id: cmd/sensei-code/resume.go:containmentView~type
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: containmentView
+    kind: type
   - id: cmd/sensei-code/resume.go:countStanding
     namespace: structural.scip
     language: go
@@ -2027,6 +2063,18 @@ code_symbols:
     file: cmd/sensei-code/resume.go
     symbol: liveQuestionOffers
     kind: function
+  - id: cmd/sensei-code/resume.go:loadContainment
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: loadContainment
+    kind: function
+  - id: cmd/sensei-code/resume.go:loadLockedRecord
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: loadLockedRecord
+    kind: var
   - id: cmd/sensei-code/resume.go:loadReviewStates
     namespace: structural.scip
     language: go
@@ -2063,11 +2111,23 @@ code_symbols:
     file: cmd/sensei-code/resume.go
     symbol: printBlockedObligation
     kind: function
+  - id: cmd/sensei-code/resume.go:printContainmentOnly
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: printContainmentOnly
+    kind: function
   - id: cmd/sensei-code/resume.go:printQuarantinedTasks
     namespace: structural.scip
     language: go
     file: cmd/sensei-code/resume.go
     symbol: printQuarantinedTasks
+    kind: function
+  - id: cmd/sensei-code/resume.go:printQuestionBehindObligation
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: printQuestionBehindObligation
     kind: function
   - id: cmd/sensei-code/resume.go:printStandingQuestion
     namespace: structural.scip
@@ -2075,11 +2135,35 @@ code_symbols:
     file: cmd/sensei-code/resume.go
     symbol: printStandingQuestion
     kind: function
+  - id: cmd/sensei-code/resume.go:printWorkspaceObligation
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: printWorkspaceObligation
+    kind: function
+  - id: cmd/sensei-code/resume.go:printWorkspaceOrphans
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: printWorkspaceOrphans
+    kind: function
+  - id: cmd/sensei-code/resume.go:readContainment
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: readContainment
+    kind: function
   - id: cmd/sensei-code/resume.go:reportOtherSessionsWithQuestions
     namespace: structural.scip
     language: go
     file: cmd/sensei-code/resume.go
     symbol: reportOtherSessionsWithQuestions
+    kind: function
+  - id: cmd/sensei-code/resume.go:reportUnlistedInventory
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume.go
+    symbol: reportUnlistedInventory
     kind: function
   - id: cmd/sensei-code/resume.go:resumeAuthorityAnswered
     namespace: structural.scip
@@ -2141,6 +2225,48 @@ code_symbols:
     file: cmd/sensei-code/resume.go
     symbol: tasksOf
     kind: function
+  - id: cmd/sensei-code/resume_blocked.go:containment.Err
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_blocked.go
+    symbol: containment.Err
+    kind: var
+  - id: cmd/sensei-code/resume_blocked.go:containment.Record
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_blocked.go
+    symbol: containment.Record
+    kind: var
+  - id: cmd/sensei-code/resume_blocked.go:containment.TaskID
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_blocked.go
+    symbol: containment.TaskID
+    kind: var
+  - id: cmd/sensei-code/resume_blocked.go:containment.Unsettled
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_blocked.go
+    symbol: containment.Unsettled
+    kind: var
+  - id: cmd/sensei-code/resume_blocked.go:containment.facts
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_blocked.go
+    symbol: containment.facts
+    kind: method
+  - id: cmd/sensei-code/resume_blocked.go:containment.refusal
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_blocked.go
+    symbol: containment.refusal
+    kind: method
+  - id: cmd/sensei-code/resume_blocked.go:containment~type
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_blocked.go
+    symbol: containment
+    kind: type
   - id: cmd/sensei-code/resume_blocked.go:continueTask
     namespace: structural.scip
     language: go
@@ -2152,6 +2278,12 @@ code_symbols:
     language: go
     file: cmd/sensei-code/resume_blocked.go
     symbol: errBlockedBehindQuestion
+    kind: var
+  - id: cmd/sensei-code/resume_blocked.go:errContainmentUnknown
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_blocked.go
+    symbol: errContainmentUnknown
     kind: var
   - id: cmd/sensei-code/resume_blocked.go:errObjectiveUnusable
     namespace: structural.scip
@@ -2176,6 +2308,12 @@ code_symbols:
     language: go
     file: cmd/sensei-code/resume_blocked.go
     symbol: errTaskQuarantined
+    kind: var
+  - id: cmd/sensei-code/resume_blocked.go:errWorkspaceQuarantined
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_blocked.go
+    symbol: errWorkspaceQuarantined
     kind: var
   - id: cmd/sensei-code/resume_blocked.go:laneArchitecture
     namespace: structural.scip
@@ -2218,6 +2356,12 @@ code_symbols:
     language: go
     file: cmd/sensei-code/resume_blocked.go
     symbol: laneUnusable
+    kind: const
+  - id: cmd/sensei-code/resume_blocked.go:laneWorkspaceQuarantined
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/resume_blocked.go
+    symbol: laneWorkspaceQuarantined
     kind: const
   - id: cmd/sensei-code/resume_blocked.go:resumeBlockedExternal
     namespace: structural.scip
@@ -2867,6 +3011,12 @@ code_symbols:
     file: cmd/sensei-code/run.go
     symbol: exitUsage
     kind: const
+  - id: cmd/sensei-code/run.go:exitWorkspaceQuarantined
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: exitWorkspaceQuarantined
+    kind: const
   - id: cmd/sensei-code/run.go:invocationHandle.Ended
     namespace: structural.scip
     language: go
@@ -3341,6 +3491,504 @@ code_symbols:
     file: cmd/sensei-code/webhook_test.go
     symbol: TestTheWebhookSecretIsConfiguredByPathAndNeverPrinted
     kind: function
+  - id: cmd/sensei-code/workspace_quarantine_identity_test.go:TestR370A10AnAnswerIsRefusedBeforeItIsConsumed
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_identity_test.go
+    symbol: TestR370A10AnAnswerIsRefusedBeforeItIsConsumed
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_identity_test.go:TestR370A12MatchingAndAbsentRecordsKeepTheirBehaviour
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_identity_test.go
+    symbol: TestR370A12MatchingAndAbsentRecordsKeepTheirBehaviour
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_identity_test.go:TestR370A14ALocklessPlatformRefusesTheContradiction
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_identity_test.go
+    symbol: TestR370A14ALocklessPlatformRefusesTheContradiction
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_identity_test.go:TestR370A1AContradictoryRecordIsRefusedAtTheFirstGate
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_identity_test.go
+    symbol: TestR370A1AContradictoryRecordIsRefusedAtTheFirstGate
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_identity_test.go:TestR370A2AMissingIdentityIsNotTreatedAsAbsent
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_identity_test.go
+    symbol: TestR370A2AMissingIdentityIsNotTreatedAsAbsent
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_identity_test.go:TestR370A3AnOrphanedContradictionKeepsItsObligation
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_identity_test.go
+    symbol: TestR370A3AnOrphanedContradictionKeepsItsObligation
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_identity_test.go:TestR370A8TheListingShowsTheFilenameIdentity
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_identity_test.go
+    symbol: TestR370A8TheListingShowsTheFilenameIdentity
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_identity_test.go:r370After
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_identity_test.go
+    symbol: r370After
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_identity_test.go:r370Contradict
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_identity_test.go
+    symbol: r370Contradict
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_lockless_test.go:TestR367N1W3AQuarantineStaysNonContinuableWithoutTheLock
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_lockless_test.go
+    symbol: TestR367N1W3AQuarantineStaysNonContinuableWithoutTheLock
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_lockless_test.go:TestR367N1W4AnUnreadableRecordIsNotSettledWithoutTheLock
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_lockless_test.go
+    symbol: TestR367N1W4AnUnreadableRecordIsNotSettledWithoutTheLock
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_lockless_test.go:TestR367N1W5LegacyResumeKeepsItsBehaviourWithoutTheLock
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_lockless_test.go
+    symbol: TestR367N1W5LegacyResumeKeepsItsBehaviourWithoutTheLock
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_lockless_test.go:r367NoLock
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_lockless_test.go
+    symbol: r367NoLock
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_n3_test.go:TestR367N3AReviewReadFailureDoesNotHideContainment
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_n3_test.go
+    symbol: TestR367N3AReviewReadFailureDoesNotHideContainment
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:TestR371C17TheHeadlessExitIsWorkspaceQuarantined
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: TestR371C17TheHeadlessExitIsWorkspaceQuarantined
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:TestR371S14RestartDiscoveryDoesNotResumeAnUnverifiedQuarantine
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: TestR371S14RestartDiscoveryDoesNotResumeAnUnverifiedQuarantine
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:TestR372S12ALockedAbsenceAllowsTheOrdinaryLane
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: TestR372S12ALockedAbsenceAllowsTheOrdinaryLane
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:TestR372S13AnInvalidLockCannotEstablishContainment
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: TestR372S13AnInvalidLockCannotEstablishContainment
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:TestR372S23L8TheCLIMatrixAgreesWithTheEngine
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: TestR372S23L8TheCLIMatrixAgreesWithTheEngine
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:TestR372S8TheContainmentRefusalPrecedesTheObjectiveCheck
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: TestR372S8TheContainmentRefusalPrecedesTheObjectiveCheck
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:TestR372S9OneFailedReadHidesNothingElse
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: TestR372S9OneFailedReadHidesNothingElse
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:r371Unverified
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: r371Unverified
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:r372Allowed
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: r372Allowed
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:r372CLIOrdinary
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: r372CLIOrdinary
+    kind: const
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:r372CLIQuarantined
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: r372CLIQuarantined
+    kind: const
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:r372CLIStatus~type
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: r372CLIStatus
+    kind: type
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:r372CLIUnknown
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: r372CLIUnknown
+    kind: const
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:r372InvalidLock
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: r372InvalidLock
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r371_test.go:r372Refused
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r371_test.go
+    symbol: r372Refused
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r373_entry_test.go:TestR373S21EveryEntryReachesTheSameContainmentDecision
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r373_entry_test.go
+    symbol: TestR373S21EveryEntryReachesTheSameContainmentDecision
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r373_entry_test.go:r373EngineDecision
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r373_entry_test.go
+    symbol: r373EngineDecision
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r373_test.go:TestR373TUIBTheCLIRefusesThePlannedSettledInvalidLockSpecimen
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r373_test.go
+    symbol: TestR373TUIBTheCLIRefusesThePlannedSettledInvalidLockSpecimen
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r373_test.go:r373PlannedHistory
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r373_test.go
+    symbol: r373PlannedHistory
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r373_test.go:r373SettledInvalidLock
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r373_test.go
+    symbol: r373SettledInvalidLock
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r374_test.go:TestR374W13TheInRunContainmentRefusalExitsEleven
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r374_test.go
+    symbol: TestR374W13TheInRunContainmentRefusalExitsEleven
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:TestD375W1NoHistoryUnlistableInventoryFails
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: TestD375W1NoHistoryUnlistableInventoryFails
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:TestD375W2HistoryUnlistableInventoryShowsKnownTasksAndFails
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: TestD375W2HistoryUnlistableInventoryShowsKnownTasksAndFails
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:TestD375W2UnreadableInventoryKeepsAnEstablishedQuarantineVisible
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: TestD375W2UnreadableInventoryKeepsAnEstablishedQuarantineVisible
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:TestD375W3ScopedListingDoesNotHideAnUnlistableInventory
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: TestD375W3ScopedListingDoesNotHideAnUnlistableInventory
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:TestD375W4ListableInventoryWithoutOrphansSucceeds
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: TestD375W4ListableInventoryWithoutOrphansSucceeds
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:TestD375W5ListableInventoryWithOrphansKeepsItsBehaviour
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: TestD375W5ListableInventoryWithOrphansKeepsItsBehaviour
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:TestD375W6AValidEmptyInventoryIsNotAFailure
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: TestD375W6AValidEmptyInventoryIsNotAFailure
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:TestD375W7AReviewReadFailureStillFailsWithObligationsVisible
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: TestD375W7AReviewReadFailureStillFailsWithObligationsVisible
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:TestD375W8TaskAndAnswerKeepTheirCanonicalGates
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: TestD375W8TaskAndAnswerKeepTheirCanonicalGates
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:TestD375W9TheListingMutatesNothing
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: TestD375W9TheListingMutatesNothing
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:r375ListDiag
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: r375ListDiag
+    kind: const
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:r375ReviewUnreadable
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: r375ReviewUnreadable
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:r375SameSnapshot
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: r375SameSnapshot
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:r375Snapshot
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: r375Snapshot
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_r375_test.go:r375Unlistable
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_r375_test.go
+    symbol: r375Unlistable
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_terminal_test.go:TestR368H10ACancellationRaceIsNotReportedAsATimeout
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_terminal_test.go
+    symbol: TestR368H10ACancellationRaceIsNotReportedAsATimeout
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_terminal_test.go:TestR368H11ExistingExitCodesKeepTheirMeaning
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_terminal_test.go
+    symbol: TestR368H11ExistingExitCodesKeepTheirMeaning
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_terminal_test.go:TestR368H1TheHeadlessConsumerEndsOnAWorkspaceQuarantine
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_terminal_test.go
+    symbol: TestR368H1TheHeadlessConsumerEndsOnAWorkspaceQuarantine
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_terminal_test.go:TestR368H6TheQuarantineEndsTheWaitPromptlyWithExit11
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_terminal_test.go
+    symbol: TestR368H6TheQuarantineEndsTheWaitPromptlyWithExit11
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_terminal_test.go:TestR368H7AQuietRunStillShowsTheQuarantineAndItsReason
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_terminal_test.go
+    symbol: TestR368H7AQuietRunStillShowsTheQuarantineAndItsReason
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_terminal_test.go:TestR368H8JSONReportsTheSameTerminalAndNoOther
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_terminal_test.go
+    symbol: TestR368H8JSONReportsTheSameTerminalAndNoOther
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_terminal_test.go:TestR368H9AResumedInvocationDrainEndsWithExit11
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_terminal_test.go
+    symbol: TestR368H9AResumedInvocationDrainEndsWithExit11
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_terminal_test.go:r368Capture
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_terminal_test.go
+    symbol: r368Capture
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_terminal_test.go:r368Exit
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_terminal_test.go
+    symbol: r368Exit
+    kind: const
+  - id: cmd/sensei-code/workspace_quarantine_terminal_test.go:r368Reason
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_terminal_test.go
+    symbol: r368Reason
+    kind: const
+  - id: cmd/sensei-code/workspace_quarantine_terminal_test.go:r368Settle
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_terminal_test.go
+    symbol: r368Settle
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_terminal_test.go:r368Task
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_terminal_test.go
+    symbol: r368Task
+    kind: const
+  - id: cmd/sensei-code/workspace_quarantine_terminal_test.go:r368Terminal
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_terminal_test.go
+    symbol: r368Terminal
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:TestP2BTheCurrentRecordDecidesNotTheSessionPayload
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: TestP2BTheCurrentRecordDecidesNotTheSessionPayload
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:TestP2BW18AP1EraOrphanIsListedAsOwedSettlement
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: TestP2BW18AP1EraOrphanIsListedAsOwedSettlement
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:TestP2BW20AnAnswerIsRefusedAndTheQuestionStands
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: TestP2BW20AnAnswerIsRefusedAndTheQuestionStands
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:TestP2BW21AHeldQuarantinedTaskIsRefusedBeforeLookupObjectiveOrIdentity
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: TestP2BW21AHeldQuarantinedTaskIsRefusedBeforeLookupObjectiveOrIdentity
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:TestP2BW21ResumeTaskIsRefusedBeforeAnyIdentityOrLineage
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: TestP2BW21ResumeTaskIsRefusedBeforeAnyIdentityOrLineage
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:TestP2BW22AnUnreadableRecordHidesNoOtherTask
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: TestP2BW22AnUnreadableRecordHidesNoOtherTask
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:TestP2BW26TheRecordIsConsultedBeforeAnythingIsStarted
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: TestP2BW26TheRecordIsConsultedBeforeAnythingIsStarted
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:TestP2BW8TheListingShowsAWorkspaceQuarantineDistinctly
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: TestP2BW8TheListingShowsAWorkspaceQuarantineDistinctly
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:wqBlock
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: wqBlock
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:wqCandidate
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: wqCandidate
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:wqInvocation
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: wqInvocation
+    kind: const
+  - id: cmd/sensei-code/workspace_quarantine_test.go:wqLaneText
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: wqLaneText
+    kind: const
+  - id: cmd/sensei-code/workspace_quarantine_test.go:wqLedger
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: wqLedger
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:wqNoSettle
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: wqNoSettle
+    kind: const
+  - id: cmd/sensei-code/workspace_quarantine_test.go:wqRead
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: wqRead
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:wqRecordPath
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: wqRecordPath
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:wqSessions
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: wqSessions
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:wqSettledCandidate
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: wqSettledCandidate
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:wqTerminal
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: wqTerminal
+    kind: function
+  - id: cmd/sensei-code/workspace_quarantine_test.go:wqUnknownText
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/workspace_quarantine_test.go
+    symbol: wqUnknownText
+    kind: const
   - id: experiments/b3-self-grounding/tools/lockscan.go:isLock
     namespace: structural.scip
     language: go
@@ -8237,6 +8885,12 @@ code_symbols:
     file: internal/candidate/identity.go
     symbol: ErrDirtyCanonical
     kind: type
+  - id: internal/candidate/identity.go:ErrIdentityContradiction
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: ErrIdentityContradiction
+    kind: var
   - id: internal/candidate/identity.go:ErrNoCrossProcessLock
     namespace: structural.scip
     language: go
@@ -8495,6 +9149,36 @@ code_symbols:
     file: internal/candidate/identity.go
     symbol: errProtectedState
     kind: var
+  - id: internal/candidate/identity.go:identityContradiction.Error
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: identityContradiction.Error
+    kind: method
+  - id: internal/candidate/identity.go:identityContradiction.Unwrap
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: identityContradiction.Unwrap
+    kind: method
+  - id: internal/candidate/identity.go:identityContradiction.embedded
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: identityContradiction.embedded
+    kind: var
+  - id: internal/candidate/identity.go:identityContradiction.requested
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: identityContradiction.requested
+    kind: var
+  - id: internal/candidate/identity.go:identityContradiction~type
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity.go
+    symbol: identityContradiction
+    kind: type
   - id: internal/candidate/identity.go:load
     namespace: structural.scip
     language: go
@@ -8560,6 +9244,78 @@ code_symbols:
     language: go
     file: internal/candidate/identity.go
     symbol: writeRecord
+    kind: function
+  - id: internal/candidate/identity_contradiction_test.go:TestR370A12AMatchingIdentityKeepsOrdinaryBehaviour
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity_contradiction_test.go
+    symbol: TestR370A12AMatchingIdentityKeepsOrdinaryBehaviour
+    kind: function
+  - id: internal/candidate/identity_contradiction_test.go:TestR370A13AnAbsentRecordStaysAbsent
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity_contradiction_test.go
+    symbol: TestR370A13AnAbsentRecordStaysAbsent
+    kind: function
+  - id: internal/candidate/identity_contradiction_test.go:TestR370A14TheLocklessReadRejectsAContradiction
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity_contradiction_test.go
+    symbol: TestR370A14TheLocklessReadRejectsAContradiction
+    kind: function
+  - id: internal/candidate/identity_contradiction_test.go:TestR370A15WritersRefuseAContradictoryRecordAndChangeNothing
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity_contradiction_test.go
+    symbol: TestR370A15WritersRefuseAContradictoryRecordAndChangeNothing
+    kind: function
+  - id: internal/candidate/identity_contradiction_test.go:TestR370A4LoadRejectsAContradictoryIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity_contradiction_test.go
+    symbol: TestR370A4LoadRejectsAContradictoryIdentity
+    kind: function
+  - id: internal/candidate/identity_contradiction_test.go:TestR370A5LoadLockedRejectsAContradictoryIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity_contradiction_test.go
+    symbol: TestR370A5LoadLockedRejectsAContradictoryIdentity
+    kind: function
+  - id: internal/candidate/identity_contradiction_test.go:TestR370A7ListReportsAContradictionUnderTheFilenameIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity_contradiction_test.go
+    symbol: TestR370A7ListReportsAContradictionUnderTheFilenameIdentity
+    kind: function
+  - id: internal/candidate/identity_contradiction_test.go:claim
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity_contradiction_test.go
+    symbol: claim
+    kind: var
+  - id: internal/candidate/identity_contradiction_test.go:omit
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity_contradiction_test.go
+    symbol: omit
+    kind: var
+  - id: internal/candidate/identity_contradiction_test.go:r370Contradictions
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity_contradiction_test.go
+    symbol: r370Contradictions
+    kind: var
+  - id: internal/candidate/identity_contradiction_test.go:r370Record
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity_contradiction_test.go
+    symbol: r370Record
+    kind: function
+  - id: internal/candidate/identity_contradiction_test.go:r370Unchanged
+    namespace: structural.scip
+    language: go
+    file: internal/candidate/identity_contradiction_test.go
+    symbol: r370Unchanged
     kind: function
   - id: internal/candidate/identity_test.go:TestBaseSHAIsImmutableForACandidateLifecycle
     namespace: structural.scip
@@ -14405,6 +15161,18 @@ code_symbols:
     file: internal/event/event.go
     symbol: WorkflowTimedOut
     kind: const
+  - id: internal/event/event.go:WorkflowWorkspaceQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/event/event.go
+    symbol: WorkflowWorkspaceQuarantined
+    kind: const
+  - id: internal/event/workspace_quarantine_test.go:TestAWorkspaceQuarantineEndsTheInvocationNotTheTask
+    namespace: structural.scip
+    language: go
+    file: internal/event/workspace_quarantine_test.go
+    symbol: TestAWorkspaceQuarantineEndsTheInvocationNotTheTask
+    kind: function
   - id: internal/evidence/envelope.go:Envelope.GraphDigest
     namespace: structural.scip
     language: go
@@ -26009,6 +26777,42 @@ code_symbols:
     file: internal/project/project_test.go
     symbol: ev
     kind: function
+  - id: internal/project/workspace_quarantine_test.go:TestR368P1SummarizeIncludesTheQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/project/workspace_quarantine_test.go
+    symbol: TestR368P1SummarizeIncludesTheQuarantine
+    kind: function
+  - id: internal/project/workspace_quarantine_test.go:TestR368P2TheQuarantineKeepsItsDistinctMeaning
+    namespace: structural.scip
+    language: go
+    file: internal/project/workspace_quarantine_test.go
+    symbol: TestR368P2TheQuarantineKeepsItsDistinctMeaning
+    kind: function
+  - id: internal/project/workspace_quarantine_test.go:TestR368P3NoSettlementIsClaimed
+    namespace: structural.scip
+    language: go
+    file: internal/project/workspace_quarantine_test.go
+    symbol: TestR368P3NoSettlementIsClaimed
+    kind: function
+  - id: internal/project/workspace_quarantine_test.go:TestR368P4BoundsAndPriorClassificationsAreUnchanged
+    namespace: structural.scip
+    language: go
+    file: internal/project/workspace_quarantine_test.go
+    symbol: TestR368P4BoundsAndPriorClassificationsAreUnchanged
+    kind: function
+  - id: internal/project/workspace_quarantine_test.go:r368Events
+    namespace: structural.scip
+    language: go
+    file: internal/project/workspace_quarantine_test.go
+    symbol: r368Events
+    kind: function
+  - id: internal/project/workspace_quarantine_test.go:r368Summary
+    namespace: structural.scip
+    language: go
+    file: internal/project/workspace_quarantine_test.go
+    symbol: r368Summary
+    kind: const
   - id: internal/proofbench/adjudicate_test.go:TestARefusalRecordsWhatItActuallyClaimed
     namespace: structural.scip
     language: go
@@ -28846,6 +29650,132 @@ code_symbols:
     language: go
     file: internal/proofbench/metrics.go
     symbol: nonConvergent
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376C1GovernedExit11IsNotAnAnonymousExitCode
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376C1GovernedExit11IsNotAnAnonymousExitCode
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376C2Exit11IsNotAGenericTerminal
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376C2Exit11IsNotAGenericTerminal
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376C3InfraPhraseDoesNotSetInfrastructureOnExit11
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376C3InfraPhraseDoesNotSetInfrastructureOnExit11
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376C4Exit11ArmIsNotInfraRetryEligible
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376C4Exit11ArmIsNotInfraRetryEligible
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376W10UnknownCodesNeverBecomeSuccess
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376W10UnknownCodesNeverBecomeSuccess
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376W11GenericExit1KeepsTextClassification
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376W11GenericExit1KeepsTextClassification
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376W1Exit11MapsToWorkspaceQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376W1Exit11MapsToWorkspaceQuarantined
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376W2Exit11IsStructuredSpecific
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376W2Exit11IsStructuredSpecific
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376W3InfraPhraseCannotReplaceTheQuarantineOutcome
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376W3InfraPhraseCannotReplaceTheQuarantineOutcome
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376W4InfraPhraseIsRetainedAsDiagnosticEvidence
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376W4InfraPhraseIsRetainedAsDiagnosticEvidence
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376W5EvidenceNamesTheOverrulingStructuredTerminal
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376W5EvidenceNamesTheOverrulingStructuredTerminal
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376W6InfrastructureIsNotTheDecidingClassification
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376W6InfrastructureIsNotTheDecidingClassification
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376W7AQuarantinedArmIsNotInfraRetryEligible
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376W7AQuarantinedArmIsNotInfraRetryEligible
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376W8AQuarantineIsNotASuccessfulCompletedChange
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376W8AQuarantineIsNotASuccessfulCompletedChange
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:TestP376W9DocumentedCodesKeepTheirMappings
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: TestP376W9DocumentedCodesKeepTheirMappings
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:itoaR376
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: itoaR376
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:r376Attempt
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: r376Attempt
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:r376Execute
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: r376Execute
+    kind: function
+  - id: internal/proofbench/quarantine_r376_test.go:r376Phrase
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: r376Phrase
+    kind: const
+  - id: internal/proofbench/quarantine_r376_test.go:r376Quarantined
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: r376Quarantined
+    kind: const
+  - id: internal/proofbench/quarantine_r376_test.go:r376Stream
+    namespace: structural.scip
+    language: go
+    file: internal/proofbench/quarantine_r376_test.go
+    symbol: r376Stream
     kind: function
   - id: internal/proofbench/quota.go:AdmitCampaign
     namespace: structural.scip
@@ -34565,6 +35495,12 @@ code_symbols:
     file: internal/runreceipt/legacy/fromevents.go
     symbol: candidateReconstruction.publish
     kind: method
+  - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.quarantine
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: candidateReconstruction.quarantine
+    kind: method
   - id: internal/runreceipt/legacy/fromevents.go:candidateReconstruction.receipt
     namespace: structural.scip
     language: go
@@ -34667,6 +35603,18 @@ code_symbols:
     file: internal/runreceipt/legacy/fromevents.go
     symbol: payloadDeclaration
     kind: function
+  - id: internal/runreceipt/legacy/fromevents.go:pendingMaterialMembers
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: pendingMaterialMembers
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:pendingRefusedMaterial
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: pendingRefusedMaterial
+    kind: function
   - id: internal/runreceipt/legacy/fromevents.go:planAdmissionRefusal
     namespace: structural.scip
     language: go
@@ -34678,6 +35626,18 @@ code_symbols:
     language: go
     file: internal/runreceipt/legacy/fromevents.go
     symbol: planAdmissionRefusedKind
+    kind: const
+  - id: internal/runreceipt/legacy/fromevents.go:quarantineMembers
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: quarantineMembers
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:quarantinedCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: quarantinedCandidate
     kind: const
   - id: internal/runreceipt/legacy/fromevents.go:readReceiptCandidate
     namespace: structural.scip
@@ -34733,6 +35693,36 @@ code_symbols:
     file: internal/runreceipt/legacy/fromevents.go
     symbol: text
     kind: function
+  - id: internal/runreceipt/legacy/fromevents.go:undeclared
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: undeclared
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents.go:unverifiedQuarantineMembers
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: unverifiedQuarantineMembers
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:verifiedQuarantineMembers
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: verifiedQuarantineMembers
+    kind: var
+  - id: internal/runreceipt/legacy/fromevents.go:workspaceQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: workspaceQuarantine
+    kind: function
+  - id: internal/runreceipt/legacy/fromevents.go:workspaceQuarantinedKind
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/fromevents.go
+    symbol: workspaceQuarantinedKind
+    kind: const
   - id: internal/runreceipt/legacy/fromevents_test.go:TestALaterPartialReceiptInheritsNoIdentity
     namespace: structural.scip
     language: go
@@ -34919,6 +35909,258 @@ code_symbols:
     file: internal/runreceipt/legacy/fromevents_test.go
     symbol: specimenStream
     kind: const
+  - id: internal/runreceipt/legacy/quarantine_r370_test.go:TestR370B10ACorrectUnverifiedPayloadStaysUnknown
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r370_test.go
+    symbol: TestR370B10ACorrectUnverifiedPayloadStaysUnknown
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r370_test.go:TestR370B11AStatedDispositionIsKeptAsStated
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r370_test.go
+    symbol: TestR370B11AStatedDispositionIsKeptAsStated
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r370_test.go:TestR370B12B14UndeclaredMembersNeverPanic
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r370_test.go
+    symbol: TestR370B12B14UndeclaredMembersNeverPanic
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r370_test.go:TestR370B13AnEarlierVerdictNeverOverridesAMalformedQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r370_test.go
+    symbol: TestR370B13AnEarlierVerdictNeverOverridesAMalformedQuarantine
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r370_test.go:TestR370B1B5AnUndeclaredVerifiedMemberIsMalformed
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r370_test.go
+    symbol: TestR370B1B5AnUndeclaredVerifiedMemberIsMalformed
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r370_test.go:TestR370B2B6AnUndeclaredUnverifiedMemberIsMalformed
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r370_test.go
+    symbol: TestR370B2B6AnUndeclaredUnverifiedMemberIsMalformed
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r370_test.go:TestR370B3B7AnUndeclaredPendingMemberIsMalformed
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r370_test.go
+    symbol: TestR370B3B7AnUndeclaredPendingMemberIsMalformed
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r370_test.go:TestR370B4B8AMissingPendingDispositionIsNotSynthesized
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r370_test.go
+    symbol: TestR370B4B8AMissingPendingDispositionIsNotSynthesized
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r370_test.go:TestR370B9ACorrectVerifiedPayloadStaysValid
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r370_test.go
+    symbol: TestR370B9ACorrectVerifiedPayloadStaysValid
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r370_test.go:r370Diagnosed
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r370_test.go
+    symbol: r370Diagnosed
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r370_test.go:r370MalformedNaming
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r370_test.go
+    symbol: r370MalformedNaming
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r370_test.go:r370Pending
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r370_test.go
+    symbol: r370Pending
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r370_test.go:r370Refusal
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r370_test.go
+    symbol: r370Refusal
+    kind: const
+  - id: internal/runreceipt/legacy/quarantine_r371_test.go:TestR371D1D3AMalformedPendingDisclosureIsRejected
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r371_test.go
+    symbol: TestR371D1D3AMalformedPendingDisclosureIsRejected
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r371_test.go:TestR371D4AValidDisclosureKeepsPending
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r371_test.go
+    symbol: TestR371D4AValidDisclosureKeepsPending
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r371_test.go:TestR371D5AnAbsentDisclosureInventsNothing
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r371_test.go
+    symbol: TestR371D5AnAbsentDisclosureInventsNothing
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_r371_test.go:r371Malformed
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_r371_test.go
+    symbol: r371Malformed
+    kind: var
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL10TheQuarantinedCandidateIsUnknown
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL10TheQuarantinedCandidateIsUnknown
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL11AVerifiedPayloadIsReconstructedWithoutStrengtheningAbsentFacts
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL11AVerifiedPayloadIsReconstructedWithoutStrengtheningAbsentFacts
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL12AnUnverifiedPayloadStaysUnverified
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL12AnUnverifiedPayloadStaysUnverified
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL13MissingOrMalformedMembersAreClassified
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL13MissingOrMalformedMembersAreClassified
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL14PendingRefusedMaterialStaysPending
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL14PendingRefusedMaterialStaysPending
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL15ALaterInvocationTerminalIsNotOverriddenByAStaleQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL15ALaterInvocationTerminalIsNotOverriddenByAStaleQuarantine
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL16PlanAdmissionRefusalPrecedenceIsUnchanged
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL16PlanAdmissionRefusalPrecedenceIsUnchanged
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL1AQuarantineTerminalIsModelled
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL1AQuarantineTerminalIsModelled
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL2AnEarlierAcceptDoesNotNameTheQuarantinedInvocation
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL2AnEarlierAcceptDoesNotNameTheQuarantinedInvocation
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL3AnEarlierRefusalDoesNotNameTheQuarantinedInvocation
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL3AnEarlierRefusalDoesNotNameTheQuarantinedInvocation
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL4APreviousCandidateIsNotTheQuarantinedMeasurement
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL4APreviousCandidateIsNotTheQuarantinedMeasurement
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL5AVerifiedPayloadIsReconstructedAsTheV14Fact
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL5AVerifiedPayloadIsReconstructedAsTheV14Fact
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL6TheOutcomeIsWorkspaceQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL6TheOutcomeIsWorkspaceQuarantined
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL7TheTerminalIsKnownWithItsSource
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL7TheTerminalIsKnownWithItsSource
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL8AnEarlierAcceptDoesNotOverrideTheQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL8AnEarlierAcceptDoesNotOverrideTheQuarantine
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:TestL9AnEarlierRefusalDoesNotOverrideTheQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: TestL9AnEarlierRefusalDoesNotOverrideTheQuarantine
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:acceptVerdict
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: acceptVerdict
+    kind: const
+  - id: internal/runreceipt/legacy/quarantine_test.go:issuesWith
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: issuesWith
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:quarantineEvent
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: quarantineEvent
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:quarantineOf
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: quarantineOf
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:quarantinedKind
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: quarantinedKind
+    kind: const
+  - id: internal/runreceipt/legacy/quarantine_test.go:reviseVerdict
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: reviseVerdict
+    kind: const
+  - id: internal/runreceipt/legacy/quarantine_test.go:stream
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: stream
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:unverifiedPayload
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: unverifiedPayload
+    kind: function
+  - id: internal/runreceipt/legacy/quarantine_test.go:verifiedPayload
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/legacy/quarantine_test.go
+    symbol: verifiedPayload
+    kind: function
   - id: internal/runreceipt/receipt.go:Attempt.DeliveredVerdict
     namespace: structural.scip
     language: go
@@ -35369,11 +36611,59 @@ code_symbols:
     file: internal/runreceipt/receipt.go
     symbol: OutcomeUnreviewed
     kind: const
+  - id: internal/runreceipt/receipt.go:OutcomeWorkspaceQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: OutcomeWorkspaceQuarantined
+    kind: const
   - id: internal/runreceipt/receipt.go:Outcome~type
     namespace: structural.scip
     language: go
     file: internal/runreceipt/receipt.go
     symbol: Outcome
+    kind: type
+  - id: internal/runreceipt/receipt.go:PendingDisposition
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PendingDisposition
+    kind: const
+  - id: internal/runreceipt/receipt.go:PendingRefusedMaterial.Disposition
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PendingRefusedMaterial.Disposition
+    kind: var
+  - id: internal/runreceipt/receipt.go:PendingRefusedMaterial.Reason
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PendingRefusedMaterial.Reason
+    kind: var
+  - id: internal/runreceipt/receipt.go:PendingRefusedMaterial.RefusalID
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PendingRefusedMaterial.RefusalID
+    kind: var
+  - id: internal/runreceipt/receipt.go:PendingRefusedMaterial.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PendingRefusedMaterial.TaskID
+    kind: var
+  - id: internal/runreceipt/receipt.go:PendingRefusedMaterial.Workspace
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PendingRefusedMaterial.Workspace
+    kind: var
+  - id: internal/runreceipt/receipt.go:PendingRefusedMaterial~type
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: PendingRefusedMaterial
     kind: type
   - id: internal/runreceipt/receipt.go:PlanAdmissionProductionScope
     namespace: structural.scip
@@ -35711,6 +37001,12 @@ code_symbols:
     file: internal/runreceipt/receipt.go
     symbol: Receipt.Verify
     kind: method
+  - id: internal/runreceipt/receipt.go:Receipt.WorkspaceQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: Receipt.WorkspaceQuarantine
+    kind: var
   - id: internal/runreceipt/receipt.go:Receipt.checkBoundedReview
     namespace: structural.scip
     language: go
@@ -35722,6 +37018,18 @@ code_symbols:
     language: go
     file: internal/runreceipt/receipt.go
     symbol: Receipt.checkPlanAdmissionRefusal
+    kind: method
+  - id: internal/runreceipt/receipt.go:Receipt.checkWorkspaceQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: Receipt.checkWorkspaceQuarantine
+    kind: method
+  - id: internal/runreceipt/receipt.go:Receipt.quarantineExplainsUnknownCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: Receipt.quarantineExplainsUnknownCandidate
     kind: method
   - id: internal/runreceipt/receipt.go:Receipt~type
     namespace: structural.scip
@@ -35830,6 +37138,90 @@ code_symbols:
     language: go
     file: internal/runreceipt/receipt.go
     symbol: Value
+    kind: type
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine.Baseline
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine.Baseline
+    kind: var
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine.Detail
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine.Detail
+    kind: var
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine.Invocation
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine.Invocation
+    kind: var
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine.PendingRefusedMaterial
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine.PendingRefusedMaterial
+    kind: var
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine.Phase
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine.Phase
+    kind: var
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine.Reason
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine.Reason
+    kind: var
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine.Recorded
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine.Recorded
+    kind: var
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine.Source
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine.Source
+    kind: var
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine.State
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine.State
+    kind: var
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine.TaskID
+    kind: var
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine.Workspace
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine.Workspace
+    kind: var
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine.checkPendingRefusedMaterial
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine.checkPendingRefusedMaterial
+    kind: method
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine.value
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine.value
+    kind: method
+  - id: internal/runreceipt/receipt.go:WorkspaceQuarantine~type
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/receipt.go
+    symbol: WorkspaceQuarantine
     kind: type
   - id: internal/runreceipt/receipt.go:candidateVocabularies
     namespace: structural.scip
@@ -36167,6 +37559,102 @@ code_symbols:
     file: internal/runreceipt/vocabulary_test.go
     symbol: TestTheReceiptVocabularyMatchesTheReviewerContract
     kind: function
+  - id: internal/runreceipt/workspace_quarantine_r367_test.go:TestR367N2AContradictoryOrUnknownDisclosureIsIncomplete
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_r367_test.go
+    symbol: TestR367N2AContradictoryOrUnknownDisclosureIsIncomplete
+    kind: function
+  - id: internal/runreceipt/workspace_quarantine_r367_test.go:TestR367N2APendingDisclosureIsReadAndCompletes
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_r367_test.go
+    symbol: TestR367N2APendingDisclosureIsReadAndCompletes
+    kind: function
+  - id: internal/runreceipt/workspace_quarantine_r367_test.go:pendingDisclosure
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_r367_test.go
+    symbol: pendingDisclosure
+    kind: function
+  - id: internal/runreceipt/workspace_quarantine_r367_test.go:withDisclosure
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_r367_test.go
+    symbol: withDisclosure
+    kind: function
+  - id: internal/runreceipt/workspace_quarantine_test.go:TestW15AContradictoryQuarantineObservationIsIncomplete
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_test.go
+    symbol: TestW15AContradictoryQuarantineObservationIsIncomplete
+    kind: function
+  - id: internal/runreceipt/workspace_quarantine_test.go:TestW15AVerifiedQuarantineExplainsAnUnknownCandidateAndAMissingOneDoesNot
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_test.go
+    symbol: TestW15AVerifiedQuarantineExplainsAnUnknownCandidateAndAMissingOneDoesNot
+    kind: function
+  - id: internal/runreceipt/workspace_quarantine_test.go:TestW16AnUnknownCandidateIsInsufficientForEveryOtherOutcomeAndVersion
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_test.go
+    symbol: TestW16AnUnknownCandidateIsInsufficientForEveryOtherOutcomeAndVersion
+    kind: function
+  - id: internal/runreceipt/workspace_quarantine_test.go:TestW17AnUnverifiedQuarantineNeverCompletesTheReceipt
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_test.go
+    symbol: TestW17AnUnverifiedQuarantineNeverCompletesTheReceipt
+    kind: function
+  - id: internal/runreceipt/workspace_quarantine_test.go:TestW6TheV14SchemaSpeaksWorkspaceQuarantinedAndV13DoesNot
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_test.go
+    symbol: TestW6TheV14SchemaSpeaksWorkspaceQuarantinedAndV13DoesNot
+    kind: function
+  - id: internal/runreceipt/workspace_quarantine_test.go:mentions
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_test.go
+    symbol: mentions
+    kind: function
+  - id: internal/runreceipt/workspace_quarantine_test.go:quarantinedReceipt
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_test.go
+    symbol: quarantinedReceipt
+    kind: function
+  - id: internal/runreceipt/workspace_quarantine_test.go:unverifiedQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_test.go
+    symbol: unverifiedQuarantine
+    kind: function
+  - id: internal/runreceipt/workspace_quarantine_test.go:v13
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_test.go
+    symbol: v13
+    kind: const
+  - id: internal/runreceipt/workspace_quarantine_test.go:v14
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_test.go
+    symbol: v14
+    kind: const
+  - id: internal/runreceipt/workspace_quarantine_test.go:verifiedQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_test.go
+    symbol: verifiedQuarantine
+    kind: function
+  - id: internal/runreceipt/workspace_quarantine_test.go:workspaceQuarantinedOutcome
+    namespace: structural.scip
+    language: go
+    file: internal/runreceipt/workspace_quarantine_test.go
+    symbol: workspaceQuarantinedOutcome
+    kind: const
   - id: internal/sensei/contracts.go:AuditAvailabilityCannot
     namespace: structural.scip
     language: go
@@ -38987,6 +40475,18 @@ code_symbols:
     file: internal/session/lineage.go
     symbol: payloadless
     kind: function
+  - id: internal/session/lineage.go:pendingDisposition
+    namespace: structural.scip
+    language: go
+    file: internal/session/lineage.go
+    symbol: pendingDisposition
+    kind: const
+  - id: internal/session/lineage.go:pendingRefusedMaterialShape
+    namespace: structural.scip
+    language: go
+    file: internal/session/lineage.go
+    symbol: pendingRefusedMaterialShape
+    kind: var
   - id: internal/session/lineage.go:planAdmissionRefusalIfOne
     namespace: structural.scip
     language: go
@@ -39418,6 +40918,24 @@ code_symbols:
     language: go
     file: internal/session/lineage.go
     symbol: validationShape
+    kind: var
+  - id: internal/session/lineage.go:workspaceQuarantinedPayload
+    namespace: structural.scip
+    language: go
+    file: internal/session/lineage.go
+    symbol: workspaceQuarantinedPayload
+    kind: function
+  - id: internal/session/lineage.go:workspaceQuarantinedShape
+    namespace: structural.scip
+    language: go
+    file: internal/session/lineage.go
+    symbol: workspaceQuarantinedShape
+    kind: var
+  - id: internal/session/lineage.go:workspaceUnverifiedShape
+    namespace: structural.scip
+    language: go
+    file: internal/session/lineage.go
+    symbol: workspaceUnverifiedShape
     kind: var
   - id: internal/session/record_outlives_candidate_test.go:TestTheExecutionRecordIsKeyedToTheCanonicalCheckout
     namespace: structural.scip
@@ -40853,6 +42371,12 @@ code_symbols:
     file: internal/session/store.go
     symbol: Interrupted.Unavailable
     kind: var
+  - id: internal/session/store.go:Interrupted.WorkspaceQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/session/store.go
+    symbol: Interrupted.WorkspaceQuarantined
+    kind: var
   - id: internal/session/store.go:Interrupted~type
     namespace: structural.scip
     language: go
@@ -42287,6 +43811,60 @@ code_symbols:
     file: internal/session/store.go
     symbol: walkEventIdentity
     kind: function
+  - id: internal/session/workspace_quarantine_r367_test.go:TestR367N2ThePendingMaterialMemberIsClosedAndBound
+    namespace: structural.scip
+    language: go
+    file: internal/session/workspace_quarantine_r367_test.go
+    symbol: TestR367N2ThePendingMaterialMemberIsClosedAndBound
+    kind: function
+  - id: internal/session/workspace_quarantine_r367_test.go:pendingMaterial
+    namespace: structural.scip
+    language: go
+    file: internal/session/workspace_quarantine_r367_test.go
+    symbol: pendingMaterial
+    kind: function
+  - id: internal/session/workspace_quarantine_r367_test.go:withPending
+    namespace: structural.scip
+    language: go
+    file: internal/session/workspace_quarantine_r367_test.go
+    symbol: withPending
+    kind: function
+  - id: internal/session/workspace_quarantine_resume_test.go:TestW3TheFoldKeepsAQuarantinedTaskListedAndOwed
+    namespace: structural.scip
+    language: go
+    file: internal/session/workspace_quarantine_resume_test.go
+    symbol: TestW3TheFoldKeepsAQuarantinedTaskListedAndOwed
+    kind: function
+  - id: internal/session/workspace_quarantine_test.go:TestW7TheWorkspaceQuarantinePayloadIsClosedAndSystemOwned
+    namespace: structural.scip
+    language: go
+    file: internal/session/workspace_quarantine_test.go
+    symbol: TestW7TheWorkspaceQuarantinePayloadIsClosedAndSystemOwned
+    kind: function
+  - id: internal/session/workspace_quarantine_test.go:quarantineEvent
+    namespace: structural.scip
+    language: go
+    file: internal/session/workspace_quarantine_test.go
+    symbol: quarantineEvent
+    kind: function
+  - id: internal/session/workspace_quarantine_test.go:unverifiedQuarantinePayload
+    namespace: structural.scip
+    language: go
+    file: internal/session/workspace_quarantine_test.go
+    symbol: unverifiedQuarantinePayload
+    kind: function
+  - id: internal/session/workspace_quarantine_test.go:verifiedQuarantinePayload
+    namespace: structural.scip
+    language: go
+    file: internal/session/workspace_quarantine_test.go
+    symbol: verifiedQuarantinePayload
+    kind: function
+  - id: internal/session/workspace_quarantine_test.go:workspaceQuarantinedKind
+    namespace: structural.scip
+    language: go
+    file: internal/session/workspace_quarantine_test.go
+    symbol: workspaceQuarantinedKind
+    kind: const
   - id: internal/setup/checks.go:DecodeToolNames
     namespace: structural.scip
     language: go
@@ -45124,6 +46702,72 @@ code_symbols:
     language: go
     file: internal/tui/setup_command_test.go
     symbol: tree
+    kind: function
+  - id: internal/tui/workspace_quarantine_test.go:TestR368T1TheQuarantineClearsTheBusyWait
+    namespace: structural.scip
+    language: go
+    file: internal/tui/workspace_quarantine_test.go
+    symbol: TestR368T1TheQuarantineClearsTheBusyWait
+    kind: function
+  - id: internal/tui/workspace_quarantine_test.go:TestR368T2NonVerboseShowsWorkspaceQuarantinedAndTheSummary
+    namespace: structural.scip
+    language: go
+    file: internal/tui/workspace_quarantine_test.go
+    symbol: TestR368T2NonVerboseShowsWorkspaceQuarantinedAndTheSummary
+    kind: function
+  - id: internal/tui/workspace_quarantine_test.go:TestR368T3TheQuarantineIsNotAnotherOutcome
+    namespace: structural.scip
+    language: go
+    file: internal/tui/workspace_quarantine_test.go
+    symbol: TestR368T3TheQuarantineIsNotAnotherOutcome
+    kind: function
+  - id: internal/tui/workspace_quarantine_test.go:TestR368T4NothingSettlesRecapturesOrReusesTheWorkspace
+    namespace: structural.scip
+    language: go
+    file: internal/tui/workspace_quarantine_test.go
+    symbol: TestR368T4NothingSettlesRecapturesOrReusesTheWorkspace
+    kind: function
+  - id: internal/tui/workspace_quarantine_test.go:TestR368T5ExistingTerminalDisplayIsUnchanged
+    namespace: structural.scip
+    language: go
+    file: internal/tui/workspace_quarantine_test.go
+    symbol: TestR368T5ExistingTerminalDisplayIsUnchanged
+    kind: function
+  - id: internal/tui/workspace_quarantine_test.go:r368Block
+    namespace: structural.scip
+    language: go
+    file: internal/tui/workspace_quarantine_test.go
+    symbol: r368Block
+    kind: function
+  - id: internal/tui/workspace_quarantine_test.go:r368Busy
+    namespace: structural.scip
+    language: go
+    file: internal/tui/workspace_quarantine_test.go
+    symbol: r368Busy
+    kind: function
+  - id: internal/tui/workspace_quarantine_test.go:r368Event
+    namespace: structural.scip
+    language: go
+    file: internal/tui/workspace_quarantine_test.go
+    symbol: r368Event
+    kind: function
+  - id: internal/tui/workspace_quarantine_test.go:r368Summary
+    namespace: structural.scip
+    language: go
+    file: internal/tui/workspace_quarantine_test.go
+    symbol: r368Summary
+    kind: const
+  - id: internal/tui/workspace_quarantine_test.go:r368Task
+    namespace: structural.scip
+    language: go
+    file: internal/tui/workspace_quarantine_test.go
+    symbol: r368Task
+    kind: const
+  - id: internal/tui/workspace_quarantine_test.go:r368Update
+    namespace: structural.scip
+    language: go
+    file: internal/tui/workspace_quarantine_test.go
+    symbol: r368Update
     kind: function
   - id: internal/validation/confine_linux.go:openWrapper
     namespace: structural.scip
@@ -52289,6 +53933,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.endInvocation
     kind: method
+  - id: internal/workflow/engine.go:Engine.endQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.endQuarantined
+    kind: method
   - id: internal/workflow/engine.go:Engine.enterRecordGate
     namespace: structural.scip
     language: go
@@ -52576,6 +54226,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.pendingPlanAttempt
+    kind: method
+  - id: internal/workflow/engine.go:Engine.pendingRefusedMaterial
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.pendingRefusedMaterial
     kind: method
   - id: internal/workflow/engine.go:Engine.planAttemptsOf
     namespace: structural.scip
@@ -52925,6 +54581,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.resumeAuthority
     kind: method
+  - id: internal/workflow/engine.go:Engine.resumeContainmentRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.resumeContainmentRefusal
+    kind: method
   - id: internal/workflow/engine.go:Engine.resumePrecondition
     namespace: structural.scip
     language: go
@@ -53117,6 +54779,24 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.terminateAuthorityOutcome
     kind: method
+  - id: internal/workflow/engine.go:Engine.terminateOnLockedRead
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.terminateOnLockedRead
+    kind: method
+  - id: internal/workflow/engine.go:Engine.terminateQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.terminateQuarantined
+    kind: method
+  - id: internal/workflow/engine.go:Engine.terminateRefusedAdmission
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.terminateRefusedAdmission
+    kind: method
   - id: internal/workflow/engine.go:Engine.terminateRun
     namespace: structural.scip
     language: go
@@ -53189,11 +54869,23 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine
     kind: type
+  - id: internal/workflow/engine.go:ErrContainmentUnestablished
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: ErrContainmentUnestablished
+    kind: var
   - id: internal/workflow/engine.go:ErrNoRunInvocation
     namespace: structural.scip
     language: go
     file: internal/workflow/engine.go
     symbol: ErrNoRunInvocation
+    kind: var
+  - id: internal/workflow/engine.go:ErrResumeContainmentRefused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: ErrResumeContainmentRefused
     kind: var
   - id: internal/workflow/engine.go:ErrTaskInvocationLive
     namespace: structural.scip
@@ -53267,6 +54959,42 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: New
     kind: function
+  - id: internal/workflow/engine.go:PendingRefusedMaterial.Disposition
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: PendingRefusedMaterial.Disposition
+    kind: var
+  - id: internal/workflow/engine.go:PendingRefusedMaterial.Reason
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: PendingRefusedMaterial.Reason
+    kind: var
+  - id: internal/workflow/engine.go:PendingRefusedMaterial.RefusalID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: PendingRefusedMaterial.RefusalID
+    kind: var
+  - id: internal/workflow/engine.go:PendingRefusedMaterial.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: PendingRefusedMaterial.TaskID
+    kind: var
+  - id: internal/workflow/engine.go:PendingRefusedMaterial.Workspace
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: PendingRefusedMaterial.Workspace
+    kind: var
+  - id: internal/workflow/engine.go:PendingRefusedMaterial~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: PendingRefusedMaterial
+    kind: type
   - id: internal/workflow/engine.go:PlanAdmissionRefused.Describe
     namespace: structural.scip
     language: go
@@ -53584,6 +55312,60 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: UnprovenAuthorityScopeError
+    kind: type
+  - id: internal/workflow/engine.go:WorkspaceQuarantine.Baseline
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceQuarantine.Baseline
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceQuarantine.Invocation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceQuarantine.Invocation
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceQuarantine.PendingRefusedMaterial
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceQuarantine.PendingRefusedMaterial
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceQuarantine.Phase
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceQuarantine.Phase
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceQuarantine.Reason
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceQuarantine.Reason
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceQuarantine.Recorded
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceQuarantine.Recorded
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceQuarantine.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceQuarantine.TaskID
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceQuarantine.Workspace
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceQuarantine.Workspace
+    kind: var
+  - id: internal/workflow/engine.go:WorkspaceQuarantine~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: WorkspaceQuarantine
     kind: type
   - id: internal/workflow/engine.go:WorkspaceUnsettled.Baseline
     namespace: structural.scip
@@ -54053,6 +55835,84 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: composedRecipes
     kind: function
+  - id: internal/workflow/engine.go:confinementUnsupportedBeforeStart
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: confinementUnsupportedBeforeStart
+    kind: function
+  - id: internal/workflow/engine.go:containmentAdmissionRefusal.Error
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: containmentAdmissionRefusal.Error
+    kind: method
+  - id: internal/workflow/engine.go:containmentAdmissionRefusal.Unwrap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: containmentAdmissionRefusal.Unwrap
+    kind: method
+  - id: internal/workflow/engine.go:containmentAdmissionRefusal.err
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: containmentAdmissionRefusal.err
+    kind: var
+  - id: internal/workflow/engine.go:containmentAdmissionRefusal~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: containmentAdmissionRefusal
+    kind: type
+  - id: internal/workflow/engine.go:containmentCheck
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: containmentCheck
+    kind: function
+  - id: internal/workflow/engine.go:containmentFromRead
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: containmentFromRead
+    kind: function
+  - id: internal/workflow/engine.go:containmentRefusalCause
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: containmentRefusalCause
+    kind: function
+  - id: internal/workflow/engine.go:containmentUnestablished.Error
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: containmentUnestablished.Error
+    kind: method
+  - id: internal/workflow/engine.go:containmentUnestablished.Unwrap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: containmentUnestablished.Unwrap
+    kind: method
+  - id: internal/workflow/engine.go:containmentUnestablished.err
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: containmentUnestablished.err
+    kind: var
+  - id: internal/workflow/engine.go:containmentUnestablished.taskID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: containmentUnestablished.taskID
+    kind: var
+  - id: internal/workflow/engine.go:containmentUnestablished~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: containmentUnestablished
+    kind: type
   - id: internal/workflow/engine.go:conversationOrNone
     namespace: structural.scip
     language: go
@@ -56380,6 +58240,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: validationRequiresConfinement
+    kind: function
+  - id: internal/workflow/engine.go:verifiedQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: verifiedQuarantine
     kind: function
   - id: internal/workflow/engine.go:verifyCheckpoint
     namespace: structural.scip
@@ -64865,6 +66731,12 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: Engine.noteServingProducer
     kind: method
+  - id: internal/workflow/receipt.go:Engine.noteWorkspaceQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: Engine.noteWorkspaceQuarantine
+    kind: method
   - id: internal/workflow/receipt.go:Engine.noteWorld
     namespace: structural.scip
     language: go
@@ -65434,6 +67306,12 @@ code_symbols:
     language: go
     file: internal/workflow/receipt.go
     symbol: receiptFacts.verdict
+    kind: var
+  - id: internal/workflow/receipt.go:receiptFacts.workspaceQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: receiptFacts.workspaceQuarantine
     kind: var
   - id: internal/workflow/receipt.go:receiptFacts~type
     namespace: structural.scip
@@ -70985,4 +72863,856 @@ code_symbols:
     file: internal/workflow/waiting_review_test.go
     symbol: recordingUnansweredRunner
     kind: type
+  - id: internal/workflow/workspace_quarantine_r367_test.go:TestR367N1TheTypedPreStartDistinctionIsLoadBearing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: TestR367N1TheTypedPreStartDistinctionIsLoadBearing
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:TestR367N1W1NoRecordKeepsTheOrdinaryOutcome
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: TestR367N1W1NoRecordKeepsTheOrdinaryOutcome
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:TestR367N1W1W2UnsupportedConfinementBeforeStartKeepsTheOrdinaryOutcome
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: TestR367N1W1W2UnsupportedConfinementBeforeStartKeepsTheOrdinaryOutcome
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:TestR367N1W3W4W6UnresolvedOrUnreadableStateKeepsTheQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: TestR367N1W3W4W6UnresolvedOrUnreadableStateKeepsTheQuarantine
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:TestR367N1W6AGenuineUnresolvedExecutionStillProjectsTheQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: TestR367N1W6AGenuineUnresolvedExecutionStillProjectsTheQuarantine
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:TestR367N2W1OtherTerminalsKeepTheirSettlement
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: TestR367N2W1OtherTerminalsKeepTheirSettlement
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:TestR367N2W2W3W4PendingMaterialIsDisclosedDurablyAndNotSettled
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: TestR367N2W2W3W4PendingMaterialIsDisclosedDurablyAndNotSettled
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:TestR367N2W4AnUnestablishedRefusalIdentityIsUnknown
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: TestR367N2W4AnUnestablishedRefusalIdentityIsUnknown
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:TestR367N2W5AFailedUnitClaimsNoDurableDisclosure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: TestR367N2W5AFailedUnitClaimsNoDurableDisclosure
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:TestR367N2W6NoInventedObligation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: TestR367N2W6NoInventedObligation
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:r367Arm
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: r367Arm
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:r367Lockless
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: r367Lockless
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:r367Member
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: r367Member
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:r367Ordinary
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: r367Ordinary
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:r367Pending
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: r367Pending
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:r367Refusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: r367Refusal
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r367_test.go:r367Unsettled
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: r367Unsettled
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r367_test.go:r367Unsupported
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r367_test.go
+    symbol: r367Unsupported
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r371_test.go:TestR371C10C12ASuccessfulLockedReadDecides
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: TestR371C10C12ASuccessfulLockedReadDecides
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r371_test.go:TestR371C13TheLocklessPreStartExceptionIsUnchanged
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: TestR371C13TheLocklessPreStartExceptionIsUnchanged
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r371_test.go:TestR371C14ALockTimeoutUnderAnOrdinaryErrorIsNotFailed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: TestR371C14ALockTimeoutUnderAnOrdinaryErrorIsNotFailed
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r371_test.go:TestR371C15NoBehaviouralFailure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: TestR371C15NoBehaviouralFailure
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r371_test.go:TestR371C1C4AFailedLockedReadEndsOnTheUnverifiedQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: TestR371C1C4AFailedLockedReadEndsOnTheUnverifiedQuarantine
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r371_test.go:r371AssertUnverified
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: r371AssertUnverified
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r371_test.go:r371Damage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: r371Damage
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r371_test.go:r371End
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: r371End
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r371_test.go:r371Ending.cancel
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: r371Ending.cancel
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r371_test.go:r371Ending.note
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: r371Ending.note
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r371_test.go:r371Ending.timedOut
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: r371Ending.timedOut
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r371_test.go:r371Endings
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: r371Endings
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r371_test.go:r371Ending~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: r371Ending
+    kind: type
+  - id: internal/workflow/workspace_quarantine_r371_test.go:r371Err
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: r371Err
+    kind: const
+  - id: internal/workflow/workspace_quarantine_r371_test.go:r371RecordPath
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: r371RecordPath
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r371_test.go:root
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: root
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r371_test.go:t
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r371_test.go
+    symbol: t
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r372_test.go:T
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: T
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r372_test.go:TestR372L1LocklessNoRecordOrdinaryErrorIsAnOrdinaryFailure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: TestR372L1LocklessNoRecordOrdinaryErrorIsAnOrdinaryFailure
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r372_test.go:TestR372L2LocklessSettledOrdinaryErrorIsAnOrdinaryFailure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: TestR372L2LocklessSettledOrdinaryErrorIsAnOrdinaryFailure
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r372_test.go:TestR372L3LocklessNoRecordCancellationIsAnOrdinaryStop
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: TestR372L3LocklessNoRecordCancellationIsAnOrdinaryStop
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r372_test.go:TestR372L4LocklessNoRecordTimeoutIsAnOrdinaryTimeout
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: TestR372L4LocklessNoRecordTimeoutIsAnOrdinaryTimeout
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r372_test.go:TestR372L5L6LocklessUnsettledOrUnreadableIsAnUnverifiedQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: TestR372L5L6LocklessUnsettledOrUnreadableIsAnUnverifiedQuarantine
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r372_test.go:TestR372L7RequiredConfinementRefusesBeforeAnyExecution
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: TestR372L7RequiredConfinementRefusesBeforeAnyExecution
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r372_test.go:TestR372LocklessExceptionDoesNotReachASafetyStop
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: TestR372LocklessExceptionDoesNotReachASafetyStop
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r372_test.go:TestR372S23TheEngineMatrix
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: TestR372S23TheEngineMatrix
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r372_test.go:r372AssertOrdinary
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: r372AssertOrdinary
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r372_test.go:r372Ending
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: r372Ending
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r372_test.go:r372Lockless
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: r372Lockless
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r372_test.go:r372Ordinary
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: r372Ordinary
+    kind: const
+  - id: internal/workflow/workspace_quarantine_r372_test.go:r372Specimens
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: r372Specimens
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r372_test.go:r372Status~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: r372Status
+    kind: type
+  - id: internal/workflow/workspace_quarantine_r372_test.go:r372Unverified
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: r372Unverified
+    kind: const
+  - id: internal/workflow/workspace_quarantine_r372_test.go:r372Verified
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: r372Verified
+    kind: const
+  - id: internal/workflow/workspace_quarantine_r372_test.go:root
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: root
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r372_test.go:string
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: string
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r372_test.go:t
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r372_test.go
+    symbol: t
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:TestR373E15E16QuestionLaneKeepsTheOrdinaryContinuation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: TestR373E15E16QuestionLaneKeepsTheOrdinaryContinuation
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:TestR373E17E18E20E22ImplementRefusesBeforeTheWorktree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: TestR373E17E18E20E22ImplementRefusesBeforeTheWorktree
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:TestR373E17LockUnavailableBeforeReuseStopsTheWrite
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: TestR373E17LockUnavailableBeforeReuseStopsTheWrite
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:TestR373E19DisposalNeitherObservesNorRemoves
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: TestR373E19DisposalNeitherObservesNorRemoves
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:TestR373E1toE6SettledInvalidLockRefusesBeforeTheLineage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: TestR373E1toE6SettledInvalidLockRefusesBeforeTheLineage
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:TestR373E22ALinuxLockFailureIsNotRepairedByAnUnlockedRead
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: TestR373E22ALinuxLockFailureIsNotRepairedByAnUnlockedRead
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:TestR373E23toE26TheLocklessException
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: TestR373E23toE26TheLocklessException
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:TestR373E27E28LocklessPreStartRefusalFabricatesNothing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: TestR373E27E28LocklessPreStartRefusalFabricatesNothing
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:TestR373E7E21SettledValidLockResumesNormally
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: TestR373E7E21SettledValidLockResumesNormally
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:TestR373E8E20UnsettledRefusesBeforeTheLineage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: TestR373E8E20UnsettledRefusesBeforeTheLineage
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:TestR373E9toE14QuestionLaneRefusesBeforeTheLineage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: TestR373E9toE14QuestionLaneRefusesBeforeTheLineage
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:TestR373TheGateIsOrderedAndCanonical
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: TestR373TheGateIsOrderedAndCanonical
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:r373AssertGateRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: r373AssertGateRefusal
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:r373Implement
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: r373Implement
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_gate_test.go:r373Worktrees
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_gate_test.go
+    symbol: r373Worktrees
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_test.go:TestR373TUIAPlannedSettledInvalidLockDoesNotReachTheImplementer
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: TestR373TUIAPlannedSettledInvalidLockDoesNotReachTheImplementer
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_test.go:TestR373TUICQuestionLaneDoesNotBindTheLineage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: TestR373TUICQuestionLaneDoesNotBindTheLineage
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_test.go:TestR373TUIDQuestionCannotBeAnsweredBeforeContainment
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: TestR373TUIDQuestionCannotBeAnsweredBeforeContainment
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_test.go:TestR373TUIELockHeldPastItsBoundDoesNotReachTheImplementer
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: TestR373TUIELockHeldPastItsBoundDoesNotReachTheImplementer
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373AnswerWhileRunning
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373AnswerWhileRunning
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373HoldLock
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373HoldLock
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373InvalidLock
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373InvalidLock
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Ledger
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Ledger
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373LockPath
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373LockPath
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Planned.e
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Planned.e
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Planned.impl
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Planned.impl
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Planned.repoRoot
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Planned.repoRoot
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Planned.root
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Planned.root
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Planned.task
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Planned.task
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Planned.worktree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Planned.worktree
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373PlannedSpecimen
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373PlannedSpecimen
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Planned~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Planned
+    kind: type
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Question.e
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Question.e
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Question.holder
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Question.holder
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Question.repoRoot
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Question.repoRoot
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Question.task
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Question.task
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373QuestionSpecimen
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373QuestionSpecimen
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Question~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Question
+    kind: type
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Resume
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Resume
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Task
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Task
+    kind: const
+  - id: internal/workflow/workspace_quarantine_r373_test.go:r373Tree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r373_test.go
+    symbol: r373Tree
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_control_test.go:TestR374N1C1InRunLockContentionIsNotATaskFailure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_control_test.go
+    symbol: TestR374N1C1InRunLockContentionIsNotATaskFailure
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_control_test.go:TestR374N1C1hARepairedLockDoesNotTurnTheGateRefusalIntoAFailure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_control_test.go
+    symbol: TestR374N1C1hARepairedLockDoesNotTurnTheGateRefusalIntoAFailure
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_control_test.go:TestR374N1C1qASettledRereadDoesNotTurnTheQuarantineRefusalIntoAFailure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_control_test.go
+    symbol: TestR374N1C1qASettledRereadDoesNotTurnTheQuarantineRefusalIntoAFailure
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_control_test.go:e
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_control_test.go
+    symbol: e
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r374_control_test.go:error
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_control_test.go
+    symbol: error
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r374_control_test.go:r374AssertContainmentEnding
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_control_test.go
+    symbol: r374AssertContainmentEnding
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_control_test.go:r374Behaviour
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_control_test.go
+    symbol: r374Behaviour
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_control_test.go:r374Hold
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_control_test.go
+    symbol: r374Hold
+    kind: const
+  - id: internal/workflow/workspace_quarantine_r374_control_test.go:r374NoBehaviouralFailure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_control_test.go
+    symbol: r374NoBehaviouralFailure
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_control_test.go:r374Sites
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_control_test.go
+    symbol: r374Sites
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r374_control_test.go:root
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_control_test.go
+    symbol: root
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r374_control_test.go:t
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_control_test.go
+    symbol: t
+    kind: var
+  - id: internal/workflow/workspace_quarantine_r374_test.go:TestR374E1AFreshSessionRefusalRecordsNoLineageTransition
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_test.go
+    symbol: TestR374E1AFreshSessionRefusalRecordsNoLineageTransition
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_test.go:TestR374N6AnInRunVerifiedQuarantineIsStillReachable
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_test.go
+    symbol: TestR374N6AnInRunVerifiedQuarantineIsStillReachable
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_test.go:TestR374N6ResumeTaskConsumesTheHelpersDecision
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_test.go
+    symbol: TestR374N6ResumeTaskConsumesTheHelpersDecision
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_test.go:TestR374W11OrdinaryErrorsKeepTheirClassifiers
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_test.go
+    symbol: TestR374W11OrdinaryErrorsKeepTheirClassifiers
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_test.go:TestR374W12N3ThePreBindingRefusalSaysWhatHappened
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_test.go
+    symbol: TestR374W12N3ThePreBindingRefusalSaysWhatHappened
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_test.go:TestR374W15ARecordThatChangedKeepsTheOriginalRefusal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_test.go
+    symbol: TestR374W15ARecordThatChangedKeepsTheOriginalRefusal
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_test.go:TestR374W15AStillUnsettledRecordIsTheVerifiedProjection
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_test.go
+    symbol: TestR374W15AStillUnsettledRecordIsTheVerifiedProjection
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_test.go:TestR374W1toW8TheGateRefusalIsTheEnding
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_test.go
+    symbol: TestR374W1toW8TheGateRefusalIsTheEnding
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_test.go:TestR374W9W10AFutureResumeIsDecidedByTheLockedGate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_test.go
+    symbol: TestR374W9W10AFutureResumeIsDecidedByTheLockedGate
+    kind: function
+  - id: internal/workflow/workspace_quarantine_r374_test.go:r374Refused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_r374_test.go
+    symbol: r374Refused
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:TestW10AQuarantineRecordsNoBehaviouralFailure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: TestW10AQuarantineRecordsNoBehaviouralFailure
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:TestW11PendingRefusedMaterialDoesNotSuppressTheQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: TestW11PendingRefusedMaterialDoesNotSuppressTheQuarantine
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:TestW13AnUnreadableRecordUnderASafetyStopProjectsAnUnverifiedQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: TestW13AnUnreadableRecordUnderASafetyStopProjectsAnUnverifiedQuarantine
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:TestW14AnOrdinaryFailureKeepsItsOrdinaryOutcome
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: TestW14AnOrdinaryFailureKeepsItsOrdinaryOutcome
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:TestW1ALiveUnsettledValidationEndsWorkspaceQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: TestW1ALiveUnsettledValidationEndsWorkspaceQuarantined
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:TestW23ACleanPreStartFailureOverASettledRecordKeepsItsOrdinaryOutcome
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: TestW23ACleanPreStartFailureOverASettledRecordKeepsItsOrdinaryOutcome
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:TestW24AnUnrecordableQuarantineTerminalPublishesNothing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: TestW24AnUnrecordableQuarantineTerminalPublishesNothing
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:TestW2AQuarantineUnderACancelledContextIsNotAStop
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: TestW2AQuarantineUnderACancelledContextIsNotAStop
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:TestW4ARestartOverAnInFlightRecordEndsWorkspaceQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: TestW4ARestartOverAnInFlightRecordEndsWorkspaceQuarantined
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:TestW5ADeferredQuestionOverAQuarantineStandsAndTheTaskIsNotFailed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: TestW5ADeferredQuestionOverAQuarantineStandsAndTheTaskIsNotFailed
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:wqAssertQuarantined
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqAssertQuarantined
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:wqField
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqField
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:wqInFlight
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqInFlight
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:wqKind
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqKind
+    kind: const
+  - id: internal/workflow/workspace_quarantine_test.go:wqMentions
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqMentions
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:wqOutcome
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqOutcome
+    kind: const
+  - id: internal/workflow/workspace_quarantine_test.go:wqPayload
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqPayload
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:wqQuarantine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqQuarantine
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:wqReceipt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqReceipt
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:wqRecordBytes
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqRecordBytes
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:wqRig
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqRig
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:wqTask
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqTask
+    kind: const
+  - id: internal/workflow/workspace_quarantine_test.go:wqValueState
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqValueState
+    kind: function
+  - id: internal/workflow/workspace_quarantine_test.go:wqValueText
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/workspace_quarantine_test.go
+    symbol: wqValueText
+    kind: function
 test_symbols:
