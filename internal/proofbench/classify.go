@@ -37,7 +37,8 @@ type TerminalSource string
 const (
 	// TerminalStructuredSpecific: the engine named a specific outcome through
 	// its documented exit contract -- completed, awaiting authority, stopped,
-	// timed out, observed. Authoritative. No text heuristic may override it.
+	// timed out, observed, workspace quarantined. Authoritative. No text
+	// heuristic may override it.
 	TerminalStructuredSpecific TerminalSource = "structured_specific"
 	// TerminalStructuredGeneric: the engine reported failure without naming a
 	// cause. The only case where text classification decides anything.
@@ -50,12 +51,13 @@ const (
 // terminalSource classifies the engine's exit code by how much it says.
 //
 // From `sensei-code run`'s documented contract: 0 complete, 1 failed, 3
-// awaiting human authority, 4 stopped, 5 timed out, 6 observed. Every code but
-// 1 names a specific outcome. Code 1 says only "failed", and an unrecognised
-// code says less than that -- those are where a transcript may be consulted.
+// awaiting human authority, 4 stopped, 5 timed out, 6 observed, 11 workspace
+// quarantined. Every code but 1 names a specific outcome. Code 1 says only
+// "failed", and an unrecognised code says less than that -- those are where a
+// transcript may be consulted.
 func terminalSource(code int) TerminalSource {
 	switch code {
-	case 0, 3, 4, 5, 6:
+	case 0, 3, 4, 5, 6, 11:
 		return TerminalStructuredSpecific
 	}
 	return TerminalStructuredGeneric
@@ -145,6 +147,13 @@ func (o *ArmOutcome) classifyInfrastructure(stream string, code int) {
 // are deliberately absent: neither has a settled meaning on the delivery axis
 // yet, and inventing one here would be a scoring change smuggled in as a bug
 // fix.
+//
+// "workspace_quarantined" is present for the opposite reason: it is pinned to
+// OTHER_FAILURE -- the harness's existing "no reading for this" state, the one
+// it already scored before exit 11 had a name -- so that an infrastructure
+// phrase in its transcript cannot turn a quarantine into an outage that
+// excuses the arm. It is not a completion, a correct result or an
+// infrastructure failure, and the scoring Cause keeps its terminal identity.
 func structuredTerminal(terminal string) (Terminal, bool) {
 	switch terminal {
 	case "workflow.completed":
@@ -153,6 +162,8 @@ func structuredTerminal(terminal string) (Terminal, bool) {
 		return TerminalTimeout, true
 	case "workflow.awaiting_authority":
 		return TerminalRefused, true
+	case "workflow.workspace_quarantined":
+		return TerminalOtherFailure, true
 	}
 	return "", false
 }

@@ -75,7 +75,9 @@ func authorityReason(payload json.RawMessage) string {
 // governedExit maps the headless run's documented exit codes.
 //
 // Taken from `sensei-code run`'s own contract rather than guessed: 0 complete,
-// 1 failed, 3 awaiting human authority, 4 stopped, 5 timed out, 6 observed.
+// 1 failed, 3 awaiting human authority, 4 stopped, 5 timed out, 6 observed,
+// 11 workspace quarantined (the invocation ended with workspace containment
+// unresolved -- not a failure, timeout, success or outage; RULING-376).
 func governedExit(code int) string {
 	switch code {
 	case 0:
@@ -90,6 +92,8 @@ func governedExit(code int) string {
 		return "workflow.timed_out"
 	case 6:
 		return "workflow.observed"
+	case 11:
+		return "workflow.workspace_quarantined"
 	}
 	return fmt.Sprintf("workflow.exit_%d", code)
 }
